@@ -1,0 +1,48 @@
+# Virtual workspace root for the DuckHaven client libraries.
+# No [project] table: the root ships nothing to PyPI; each member under
+# packages/* is its own independently-versioned, independently-published project.
+
+[tool.uv.workspace]
+members = ["packages/*"]
+
+[dependency-groups]
+dev = [
+    "ruff>=0.15",
+    "pytest>=8.3",
+    "pytest-cov>=5.0",
+    "respx>=0.21",
+    "build>=1.2",
+    "twine>=5.1",
+]
+
+[tool.ruff]
+line-length = 100
+# The workspace floor; UP rules must not suggest idioms newer than this.
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["duckhaven_sql_connector"]
+
+[tool.pytest.ini_options]
+addopts = "-ra"
+testpaths = ["packages/duckhaven-sql-connector/tests/unit"]
+markers = [
+    "integration: live tests against a real DuckHaven; opt-in via DUCKHAVEN_TEST_HOST.",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["duckhaven_sql_connector"]
+omit = ["*/tests/*", "*/_version.py"]
+
+[tool.coverage.report]
+show_missing = true
+precision = 1
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

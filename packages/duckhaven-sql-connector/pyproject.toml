@@ -1,0 +1,55 @@
+[project]
+name = "duckhaven-sql-connector"
+description = "DB-API 2.0 client for DuckHaven's SQL session/statement API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "DuckHaven" }]
+keywords = ["duckhaven", "duckdb", "dbapi", "sql", "connector"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+    "Topic :: Database :: Front-Ends",
+    "Typing :: Typed",
+]
+dependencies = ["httpx>=0.28"]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+arrow = ["pyarrow>=15"]
+otel = [
+    "opentelemetry-api>=1.36",
+    "opentelemetry-instrumentation-httpx>=0.48b0",
+]
+
+[project.urls]
+Homepage = "https://github.com/duckhaven/duckhaven-clients"
+Source = "https://github.com/duckhaven/duckhaven-clients"
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+# Version comes from git tags with a per-package prefix (sql-connector-vX.Y.Z), so
+# every member versions independently from the same workspace repo. fallback-version
+# keeps source checkouts (no tag) buildable.
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../..", tag_regex = "^sql-connector-v(?P<version>.+)$", fallback_version = "0.0.0" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/duckhaven_sql_connector/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/duckhaven_sql_connector"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "README.md", "CHANGELOG.md"]
