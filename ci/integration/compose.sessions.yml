@@ -1,0 +1,7 @@
+# CI-only override, layered on the DuckHaven server's deploy/docker-compose.yml:
+# turn on the SQL session surface the connector exercises. Kept here (not in the
+# server repo) because it's specific to these integration tests.
+services:
+  api:
+    environment:
+      SQL_SESSIONS_ENABLED: "true"
