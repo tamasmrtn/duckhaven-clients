@@ -13,7 +13,11 @@ _SEED = """id,name
 2,bob
 """
 
-_VIEW = "select * from {{ ref('people') }}"
+# A table (not a view): DuckDB's Iceberg REST catalog does not implement CREATE VIEW.
+_TABLE = """
+{{ config(materialized='table') }}
+select * from {{ ref('people') }}
+"""
 
 _INCREMENTAL = """
 {{ config(materialized='incremental') }}
@@ -26,7 +30,7 @@ where id > (select max(id) from {{ this }})
 _SCHEMA_YML = """
 version: 2
 models:
-  - name: people_view
+  - name: people_tbl
     columns:
       - name: id
         data_tests: [not_null, unique]
@@ -41,7 +45,7 @@ class TestDuckHavenEndToEnd:
     @pytest.fixture(scope="class")
     def models(self):
         return {
-            "people_view.sql": _VIEW,
+            "people_tbl.sql": _TABLE,
             "people_incr.sql": _INCREMENTAL,
             "schema.yml": _SCHEMA_YML,
         }
@@ -51,8 +55,8 @@ class TestDuckHavenEndToEnd:
         assert len(run_dbt(["run"])) == 2
         run_dbt(["test"])
 
-        view_count = project.run_sql("select count(*) from {schema}.people_view", fetch="one")
-        assert view_count[0] == 2
+        tbl_count = project.run_sql("select count(*) from {schema}.people_tbl", fetch="one")
+        assert tbl_count[0] == 2
 
         # A second incremental run with no new source rows must not duplicate.
         run_dbt(["run"])

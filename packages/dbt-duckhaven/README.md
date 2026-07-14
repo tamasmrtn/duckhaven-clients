@@ -41,15 +41,20 @@ my_project:
 
 ## What works in v1
 
-Materializations: **table, view, seed, incremental** (`append` and `delete+insert`
-strategies), and **ephemeral**. Generic and singular tests, and `dbt docs generate`.
+Materializations: **table, seed, incremental** (`append` and `delete+insert` strategies),
+and **ephemeral**. Generic and singular tests.
 
 ### Not supported (yet)
 
+- **`view` materialization** — DuckDB's Iceberg REST catalog does not implement
+  `CREATE VIEW`, so view models fail. Use `table` instead.
 - **Python models** — DuckHaven agents execute SQL only; a Python model fails clearly.
 - **Snapshots** and the **`merge` incremental strategy** — deferred (need Iceberg MERGE
   / temp-relation semantics that are still stabilizing).
 - **`external` materialization / dbt-duckdb source plugins** — out of scope.
+
+> **Server requirement.** The adapter needs a DuckHaven build whose SQL session/statement
+> API is enabled and whose statement policy admits `DESCRIBE` (used for column metadata).
 
 ## Concurrency
 
