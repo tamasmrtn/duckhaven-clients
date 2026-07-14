@@ -7,6 +7,7 @@ on:
   push:
     tags:
       - "sql-connector-v*"
+      - "dbt-duckhaven-v*"
 
 jobs:
   build:
@@ -18,7 +19,12 @@ jobs:
         with:
           fetch-depth: 0 # hatch-vcs derives the version from this tag
       - id: route
-        run: echo "package=duckhaven-sql-connector" >> "$GITHUB_OUTPUT"
+        run: |
+          case "${GITHUB_REF_NAME}" in
+            sql-connector-v*) echo "package=duckhaven-sql-connector" >> "$GITHUB_OUTPUT" ;;
+            dbt-duckhaven-v*) echo "package=dbt-duckhaven" >> "$GITHUB_OUTPUT" ;;
+            *) echo "unrecognized release tag prefix: ${GITHUB_REF_NAME}" >&2; exit 1 ;;
+          esac
       - uses: astral-sh/setup-uv@v7
       - run: uv build --package ${{ steps.route.outputs.package }}
       - run: uvx twine check dist/*

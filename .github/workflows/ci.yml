@@ -33,9 +33,29 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --python ${{ matrix.python-version }}
+      # Scoped to the connector so this leg stays green on 3.14, where dbt's stack
+      # (mashumaro) cannot import; dbt-duckhaven is exercised by the job below.
       - run: >
           uv run --python ${{ matrix.python-version }} pytest
+          packages/duckhaven-sql-connector/tests/unit
           --cov=duckhaven_sql_connector --cov-report=term-missing --cov-fail-under=90
+
+  test-dbt-duckhaven:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # dbt does not run on 3.14 yet (mashumaro), so cap this member at 3.13.
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --python ${{ matrix.python-version }}
+      - run: >
+          uv run --python ${{ matrix.python-version }} pytest
+          packages/dbt-duckhaven/tests/unit
 
   build:
     runs-on: ubuntu-latest
@@ -45,4 +65,5 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
       - run: uv build --package duckhaven-sql-connector
+      - run: uv build --package dbt-duckhaven
       - run: uvx twine check dist/*

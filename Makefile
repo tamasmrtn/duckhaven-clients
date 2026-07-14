@@ -22,6 +22,12 @@ test-cov:
 test-integration:
 	uv run pytest packages/duckhaven-sql-connector/tests/integration -m integration
 
+# dbt-duckhaven conformance (dbt-tests-adapter) + e2e against a live DuckHaven; needs
+# DUCKHAVEN_TEST_HOST/WORKSPACE/PAT/CATALOG.
+test-dbt-integration:
+	uv run pytest packages/dbt-duckhaven/tests/functional packages/dbt-duckhaven/tests/e2e \
+		-p dbt.tests.fixtures.project -m integration
+
 # Refresh the pinned OpenAPI contract from a running server: make refresh-contract HOST=https://...
 refresh-contract:
 	uv run python packages/duckhaven-sql-connector/scripts/refresh_contract.py $(HOST)
