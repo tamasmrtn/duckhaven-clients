@@ -2,10 +2,11 @@ name: Integration
 
 # Live integration tests against a real DuckHaven stack. The stack is stood up from the
 # server's published ghcr images (no source build) using the server repo's own compose
-# file, then seeded through the public API — the connector package itself stays decoupled.
+# file, then seeded through the public API — the client packages stay decoupled.
 #
 # Uses no secrets: the first-boot setup token is read from the fresh API container, so this
-# runs safely on fork PRs too.
+# runs safely on fork PRs too. The stack comes up once and each member's suite runs only
+# when that member (or a shared root) changed.
 on:
   pull_request:
   push:
@@ -24,7 +25,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      connector: ${{ steps.filter.outputs.connector }}
+      dbt: ${{ steps.filter.outputs.dbt }}
+      any: ${{ steps.filter.outputs.connector == 'true' || steps.filter.outputs.dbt == 'true' }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            shared: &shared
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'Makefile'
+              - '.python-version'
+              - 'ci/integration/**'
+              - '.github/workflows/integration.yml'
+            connector:
+              - *shared
+              - 'packages/duckhaven-sql-connector/**'
+            dbt:
+              - *shared
+              - 'packages/dbt-duckhaven/**'
+
   integration:
+    needs: changes
+    if: needs.changes.outputs.any == 'true'
     runs-on: ubuntu-latest
     env:
       # Override to a tag whose image includes the SQL session surface.
@@ -73,8 +102,13 @@ jobs:
       - name: Seed a workspace, catalog, and service-account PAT
         run: python3 ci/integration/seed.py
 
-      - name: Run integration tests
+      - name: Run connector integration tests
+        if: needs.changes.outputs.connector == 'true'
         run: make test-integration
+
+      - name: Run dbt-duckhaven conformance + e2e
+        if: needs.changes.outputs.dbt == 'true'
+        run: make test-dbt-integration
 
       - name: Dump stack logs on failure
         if: failure()
@@ -89,3 +123,19 @@ jobs:
       - name: Tear down
         if: always()
         run: docker compose $CF down -v
+
+  # Single required check for this workflow: green when integration passed or was
+  # intentionally skipped (no client package changed).
+  integration-success:
+    if: always()
+    needs: [changes, integration]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify integration passed or was skipped
+        run: |
+          result="${{ needs.integration.result }}"
+          if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+            echo "Integration did not pass: $result"
+            exit 1
+          fi
+          echo "Integration passed or was skipped."
