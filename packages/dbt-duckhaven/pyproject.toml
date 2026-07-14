@@ -48,9 +48,6 @@ build-backend = "hatchling.build"
 source = "vcs"
 raw-options = { root = "../..", tag_regex = "^dbt-duckhaven-v(?P<version>.+)$", fallback_version = "0.0.0" }
 
-[tool.hatch.build.hooks.vcs]
-version-file = "src/dbt/adapters/duckhaven/_version.py"
-
 # The adapter and its bundled dbt macros both ship under the shared `dbt` namespace.
 [tool.hatch.build.targets.wheel]
 packages = ["src/dbt"]

@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 from dbt.adapters.contracts.connection import ConnectionState
+from dbt.adapters.duckdb.connections import DuckDBConnectionManager
 from dbt.adapters.duckhaven import environments
 from dbt.adapters.duckhaven.connections import DuckHavenConnectionManager
 from dbt.adapters.duckhaven.credentials import DuckHavenCredentials
@@ -26,9 +27,10 @@ def make_creds(**overrides):
 
 @pytest.fixture(autouse=True)
 def _reset_env():
-    DuckHavenConnectionManager._ENV = None
+    # The env is stored on the base class (dbt-duckdb reads it there).
+    DuckDBConnectionManager._ENV = None
     yield
-    DuckHavenConnectionManager._ENV = None
+    DuckDBConnectionManager._ENV = None
 
 
 def test_open_builds_duckhaven_environment(monkeypatch):
@@ -44,7 +46,7 @@ def test_open_builds_duckhaven_environment(monkeypatch):
 
     DuckHavenConnectionManager.open(conn)
 
-    assert isinstance(DuckHavenConnectionManager._ENV, DuckHavenEnvironment)
+    assert isinstance(DuckDBConnectionManager._ENV, DuckHavenEnvironment)
     assert conn.state == ConnectionState.OPEN
     assert conn.handle is sessions[0]
 

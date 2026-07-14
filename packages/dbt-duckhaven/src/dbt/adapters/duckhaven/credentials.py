@@ -41,8 +41,11 @@ class DuckHavenCredentials(DuckDBCredentials):
         return f"{self.host}|{self.workspace}|{self.agent}|{self.database}"
 
     def _connection_keys(self):
-        # Fields shown by ``dbt debug`` (token is deliberately omitted).
-        return ("host", "workspace", "agent", "catalog", "schema")
+        # These become dbt's Jinja ``target`` (via Profile.to_target_dict →
+        # connection_info). ``database`` MUST be here — dbt's generate_database_name
+        # reads target.database to qualify every relation; omitting it renders an empty
+        # catalog. ``token`` is deliberately omitted (secret).
+        return ("host", "workspace", "agent", "catalog", "database", "schema")
 
     @classmethod
     def __pre_deserialize__(cls, data: dict[Any, Any]) -> dict[Any, Any]:

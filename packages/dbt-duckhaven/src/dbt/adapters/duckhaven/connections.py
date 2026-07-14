@@ -8,8 +8,6 @@ place to inject a custom environment.
 
 from __future__ import annotations
 
-import threading
-
 from dbt.adapters.contracts.connection import Connection, ConnectionState
 from dbt.adapters.duckdb.connections import DuckDBConnectionManager
 from dbt.adapters.events.logging import AdapterLogger
@@ -22,10 +20,6 @@ logger = AdapterLogger("DuckHaven")
 
 class DuckHavenConnectionManager(DuckDBConnectionManager):
     TYPE = "duckhaven"
-    # Own the shared-environment cache so we never clobber dbt-duckdb's.
-    _LOCK = threading.RLock()
-    _ENV = None
-    _LOGGED_MESSAGES: set[str] = set()
 
     @classmethod
     def open(cls, connection: Connection) -> Connection:
@@ -34,11 +28,16 @@ class DuckHavenConnectionManager(DuckDBConnectionManager):
             return connection
 
         credentials = cls.get_credentials(connection.credentials)
-        with cls._LOCK:
+        # Store the environment on DuckDBConnectionManager (the base), not on this
+        # subclass: dbt-duckdb's impl.py reads DuckDBConnectionManager.env() directly in
+        # several @available helpers (e.g. get_binding_char, which seeds use), so the env
+        # must live there or those calls raise "environment requested before creation".
+        base = DuckDBConnectionManager
+        with base._LOCK:
             try:
-                if not cls._ENV or cls._ENV.creds != credentials:
-                    cls._ENV = DuckHavenEnvironment(credentials)
-                connection.handle = cls._ENV.handle()
+                if not base._ENV or base._ENV.creds != credentials:
+                    base._ENV = DuckHavenEnvironment(credentials)
+                connection.handle = base._ENV.handle()
                 connection.state = ConnectionState.OPEN
             except Exception as e:  # noqa: BLE001 - surfaced as FailedToConnectError below
                 logger.debug(f"Error opening a DuckHaven session: {e}")

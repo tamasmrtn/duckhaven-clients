@@ -43,6 +43,14 @@ def test_connection_keys_hide_token():
     assert "token" not in make()._connection_keys()
 
 
+def test_connection_keys_include_database():
+    # dbt's Jinja `target` is built from _connection_keys; `database` must be present
+    # or generate_database_name renders an empty catalog into every relation.
+    keys = make()._connection_keys()
+    assert "database" in keys
+    assert dict(make().connection_info())["database"] == "sales"
+
+
 def test_missing_required_field_raises():
     with pytest.raises(DbtRuntimeError):
         make(token="")

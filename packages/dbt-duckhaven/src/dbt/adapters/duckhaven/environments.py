@@ -24,15 +24,18 @@ class DuckHavenEnvironment(Environment):
     def handle(self):
         creds: DuckHavenCredentials = self.creds  # type: ignore[assignment]
         # The connector's Connection is a DB-API handle: dbt drives it via
-        # ``handle.cursor()`` → ``cursor.execute(sql, bindings)``. It also issues
-        # ``USE catalog.schema`` on open, so dbt need not.
+        # ``handle.cursor()`` → ``cursor.execute(sql, bindings)``.
+        #
+        # Deliberately do NOT forward ``schema``: the connector issues ``USE
+        # catalog.schema`` on open, which fails if the schema does not exist yet —
+        # but dbt creates schemas itself and fully-qualifies every relation
+        # (database.schema.table), so an active schema is unnecessary.
         return connect(
             host=creds.host,
             workspace=creds.workspace,
             token=creds.token,
             agent=creds.agent,
             catalog=creds.catalog or creds.database,
-            schema=creds.schema,
         )
 
     def get_binding_char(self) -> str:
