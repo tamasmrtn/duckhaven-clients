@@ -18,6 +18,14 @@ test:
 test-cov:
 	uv run pytest --cov=duckhaven_sql_connector --cov-report=term-missing --cov-fail-under=90
 
+# Live tests against a real DuckHaven; needs DUCKHAVEN_TEST_HOST/WORKSPACE/PAT.
+test-integration:
+	uv run pytest packages/duckhaven-sql-connector/tests/integration -m integration
+
+# Refresh the pinned OpenAPI contract from a running server: make refresh-contract HOST=https://...
+refresh-contract:
+	uv run python packages/duckhaven-sql-connector/scripts/refresh_contract.py $(HOST)
+
 # Build a single member: make build PKG=duckhaven-sql-connector
 build:
 	uv build --package $(PKG)

@@ -1,0 +1,91 @@
+name: Integration
+
+# Live integration tests against a real DuckHaven stack. The stack is stood up from the
+# server's published ghcr images (no source build) using the server repo's own compose
+# file, then seeded through the public API — the connector package itself stays decoupled.
+#
+# Uses no secrets: the first-boot setup token is read from the fresh API container, so this
+# runs safely on fork PRs too.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: DuckHaven ghcr image tag to test against
+        default: latest
+      server_ref:
+        description: duckhaven server repo ref for the compose stack
+        default: main
+
+concurrency:
+  group: integration-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    env:
+      # Override to a tag whose image includes the SQL session surface.
+      DUCKHAVEN_IMAGE_TAG: ${{ github.event.inputs.image_tag || vars.DUCKHAVEN_IMAGE_TAG || 'latest' }}
+      COMPOSE_PROJECT_NAME: duckhaven
+      CF: -f server/deploy/docker-compose.yml -f ci/integration/compose.sessions.yml
+      DH_HOST: http://localhost:8000
+      DH_WORKSPACE: analytics
+      DH_CATALOG: analytics
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Check out the DuckHaven server deploy stack
+        uses: actions/checkout@v5
+        with:
+          repository: tamasmrtn/duckhaven
+          ref: ${{ github.event.inputs.server_ref || 'main' }}
+          path: server
+          sparse-checkout: deploy
+
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync
+
+      - name: Start the DuckHaven stack (ghcr images)
+        run: docker compose $CF up -d --quiet-pull
+
+      - name: Wait for the API and agent to be healthy
+        run: |
+          for _ in $(seq 1 60); do
+            ok=1
+            for svc in api agent; do
+              cid=$(docker compose $CF ps -q "$svc")
+              status=$(docker inspect -f '{{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}}' "$cid" 2>/dev/null || echo missing)
+              [ "$status" = "healthy" ] || ok=0
+            done
+            [ "$ok" = "1" ] && { echo "stack healthy"; exit 0; }
+            sleep 5
+          done
+          echo "stack did not become healthy" >&2
+          docker compose $CF logs api agent | tail -120 >&2
+          exit 1
+
+      - name: Capture the first-boot setup token
+        run: echo "DH_SETUP_TOKEN=$(docker compose $CF exec -T api cat /var/duckhaven/setup_token)" >> "$GITHUB_ENV"
+
+      - name: Seed a workspace, catalog, and service-account PAT
+        run: python3 ci/integration/seed.py
+
+      - name: Run integration tests
+        run: make test-integration
+
+      - name: Dump stack logs on failure
+        if: failure()
+        run: docker compose $CF logs --no-color > compose-logs.txt
+
+      - uses: actions/upload-artifact@v5
+        if: failure()
+        with:
+          name: integration-compose-logs
+          path: compose-logs.txt
+
+      - name: Tear down
+        if: always()
+        run: docker compose $CF down -v

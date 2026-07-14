@@ -13,6 +13,10 @@ dev = [
     "respx>=0.21",
     "build>=1.2",
     "twine>=5.1",
+    # Installed so the optional-extra code paths (arrow, otel) are exercised in tests.
+    "pyarrow>=15",
+    "opentelemetry-api>=1.36",
+    "opentelemetry-sdk>=1.36",
 ]
 
 [tool.ruff]
