@@ -31,10 +31,16 @@ def _backoff_delay(attempt: int, policy: RetryPolicy) -> float:
 
 class Transport:
     def __init__(
-        self, config: ClientConfig, *, sleep: Callable[[float], None] = time.sleep
+        self,
+        config: ClientConfig,
+        *,
+        sleep: Callable[[float], None] = time.sleep,
+        monotonic: Callable[[], float] = time.monotonic,
     ) -> None:
         self._config = config
         self._sleep = sleep
+        # Injectable clock so the cursor's poll-timeout is deterministically testable.
+        self._monotonic = monotonic
         self._client = httpx.Client(
             base_url=config.base_url,
             headers={

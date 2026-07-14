@@ -1,10 +1,25 @@
 """PEP 249 (DB-API 2.0) declarations.
 
-This module currently defines the mandated exception hierarchy. The module globals
-(``apilevel``/``threadsafety``/``paramstyle``), the type objects, and the ``connect``
-entry point are added in a later change; ``errors.py`` maps transport failures onto the
-exceptions defined here.
+The mandated exception hierarchy, module globals, type objects, and constructors.
+``connect`` lives in ``connection.py`` (and is re-exported from the package root) to
+avoid an import cycle; ``errors.py`` maps transport failures onto the exceptions here.
 """
+
+from __future__ import annotations
+
+import datetime as _dt
+import time as _time
+from typing import Any
+
+# --- Module globals (PEP 249) ------------------------------------------------
+
+apilevel = "2.0"
+# 1 = threads may share the module but not connections. dbt opens one session
+# (Connection) per thread, so this is the correct, honest value.
+threadsafety = 1
+# The statement API takes no server-side parameters; the connector renders ``?``
+# placeholders into safe SQL literals client-side (see _params.py).
+paramstyle = "qmark"
 
 
 class Warning(Exception):  # noqa: A001 - PEP 249 mandates this exact name
@@ -69,3 +84,64 @@ class ProgrammingError(DatabaseError):
 
 class NotSupportedError(DatabaseError):
     """A method or API the backend does not support was used."""
+
+
+# --- Type objects and constructors (PEP 249) --------------------------------
+
+
+class _DBAPITypeObject:
+    """A type-comparison singleton that equals any of the given type-code names."""
+
+    def __init__(self, *values: str) -> None:
+        self.values = frozenset(values)
+
+    def __eq__(self, other: object) -> bool:
+        return other in self.values
+
+    def __ne__(self, other: object) -> bool:
+        return other not in self.values
+
+    def __hash__(self) -> int:
+        return hash(self.values)
+
+
+STRING = _DBAPITypeObject("VARCHAR", "TEXT", "CHAR", "BPCHAR", "STRING")
+BINARY = _DBAPITypeObject("BLOB", "BYTEA", "VARBINARY")
+NUMBER = _DBAPITypeObject(
+    "TINYINT",
+    "SMALLINT",
+    "INTEGER",
+    "BIGINT",
+    "HUGEINT",
+    "UTINYINT",
+    "USMALLINT",
+    "UINTEGER",
+    "UBIGINT",
+    "FLOAT",
+    "DOUBLE",
+    "REAL",
+    "DECIMAL",
+    "NUMERIC",
+)
+DATETIME = _DBAPITypeObject("TIMESTAMP", "TIMESTAMPTZ", "DATE", "TIME", "TIMETZ")
+ROWID = _DBAPITypeObject("ROWID")
+
+Date = _dt.date
+Time = _dt.time
+Timestamp = _dt.datetime
+
+
+def DateFromTicks(ticks: float) -> _dt.date:
+    return Date(*_time.localtime(ticks)[:3])
+
+
+def TimeFromTicks(ticks: float) -> _dt.time:
+    return Time(*_time.localtime(ticks)[3:6])
+
+
+def TimestampFromTicks(ticks: float) -> _dt.datetime:
+    return Timestamp(*_time.localtime(ticks)[:6])
+
+
+def Binary(value: Any) -> bytes:
+    return bytes(value)

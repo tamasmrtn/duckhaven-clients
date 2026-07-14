@@ -32,6 +32,8 @@ def test_defaults():
         {"token": ""},
         {"timeout": 0},
         {"http_timeout": -1},
+        {"fetch_size": 0},
+        {"agent": "warehouse-a"},
     ],
 )
 def test_invalid_config_raises_interface_error(over):

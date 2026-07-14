@@ -7,6 +7,7 @@ session manager, and the cursor.
 
 from __future__ import annotations
 
+import uuid
 from dataclasses import dataclass, field
 
 from .dbapi import InterfaceError
@@ -39,6 +40,9 @@ class ClientConfig:
     # session-open budget (default 30s) so an open call isn't cut off client-side.
     http_timeout: float = 60.0
     tls_verify: bool = True
+    # Rows requested per pagination call to /queries/{id}/rows. Independent of the
+    # cursor's arraysize, which governs how many buffered rows fetchmany() returns.
+    fetch_size: int = 1000
     retry: RetryPolicy = field(default_factory=RetryPolicy)
 
     def __post_init__(self) -> None:
@@ -52,6 +56,15 @@ class ClientConfig:
             raise InterfaceError("token is required")
         if self.timeout <= 0 or self.http_timeout <= 0:
             raise InterfaceError("timeout and http_timeout must be positive")
+        if self.fetch_size <= 0:
+            raise InterfaceError("fetch_size must be positive")
+        # The session endpoint selects compute by agent_id (a UUID). A friendly
+        # agent name would need a lookup the API does not yet expose.
+        if self.agent is not None:
+            try:
+                uuid.UUID(str(self.agent))
+            except ValueError as exc:
+                raise InterfaceError("agent must be an agent UUID") from exc
 
     @property
     def base_url(self) -> str:
