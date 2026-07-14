@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from ._params import quote_identifier
+from ._telemetry import Hooks
 from .client import Transport
 from .config import ClientConfig, RetryPolicy
 from .cursor import Cursor
@@ -39,8 +40,14 @@ class Connection:
         self._dead = False
 
     @classmethod
-    def open(cls, config: ClientConfig, *, transport: Transport | None = None) -> Connection:
-        transport = transport or Transport(config)
+    def open(
+        cls,
+        config: ClientConfig,
+        *,
+        transport: Transport | None = None,
+        hooks: Hooks | None = None,
+    ) -> Connection:
+        transport = transport or Transport(config, hooks=hooks)
         body: dict[str, Any] = {}
         if config.agent is not None:
             body["agent_id"] = config.agent
@@ -130,6 +137,7 @@ def connect(
     http_timeout: float = 60.0,
     tls_verify: bool = True,
     retry: RetryPolicy | None = None,
+    hooks: Hooks | None = None,
 ) -> Connection:
     """Open a DuckHaven SQL session and return a DB-API 2.0 Connection."""
     config = ClientConfig(
@@ -144,4 +152,4 @@ def connect(
         tls_verify=tls_verify,
         retry=retry or RetryPolicy(),
     )
-    return Connection.open(config)
+    return Connection.open(config, hooks=hooks)

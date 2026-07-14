@@ -77,7 +77,9 @@ class Cursor:
         row_count = query.get("row_count")
         self._rowcount = row_count if isinstance(row_count, int) else -1
 
-        self._result = ResultSet(transport, self._query_id, config.fetch_size)
+        self._result = ResultSet(
+            transport, self._query_id, config.fetch_size, hooks=transport._hooks
+        )
         self._result.ensure_started()
         cols = self._result.columns
         self._description = [(name, *_DESCRIPTION_FILLER) for name in cols] if cols else None
@@ -137,6 +139,15 @@ class Cursor:
 
     def fetchall(self) -> list[tuple[Any, ...]]:
         return self._require_result().fetchall()
+
+    def fetch_arrow_table(self) -> Any:
+        """Return the remaining rows as a ``pyarrow.Table`` (requires the ``arrow`` extra)."""
+        from ._arrow import to_arrow_table
+
+        result = self._require_result()
+        columns = result.columns
+        rows = result.fetchall()
+        return to_arrow_table(columns, rows)
 
     def __iter__(self) -> Cursor:
         return self

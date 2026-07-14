@@ -14,6 +14,7 @@ from __future__ import annotations
 from collections import deque
 from typing import TYPE_CHECKING, Any
 
+from ._telemetry import Hooks
 from .dbapi import InterfaceError
 
 if TYPE_CHECKING:
@@ -21,10 +22,13 @@ if TYPE_CHECKING:
 
 
 class ResultSet:
-    def __init__(self, transport: Transport, query_id: str, fetch_size: int) -> None:
+    def __init__(
+        self, transport: Transport, query_id: str, fetch_size: int, hooks: Hooks | None = None
+    ) -> None:
         self._transport = transport
         self._query_id = query_id
         self._fetch_size = fetch_size
+        self._hooks = hooks or Hooks()
         self._buffer: deque[tuple[Any, ...]] = deque()
         self._next_cursor: str | None = None
         self._started = False
@@ -48,6 +52,8 @@ class ResultSet:
         self.columns = columns
         for row in rows:
             self._buffer.append(tuple(row.get(col) for col in columns))
+        if self._hooks.on_rows_fetched is not None:
+            self._hooks.on_rows_fetched(self._query_id, len(rows))
         if self._next_cursor is None:
             self._exhausted = True
         self._started = True

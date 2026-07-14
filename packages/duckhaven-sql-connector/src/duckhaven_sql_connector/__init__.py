@@ -23,6 +23,7 @@ except ImportError:  # pragma: no cover - source checkout without a build
     except PackageNotFoundError:  # pragma: no cover
         __version__ = "0.0.0+unknown"
 
+from ._telemetry import Hooks
 from .config import ClientConfig, RetryPolicy
 from .connection import Connection, connect
 from .cursor import Cursor
@@ -62,6 +63,7 @@ __all__ = [
     "Cursor",
     "ClientConfig",
     "RetryPolicy",
+    "Hooks",
     # globals
     "apilevel",
     "threadsafety",

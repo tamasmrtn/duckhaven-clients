@@ -17,6 +17,7 @@ from typing import Any
 import httpx
 
 from . import __version__
+from ._telemetry import Hooks, client_span, inject_traceparent
 from .config import ClientConfig, RetryPolicy
 from .errors import map_http_error, map_transport_error
 
@@ -36,11 +37,13 @@ class Transport:
         *,
         sleep: Callable[[float], None] = time.sleep,
         monotonic: Callable[[], float] = time.monotonic,
+        hooks: Hooks | None = None,
     ) -> None:
         self._config = config
         self._sleep = sleep
         # Injectable clock so the cursor's poll-timeout is deterministically testable.
         self._monotonic = monotonic
+        self._hooks = hooks or Hooks()
         self._client = httpx.Client(
             base_url=config.base_url,
             headers={
@@ -77,28 +80,50 @@ class Transport:
         policy = self._config.retry
         idempotent = method in _IDEMPOTENT
         attempt = 0
-        while True:
-            try:
-                response = self._client.request(method, path, json=json, params=params)
-            except httpx.TransportError as exc:
-                if idempotent and attempt < policy.max_retries:
-                    self._sleep(_backoff_delay(attempt, policy))
-                    attempt += 1
-                    continue
-                raise map_transport_error(exc) from exc
+        with client_span(
+            "duckhaven.http", {"http.request.method": method, "url.path": path}
+        ) as span:
+            while True:
+                headers: dict[str, str] = {}
+                inject_traceparent(headers)
+                started = time.monotonic()
+                try:
+                    response = self._client.request(
+                        method, path, json=json, params=params, headers=headers
+                    )
+                except httpx.TransportError as exc:
+                    if idempotent and attempt < policy.max_retries:
+                        self._on_retry(method, path, attempt + 1)
+                        self._sleep(_backoff_delay(attempt, policy))
+                        attempt += 1
+                        continue
+                    raise map_transport_error(exc) from exc
 
-            if response.status_code >= 400:
-                if (
-                    idempotent
-                    and response.status_code in policy.retry_statuses
-                    and attempt < policy.max_retries
-                ):
-                    self._sleep(_backoff_delay(attempt, policy))
-                    attempt += 1
-                    continue
-                raise map_http_error(response)
+                self._on_request(method, path, response.status_code, time.monotonic() - started)
+                if span is not None:
+                    span.set_attribute("http.response.status_code", response.status_code)
 
-            return response
+                if response.status_code >= 400:
+                    if (
+                        idempotent
+                        and response.status_code in policy.retry_statuses
+                        and attempt < policy.max_retries
+                    ):
+                        self._on_retry(method, path, attempt + 1)
+                        self._sleep(_backoff_delay(attempt, policy))
+                        attempt += 1
+                        continue
+                    raise map_http_error(response)
+
+                return response
+
+    def _on_request(self, method: str, path: str, status: int, duration: float) -> None:
+        if self._hooks.on_request is not None:
+            self._hooks.on_request(method, path, status, duration)
+
+    def _on_retry(self, method: str, path: str, attempt: int) -> None:
+        if self._hooks.on_retry is not None:
+            self._hooks.on_retry(method, path, attempt)
 
     def close(self) -> None:
         self._client.close()
