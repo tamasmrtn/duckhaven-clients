@@ -14,6 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       package: ${{ steps.route.outputs.package }}
+      # Each package publishes from its own GitHub environment so its PyPI Trusted
+      # Publisher is a distinct (workflow, environment) pair. PyPI requires a *pending*
+      # publisher's (repo, workflow, environment) to be unique across projects, so
+      # sharing one environment across members collides while both are pending.
+      env_testpypi: ${{ steps.route.outputs.env_testpypi }}
+      env_pypi: ${{ steps.route.outputs.env_pypi }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -21,8 +27,14 @@ jobs:
       - id: route
         run: |
           case "${GITHUB_REF_NAME}" in
-            sql-connector-v*) echo "package=duckhaven-sql-connector" >> "$GITHUB_OUTPUT" ;;
-            dbt-duckhaven-v*) echo "package=dbt-duckhaven" >> "$GITHUB_OUTPUT" ;;
+            sql-connector-v*)
+              echo "package=duckhaven-sql-connector" >> "$GITHUB_OUTPUT"
+              echo "env_testpypi=testpypi" >> "$GITHUB_OUTPUT"
+              echo "env_pypi=pypi" >> "$GITHUB_OUTPUT" ;;
+            dbt-duckhaven-v*)
+              echo "package=dbt-duckhaven" >> "$GITHUB_OUTPUT"
+              echo "env_testpypi=testpypi-dbt-duckhaven" >> "$GITHUB_OUTPUT"
+              echo "env_pypi=pypi-dbt-duckhaven" >> "$GITHUB_OUTPUT" ;;
             *) echo "unrecognized release tag prefix: ${GITHUB_REF_NAME}" >&2; exit 1 ;;
           esac
       - uses: astral-sh/setup-uv@v7
@@ -36,7 +48,7 @@ jobs:
   testpypi:
     needs: build
     runs-on: ubuntu-latest
-    environment: testpypi
+    environment: ${{ needs.build.outputs.env_testpypi }}
     permissions:
       id-token: write # OIDC for Trusted Publishing
     steps:
@@ -49,9 +61,9 @@ jobs:
           repository-url: https://test.pypi.org/legacy/
 
   pypi:
-    needs: testpypi
+    needs: [build, testpypi]
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: ${{ needs.build.outputs.env_pypi }}
     permissions:
       id-token: write
     steps:
