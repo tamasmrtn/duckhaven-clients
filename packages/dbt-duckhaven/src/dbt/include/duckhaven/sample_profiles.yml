@@ -1,0 +1,13 @@
+default:
+  target: dev
+  outputs:
+    dev:
+      type: duckhaven
+      host: https://duckhaven.internal
+      workspace: analytics
+      token: "{{ env_var('DUCKHAVEN_PAT') }}"
+      # agent is an agent UUID (compute selector); omit to let the API auto-pick.
+      # agent: 00000000-0000-0000-0000-000000000000
+      catalog: sales
+      schema: analytics
+      threads: 4
