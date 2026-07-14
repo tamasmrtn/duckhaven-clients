@@ -35,10 +35,10 @@ jobs:
       DH_WORKSPACE: analytics
       DH_CATALOG: analytics
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
 
       - name: Check out the DuckHaven server deploy stack
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           repository: tamasmrtn/duckhaven
           ref: ${{ github.event.inputs.server_ref || 'main' }}
