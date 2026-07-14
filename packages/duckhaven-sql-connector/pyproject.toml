@@ -31,8 +31,8 @@ otel = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/duckhaven/duckhaven-clients"
-Source = "https://github.com/duckhaven/duckhaven-clients"
+Homepage = "https://github.com/tamasmrtn/duckhaven-clients"
+Source = "https://github.com/tamasmrtn/duckhaven-clients"
 
 [build-system]
 requires = ["hatchling", "hatch-vcs"]
