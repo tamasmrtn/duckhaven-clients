@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # Python dependencies across the uv workspace (root uv.lock + members).
+  - package-ecosystem: "uv"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    open-pull-requests-limit: 10
+    labels:
+      - "dependencies"
+      - "python"
+    # Batch minor + patch bumps into one PR (auto-merged by the workflow once CI
+    # and integration pass). Majors are excluded here, so they arrive as separate,
+    # individually-reviewable PRs.
+    groups:
+      python-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
+
+  # GitHub Actions used by the workflows.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      actions-minor-patch:
+        patterns: ["*"]
+        update-types: ["minor", "patch"]
