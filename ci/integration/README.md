@@ -18,11 +18,11 @@ against a **real DuckHaven**, on every PR and on push to `main`.
 No GitHub secrets are used (the setup token comes from the fresh container), so it runs on
 fork PRs too.
 
-## Image tag caveat
+## Image tag
 
-The default tag is `latest`. The integration job passes only against an image that includes
-the **SQL session surface**; point it at a suitable tag by setting the repo variable
-`DUCKHAVEN_IMAGE_TAG` (or via the `workflow_dispatch` input) until `latest` carries it.
+The default tag is `latest`, which carries the **SQL session surface** the tests need. To
+pin a specific release or test a candidate image, set the repo variable
+`DUCKHAVEN_IMAGE_TAG` (or use the `workflow_dispatch` input).
 
 ## Running the seed locally
 

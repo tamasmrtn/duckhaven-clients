@@ -35,17 +35,17 @@ jobs:
       DH_WORKSPACE: analytics
       DH_CATALOG: analytics
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Check out the DuckHaven server deploy stack
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           repository: tamasmrtn/duckhaven
           ref: ${{ github.event.inputs.server_ref || 'main' }}
           path: server
           sparse-checkout: deploy
 
-      - uses: astral-sh/setup-uv@v5
+      - uses: astral-sh/setup-uv@v7
       - run: uv sync
 
       - name: Start the DuckHaven stack (ghcr images)
@@ -80,7 +80,7 @@ jobs:
         if: failure()
         run: docker compose $CF logs --no-color > compose-logs.txt
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         if: failure()
         with:
           name: integration-compose-logs
