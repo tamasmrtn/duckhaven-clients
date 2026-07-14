@@ -70,6 +70,10 @@ class OperationalError(DatabaseError):
     """
 
 
+class MaxRetryDurationError(OperationalError):
+    """Retries for a single request exceeded the configured total-time budget."""
+
+
 class IntegrityError(DatabaseError):
     """Relational integrity was violated."""
 

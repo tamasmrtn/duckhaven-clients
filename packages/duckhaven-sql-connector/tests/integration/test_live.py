@@ -71,3 +71,14 @@ def test_statement_after_close_raises(conn):
     conn.close()
     with pytest.raises(ProgrammingError):
         conn.cursor()
+
+
+def test_metadata_catalogs_and_tables(conn):
+    cur = conn.cursor()
+    cur.catalogs()
+    catalogs = [row[0] for row in cur.fetchall()]
+    assert isinstance(catalogs, list)  # at least the attached workspace catalogs
+
+    cur.tables()
+    assert cur.description is not None
+    assert "table_name" in [col[0] for col in cur.description]

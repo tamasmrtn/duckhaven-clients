@@ -104,3 +104,51 @@ def test_context_manager_closes_client():
     with _transport() as t:
         assert t._client.is_closed is False
     assert t._client.is_closed is True
+
+
+def _recording_transport(policy: RetryPolicy):
+    cfg = ClientConfig(
+        host="https://dh.test", workspace="analytics", token="dh_pat_x", retry=policy
+    )
+    slept: list[float] = []
+    return Transport(cfg, sleep=slept.append), slept
+
+
+@respx.mock
+def test_retry_after_header_is_honored_over_backoff():
+    transport, slept = _recording_transport(
+        RetryPolicy(max_retries=2, backoff_base=0.0, backoff_max=0.0)
+    )
+    respx.get(f"{BASE}/probe").mock(
+        side_effect=[
+            httpx.Response(503, headers={"Retry-After": "7"}),
+            httpx.Response(200, json={}),
+        ]
+    )
+    transport.get("/probe")
+    assert slept == [7.0]  # used the header, not the (zero) computed backoff
+
+
+@respx.mock
+def test_retry_budget_exceeded_raises_max_retry_duration():
+    transport, _ = _recording_transport(
+        RetryPolicy(max_retries=5, backoff_base=0.0, backoff_max=0.0, max_elapsed=1.0)
+    )
+    respx.get(f"{BASE}/probe").mock(
+        return_value=httpx.Response(503, headers={"Retry-After": "100"})
+    )
+    with pytest.raises(dbapi.MaxRetryDurationError):
+        transport.get("/probe")
+
+
+def test_retry_after_parses_http_date():
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+
+    from duckhaven_sql_connector.client import _retry_after_seconds
+
+    future = datetime.now(tz=timezone.utc) + timedelta(seconds=30)
+    resp = httpx.Response(503, headers={"Retry-After": format_datetime(future)})
+    assert 20 < _retry_after_seconds(resp) <= 30
+    assert _retry_after_seconds(httpx.Response(503)) is None
+    assert _retry_after_seconds(httpx.Response(503, headers={"Retry-After": "garbage"})) is None

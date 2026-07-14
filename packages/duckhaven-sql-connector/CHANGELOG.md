@@ -17,6 +17,10 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
   result-transport seam ready for a future server-side Arrow/EXTERNAL_LINKS disposition.
 - Optional extras: `arrow` (`Cursor.fetch_arrow_table`) and `otel` (client spans + W3C
   `traceparent` propagation), plus dependency-free instrumentation `Hooks`.
+- Cursor metadata methods (`catalogs`/`schemas`/`tables`/`columns`) over
+  `information_schema`, for dbt/BI relation introspection.
+- Retry hardening: honors a server `Retry-After` header and bounds retries by a total-time
+  budget (`RetryPolicy.max_elapsed`, raising `MaxRetryDurationError`).
 - A pinned OpenAPI contract subset with an anti-drift test, env-gated live integration
   tests, and a quickstart example.
 - Workspace and package scaffolding: uv workspace, Apache-2.0 license, Ruff/pre-commit,

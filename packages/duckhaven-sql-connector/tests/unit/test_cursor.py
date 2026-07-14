@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 import respx
@@ -199,6 +201,58 @@ def test_execute_on_closed_cursor_raises():
     cur.close()
     with pytest.raises(ProgrammingError):
         cur.execute("SELECT 1")
+
+
+@respx.mock
+def test_catalogs_metadata_issues_information_schema_query():
+    conn = open_conn()
+    statements = _submit(status="done", row_count=2)
+    respx.get(ROWS_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [{"catalog_name": "sales"}, {"catalog_name": "raw"}],
+                "columns": ["catalog_name"],
+                "cursor": None,
+                "total": 2,
+            },
+        )
+    )
+    cur = conn.cursor()
+    cur.catalogs()
+    sent = json.loads(statements.calls.last.request.content)["sql"]
+    assert "DISTINCT catalog_name FROM information_schema.schemata" in sent
+    assert [r[0] for r in cur.fetchall()] == ["sales", "raw"]
+
+
+@respx.mock
+def test_tables_metadata_renders_like_filter():
+    conn = open_conn()
+    statements = _submit(status="done", row_count=1)
+    respx.get(ROWS_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "rows": [
+                    {
+                        "table_catalog": "sales",
+                        "table_schema": "public",
+                        "table_name": "orders",
+                        "table_type": "BASE TABLE",
+                    }
+                ],
+                "columns": ["table_catalog", "table_schema", "table_name", "table_type"],
+                "cursor": None,
+                "total": 1,
+            },
+        )
+    )
+    cur = conn.cursor()
+    cur.tables(schema_name="public")
+    sent = json.loads(statements.calls.last.request.content)["sql"]
+    assert "information_schema.tables" in sent
+    assert "table_schema LIKE 'public'" in sent  # qmark rendered client-side
+    assert cur.fetchall()[0][2] == "orders"
 
 
 @respx.mock

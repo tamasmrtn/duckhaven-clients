@@ -12,6 +12,8 @@ from __future__ import annotations
 import random
 import time
 from collections.abc import Callable
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -19,6 +21,7 @@ import httpx
 from . import __version__
 from ._telemetry import Hooks, client_span, inject_traceparent
 from .config import ClientConfig, RetryPolicy
+from .dbapi import MaxRetryDurationError
 from .errors import map_http_error, map_transport_error
 
 _IDEMPOTENT = frozenset({"GET", "DELETE"})
@@ -28,6 +31,23 @@ def _backoff_delay(attempt: int, policy: RetryPolicy) -> float:
     """Capped exponential backoff with full jitter for retry ``attempt`` (0-based)."""
     ceiling = min(policy.backoff_max, policy.backoff_base * (2**attempt))
     return random.uniform(0, ceiling)
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    """Parse a Retry-After header (delta-seconds or an HTTP date) into seconds, or None."""
+    value = response.headers.get("Retry-After")
+    if value is None:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return float(value)
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, (when - datetime.now(tz=timezone.utc)).total_seconds())
 
 
 class Transport:
@@ -80,6 +100,7 @@ class Transport:
         policy = self._config.retry
         idempotent = method in _IDEMPOTENT
         attempt = 0
+        deadline = time.monotonic() + policy.max_elapsed
         with client_span(
             "duckhaven.http", {"http.request.method": method, "url.path": path}
         ) as span:
@@ -93,8 +114,9 @@ class Transport:
                     )
                 except httpx.TransportError as exc:
                     if idempotent and attempt < policy.max_retries:
-                        self._on_retry(method, path, attempt + 1)
-                        self._sleep(_backoff_delay(attempt, policy))
+                        self._sleep_before_retry(
+                            method, path, attempt, _backoff_delay(attempt, policy), deadline
+                        )
                         attempt += 1
                         continue
                     raise map_transport_error(exc) from exc
@@ -109,13 +131,28 @@ class Transport:
                         and response.status_code in policy.retry_statuses
                         and attempt < policy.max_retries
                     ):
-                        self._on_retry(method, path, attempt + 1)
-                        self._sleep(_backoff_delay(attempt, policy))
+                        delay = _backoff_delay(attempt, policy)
+                        if policy.respect_retry_after:
+                            after = _retry_after_seconds(response)
+                            if after is not None:
+                                delay = after
+                        self._sleep_before_retry(method, path, attempt, delay, deadline)
                         attempt += 1
                         continue
                     raise map_http_error(response)
 
                 return response
+
+    def _sleep_before_retry(
+        self, method: str, path: str, attempt: int, delay: float, deadline: float
+    ) -> None:
+        """Wait ``delay`` before a retry, or raise if it would blow the time budget."""
+        if time.monotonic() + delay > deadline:
+            raise MaxRetryDurationError(
+                f"retry budget exhausted for {method} {path} after {attempt + 1} attempt(s)"
+            )
+        self._on_retry(method, path, attempt + 1)
+        self._sleep(delay)
 
     def _on_request(self, method: str, path: str, status: int, duration: float) -> None:
         if self._hooks.on_request is not None:

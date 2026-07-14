@@ -53,8 +53,26 @@ carrying the server's `code`/`status_code`/`detail`:
 - `ProgrammingError` — a rejected statement (`statement_not_allowed`), a denied grant, or a
   missing object.
 - `OperationalError` — an unavailable/disconnected agent, a reaped or closed session
-  (reconnect), a timeout, or the session surface being disabled.
+  (reconnect), a timeout, or the session surface being disabled. `MaxRetryDurationError`
+  (a subtype) is raised when retries exhaust the configured time budget.
 - `InterfaceError` — bad connection configuration or a malformed response.
+
+Idempotent requests (poll/fetch/cancel) are retried on transient failures with capped
+exponential backoff; a server `Retry-After` header is honored, and retries are bounded by
+both a max-attempt count and a total-time budget (`RetryPolicy.max_elapsed`). Statement
+submits are never auto-retried.
+
+## Metadata
+
+For relation introspection (as dbt and BI tools need), the cursor exposes metadata methods
+that query the server's `information_schema`; fetch the rows as usual:
+
+```python
+cur.tables(schema_name="public")
+for catalog, schema, name, table_type in cur.fetchall():
+    ...
+# also: cur.catalogs(), cur.schemas(catalog=…), cur.columns(table_name=…)
+```
 
 ## Arrow results
 

@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
+from . import _metadata
 from ._params import render_qmark
 from .dbapi import OperationalError, ProgrammingError
 from .result import ResultSet
@@ -139,6 +140,43 @@ class Cursor:
 
     def fetchall(self) -> list[tuple[Any, ...]]:
         return self._require_result().fetchall()
+
+    # -- Metadata (dbt/BI relation introspection via information_schema) -----
+
+    def catalogs(self) -> Cursor:
+        """Execute a query listing catalogs (`catalog_name`). Fetch the rows to read them."""
+        return self._run_metadata(_metadata.catalogs_query())
+
+    def schemas(self, *, catalog: str | None = None, schema_name: str | None = None) -> Cursor:
+        """Execute a query listing schemas, optionally filtered by catalog / name pattern."""
+        return self._run_metadata(_metadata.schemas_query(catalog, schema_name))
+
+    def tables(
+        self,
+        *,
+        catalog: str | None = None,
+        schema_name: str | None = None,
+        table_name: str | None = None,
+    ) -> Cursor:
+        """Execute a query listing tables, optionally filtered by catalog/schema/name."""
+        return self._run_metadata(_metadata.tables_query(catalog, schema_name, table_name))
+
+    def columns(
+        self,
+        *,
+        catalog: str | None = None,
+        schema_name: str | None = None,
+        table_name: str | None = None,
+        column_name: str | None = None,
+    ) -> Cursor:
+        """Execute a query listing columns, optionally filtered by catalog/schema/table/name."""
+        return self._run_metadata(
+            _metadata.columns_query(catalog, schema_name, table_name, column_name)
+        )
+
+    def _run_metadata(self, query: tuple[str, list[Any]]) -> Cursor:
+        sql, params = query
+        return self.execute(sql, params or None)
 
     def fetch_arrow_table(self) -> Any:
         """Return the remaining rows as a ``pyarrow.Table`` (requires the ``arrow`` extra)."""

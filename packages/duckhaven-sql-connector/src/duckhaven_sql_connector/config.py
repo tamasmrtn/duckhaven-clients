@@ -23,6 +23,11 @@ class RetryPolicy:
     max_retries: int = 3
     backoff_base: float = 0.1
     backoff_max: float = 10.0
+    # Total wall-clock budget for all retries of one request; exceeding it raises
+    # MaxRetryDurationError rather than sleeping past it (e.g. on a large Retry-After).
+    max_elapsed: float = 120.0
+    # Honor a server Retry-After header (429/503) in place of computed backoff.
+    respect_retry_after: bool = True
     retry_statuses: frozenset[int] = frozenset({429, 502, 503, 504})
 
 
