@@ -58,7 +58,26 @@ class TestDuckHavenEndToEnd:
         tbl_count = project.run_sql("select count(*) from {schema}.people_tbl", fetch="one")
         assert tbl_count[0] == 2
 
-        # A second incremental run with no new source rows must not duplicate.
+        # A second run rebuilds the `table` model, which exercises the rename path:
+        # dbt renames the existing relation to a backup (ALTER ... RENAME TO), renames the
+        # freshly built temp relation into place, then drops the backup. This is the
+        # end-to-end verification that ALTER ... RENAME TO and drop_relation (without
+        # CASCADE) both work on the Iceberg REST catalog. It also re-runs the incremental,
+        # which must not duplicate rows.
         run_dbt(["run"])
+
+        # people_tbl survived the rename/drop cycle with its rows intact.
+        tbl_count = project.run_sql("select count(*) from {schema}.people_tbl", fetch="one")
+        assert tbl_count[0] == 2
+
         incr_count = project.run_sql("select count(*) from {schema}.people_incr", fetch="one")
         assert incr_count[0] == 2
+
+        # No stale backup/temp relations left behind by the rename swap.
+        leftovers = project.run_sql(
+            "select count(*) from information_schema.tables "
+            "where table_schema = '{schema}' "
+            "and (table_name like '%__dbt_backup' or table_name like '%__dbt_tmp')",
+            fetch="one",
+        )
+        assert leftovers[0] == 0
