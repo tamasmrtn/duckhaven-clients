@@ -1,7 +1,7 @@
 """SQL builders for the cursor's catalog/schema/table/column metadata methods.
 
 dbt and BI tools introspect relations through the DB-API metadata methods. DuckHaven has
-no dedicated metadata endpoint, so — like the Databricks connector's ``SHOW`` queries —
+no dedicated metadata endpoint, so
 these run ordinary ``SELECT``s (allowed by the statement policy) against the ANSI-standard
 ``information_schema`` views the agent's DuckDB exposes over the attached catalogs.
 

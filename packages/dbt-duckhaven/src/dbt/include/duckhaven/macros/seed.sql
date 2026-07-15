@@ -2,8 +2,7 @@
   DuckHaven runs DuckDB remotely on an agent, so dbt-duckdb's default seed strategy —
   COPY FROM the client's local CSV — cannot work (the agent has no access to that file,
   and the statement policy blocks COPY from non-staging paths). Load seeds via batched
-  INSERT ... VALUES with parameter bindings instead, exactly like dbt-databricks and
-  dbt-snowflake. This is dbt's default (non-duckdb) load path.
+  INSERT ... VALUES with parameter bindings instead. This is dbt's default (non-duckdb) load path.
 #}
 {% macro duckhaven__load_csv_rows(model, agate_table) %}
   {% set batch_size = get_batch_size() %}

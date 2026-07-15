@@ -1,7 +1,6 @@
 """Connection configuration and retry policy.
 
-``ClientConfig`` is the validated bundle of connection settings — the DuckHaven analog
-of Databricks ``host`` / ``http_path`` / ``token`` — shared by the transport, the
+``ClientConfig`` is the validated bundle of connection settings shared by the transport, the
 session manager, and the cursor.
 """
 

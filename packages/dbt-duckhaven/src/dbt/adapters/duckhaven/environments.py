@@ -3,7 +3,7 @@
 dbt-duckdb delegates "where code runs" to an ``Environment``. This one routes execution
 through the ``duckhaven-sql-connector`` session client instead of an in-process DuckDB.
 Each :meth:`handle` opens a fresh connector ``Connection`` (one DuckHaven session), so
-every dbt thread gets its own session — mirroring dbt-databricks' session-per-connection.
+every dbt thread gets its own session.
 """
 
 from __future__ import annotations

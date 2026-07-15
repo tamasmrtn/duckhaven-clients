@@ -18,7 +18,6 @@ from dbt.adapters.duckdb.credentials import DuckDBCredentials
 
 @dataclass
 class DuckHavenCredentials(DuckDBCredentials):
-    # DuckHaven connection — the Databricks host / http_path / token analog.
     host: str = ""
     workspace: str = ""
     token: str = ""

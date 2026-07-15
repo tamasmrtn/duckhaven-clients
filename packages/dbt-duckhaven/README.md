@@ -1,7 +1,7 @@
 # dbt-duckhaven
 
 A [dbt](https://www.getdbt.com/) adapter that runs your DuckDB models on **DuckHaven**
-compute through the DuckHaven API — the "Databricks model" for DuckDB. Instead of dbt
+compute through the DuckHaven API. Instead of dbt
 opening its own in-process DuckDB, every statement is routed through the DuckHaven
 session API, which dispatches it to an agent. dbt authenticates as a DuckHaven
 service-account personal access token (PAT), so a `dbt run` is fully governed and
@@ -35,9 +35,7 @@ my_project:
       threads: 4
 ```
 
-`host` / `workspace` / `token` are the DuckHaven analog of Databricks
-`host` / `http_path` / `token`. `agent` selects a specific compute (a "warehouse") by
-**UUID**; omit it to let the API pick a compatible connected agent.
+`host` / `workspace` / `token` / `agent` let the API pick a compatible connected agent.
 
 ## What works in v1
 
