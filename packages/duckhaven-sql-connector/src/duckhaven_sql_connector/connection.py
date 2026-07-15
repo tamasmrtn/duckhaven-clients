@@ -137,6 +137,7 @@ def connect(
     http_timeout: float = 60.0,
     tls_verify: bool = True,
     retry: RetryPolicy | None = None,
+    application: str | None = None,
     hooks: Hooks | None = None,
 ) -> Connection:
     """Open a DuckHaven SQL session and return a DB-API 2.0 Connection."""
@@ -151,5 +152,6 @@ def connect(
         http_timeout=http_timeout,
         tls_verify=tls_verify,
         retry=retry or RetryPolicy(),
+        application=application,
     )
     return Connection.open(config, hooks=hooks)

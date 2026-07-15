@@ -31,6 +31,15 @@ def test_sends_bearer_and_user_agent():
 
 
 @respx.mock
+def test_application_is_appended_to_user_agent():
+    route = respx.get(f"{BASE}/probe").mock(return_value=httpx.Response(200, json={}))
+    _transport(application="dbt-duckhaven/1.2.3").get("/probe")
+    ua = route.calls.last.request.headers["user-agent"]
+    assert ua.startswith("duckhaven-sql-connector/")
+    assert ua.endswith(" dbt-duckhaven/1.2.3")
+
+
+@respx.mock
 def test_get_retries_on_503_then_succeeds():
     route = respx.get(f"{BASE}/probe").mock(
         side_effect=[httpx.Response(503), httpx.Response(200, json={"ok": True})]

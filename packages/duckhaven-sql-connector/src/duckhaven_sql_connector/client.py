@@ -68,7 +68,10 @@ class Transport:
             base_url=config.base_url,
             headers={
                 "Authorization": f"Bearer {config.token}",
-                "User-Agent": f"duckhaven-sql-connector/{__version__}",
+                "User-Agent": (
+                    f"duckhaven-sql-connector/{__version__}"
+                    + (f" {config.application}" if config.application else "")
+                ),
             },
             verify=config.tls_verify,
             timeout=config.http_timeout,

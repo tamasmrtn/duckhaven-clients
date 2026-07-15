@@ -21,6 +21,7 @@ def test_defaults():
     assert cfg.timeout == 600.0
     assert isinstance(cfg.retry, RetryPolicy)
     assert cfg.agent is None
+    assert cfg.application is None
 
 
 @pytest.mark.parametrize(
