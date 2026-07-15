@@ -34,6 +34,8 @@ def test_handle_opens_a_connector_session_with_mapped_args(monkeypatch):
     assert handle == "SESSION"
     # schema is deliberately not forwarded: dbt fully-qualifies relations and creates
     # schemas itself, so a session-level USE would only fail on not-yet-created schemas.
+    application = calls.pop("application")
+    assert application.startswith("dbt-duckhaven/")
     assert calls == {
         "host": "https://dh.internal",
         "workspace": "analytics",

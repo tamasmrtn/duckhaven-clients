@@ -14,6 +14,7 @@ from dbt.adapters.contracts.connection import AdapterResponse, Connection
 from dbt.adapters.duckdb.environments import Environment
 from duckhaven_sql_connector import connect
 
+from .__version__ import version as _adapter_version
 from .credentials import DuckHavenCredentials
 
 
@@ -36,6 +37,9 @@ class DuckHavenEnvironment(Environment):
             token=creds.token,
             agent=creds.agent,
             catalog=creds.catalog or creds.database,
+            # Identify dbt to the server (User-Agent suffix) so a governed `dbt run` is
+            # attributable, distinct from raw connector or BI-tool traffic.
+            application=f"dbt-duckhaven/{_adapter_version}",
         )
 
     def get_binding_char(self) -> str:
