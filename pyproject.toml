@@ -19,6 +19,9 @@ dev = [
     "opentelemetry-sdk>=1.36",
     # dbt's standard adapter conformance harness, for the dbt-duckhaven member.
     "dbt-tests-adapter>=1.10",
+    # Renders the dbt-duckhaven macros in unit tests (present transitively via
+    # dbt-common, pinned here so the render harness doesn't rely on a transitive dep).
+    "jinja2>=3.1",
 ]
 
 [tool.ruff]

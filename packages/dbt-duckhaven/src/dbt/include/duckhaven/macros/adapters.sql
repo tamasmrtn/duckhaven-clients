@@ -46,3 +46,16 @@
     drop schema if exists {{ relation.without_identifier() }}
   {%- endcall -%}
 {%- endmacro %}
+
+
+{#
+  DuckDB's Iceberg REST catalog rejects DROP ... CASCADE (same limitation as drop_schema).
+  dbt-duckdb's duckdb__drop_relation appends CASCADE for non-DuckLake relations, which the
+  table materialization hits on every rebuild (it drops the renamed backup relation). Drop
+  without CASCADE.
+#}
+{% macro duckhaven__drop_relation(relation) -%}
+  {%- call statement('drop_relation', auto_begin=False) -%}
+    drop {{ relation.type }} if exists {{ relation }}
+  {%- endcall -%}
+{%- endmacro %}
