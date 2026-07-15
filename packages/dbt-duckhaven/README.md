@@ -4,7 +4,8 @@ A [dbt](https://www.getdbt.com/) adapter that runs your DuckDB models on **DuckH
 compute through the DuckHaven API. Instead of dbt
 opening its own in-process DuckDB, every statement is routed through the DuckHaven
 session API, which dispatches it to an agent. dbt authenticates as a DuckHaven
-service-account personal access token (PAT), so a `dbt run` is fully governed and
+service-account personal access token (PAT), and identifies itself to the server via the
+connector's User-Agent (`dbt-duckhaven/<version>`), so a `dbt run` is fully governed and
 attributable.
 
 It reuses [`dbt-duckdb`](https://github.com/duckdb/dbt-duckdb) wholesale — the DuckDB
@@ -30,12 +31,13 @@ my_project:
       workspace: analytics                     # DuckHaven workspace slug
       token: "{{ env_var('DUCKHAVEN_PAT') }}"  # a DuckHaven PAT (dh_pat_…)
       agent: 00000000-0000-0000-0000-000000000000  # optional agent UUID; omit to auto-pick
-      catalog: sales                           # dbt "database" → Polaris catalog
+      catalog: sales                           # required — dbt "database" → Polaris catalog
       schema: analytics                        # dbt "schema"   → Polaris namespace
       threads: 4
 ```
 
-`host` / `workspace` / `token` / `agent` let the API pick a compatible connected agent.
+`host`, `workspace`, `token`, and `catalog` are required; `agent` is optional (omit to let
+the API pick a compatible connected agent). `dbt init` scaffolds these prompts for you.
 
 ## What works in v1
 
@@ -50,6 +52,14 @@ and **ephemeral**. Generic and singular tests.
 - **Snapshots** and the **`merge` incremental strategy** — deferred (need Iceberg MERGE
   / temp-relation semantics that are still stabilizing).
 - **`external` materialization / dbt-duckdb source plugins** — out of scope.
+
+### Model constraints
+
+Polaris/Iceberg does not enforce relational constraints. In model contracts, `not_null` is
+enforced (rejected on write), while `primary_key`, `foreign_key`, and `unique` are
+**documentation-only** (not enforced), and `check` constraints are not supported. The
+adapter advertises this to dbt so contracts don't promise enforcement the backend can't
+provide.
 
 > **Server requirement.** The adapter needs a DuckHaven build whose SQL session/statement
 > API is enabled and whose statement policy admits `DESCRIBE` (used for column metadata).
