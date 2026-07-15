@@ -56,6 +56,13 @@ def test_missing_required_field_raises():
         make(token="")
 
 
+def test_missing_catalog_raises():
+    # catalog → dbt database qualifies every relation; without it dbt-duckdb would fall
+    # back to the ":memory:" sentinel and silently target a non-existent catalog.
+    with pytest.raises(DbtRuntimeError):
+        make(catalog="")
+
+
 def test_remote_field_rejected():
     # `remote` would route to dbt-duckdb's Buena Vista environment, not DuckHaven.
     with pytest.raises(DbtRuntimeError):

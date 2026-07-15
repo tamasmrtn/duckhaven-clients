@@ -60,9 +60,9 @@ class DuckHavenCredentials(DuckDBCredentials):
 
     def __post_init__(self):
         super().__post_init__()
-        if not (self.host and self.workspace and self.token):
+        if not (self.host and self.workspace and self.token and self.catalog):
             raise DbtRuntimeError(
-                "dbt-duckhaven requires 'host', 'workspace', and 'token' in profiles.yml"
+                "dbt-duckhaven requires 'host', 'workspace', 'token', and 'catalog' in profiles.yml"
             )
         if self.remote is not None:
             raise DbtRuntimeError(
