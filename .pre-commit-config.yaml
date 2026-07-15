@@ -1,4 +1,4 @@
-# Mirrors the DuckHaven server's Ruff-only quality gate (no mypy).
+# Mirrors the DuckHaven server's Ruff-only quality gate.
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.15.21
