@@ -10,10 +10,14 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 - Initial `dbt-duckhaven` adapter: registers `type: duckhaven`, subclasses `dbt-duckdb`,
   and routes every statement through the DuckHaven session API via
-  `duckhaven-sql-connector`. v1 materializations: table, view, seed, incremental,
-  ephemeral. Python models and snapshots are not supported.
+  `duckhaven-sql-connector`. v1 materializations: table, seed, incremental, ephemeral.
+  Views, Python models, and snapshots are not supported.
 - `duckhaven__drop_relation` drops without `CASCADE` (the Iceberg REST catalog rejects it,
   as it already does for `DROP SCHEMA`); the `table` materialization hits this on rebuild.
+- Custom `table` materialization: rebuilds a table by dropping and recreating it in place
+  rather than dbt-duckdb's `__dbt_tmp` build-and-`ALTER … RENAME` swap. Iceberg rename keeps
+  the old storage location, so the swap left the table at the `__dbt_tmp` path and the next
+  run's `CREATE … __dbt_tmp` failed with a Polaris location conflict.
 - `dbt run` identifies dbt to the server via the connector User-Agent
   (`dbt-duckhaven/<version>`), for governed attribution.
 - `profile_template.yml` so `dbt init` scaffolds the connection prompts.
