@@ -29,6 +29,32 @@ _PENDING = ("queued", "running")
 # A 7-tuple with only the column name known; DuckHaven's rows page carries no types.
 _DESCRIPTION_FILLER = (None, None, None, None, None, None)
 
+# Standalone transaction-control statements. The DuckHaven session is autocommit (each
+# statement commits via Polaris), so these carry no server-side meaning — and submitting a
+# real ``BEGIN`` would wrongly open a transaction on the agent's connection. Some clients
+# (notably dbt's test harness) still emit a bare ``COMMIT``; treat all of these as
+# client-side no-ops rather than statements the session would leave queued forever.
+_TXN_CONTROL_NOOPS = frozenset(
+    {
+        "BEGIN",
+        "BEGIN TRANSACTION",
+        "START TRANSACTION",
+        "COMMIT",
+        "COMMIT TRANSACTION",
+        "END",
+        "END TRANSACTION",
+        "ROLLBACK",
+        "ROLLBACK TRANSACTION",
+        "ABORT",
+    }
+)
+
+
+def _is_txn_control_noop(sql: str) -> bool:
+    """True if ``sql`` is a standalone BEGIN/COMMIT/ROLLBACK-style statement."""
+    normalized = " ".join(sql.strip().rstrip(";").split()).upper()
+    return normalized in _TXN_CONTROL_NOOPS
+
 
 class Cursor:
     def __init__(self, connection: Connection) -> None:
@@ -55,6 +81,14 @@ class Cursor:
     def execute(self, operation: str, parameters: Sequence[Any] | None = None) -> Cursor:
         self._ensure_open()
         sql = render_qmark(operation, parameters) if parameters else operation
+
+        if _is_txn_control_noop(sql):
+            # Autocommit session: nothing to submit. Reset to a clean, result-less state.
+            self._query_id = None
+            self._result = None
+            self._description = None
+            self._rowcount = -1
+            return self
 
         transport = self._connection._transport
         config = self._connection._config
