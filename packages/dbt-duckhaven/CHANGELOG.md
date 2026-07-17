@@ -6,6 +6,8 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-17
+
 ### Added
 
 - Initial `dbt-duckhaven` adapter: registers `type: duckhaven`, subclasses `dbt-duckdb`,
@@ -42,6 +44,8 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ### Changed
 
+- `duckhaven-sql-connector` dependency now requires `>=0.1.0`, its first published release,
+  instead of an unpinned floor.
 - `catalog` is now a required profile field (previously it silently fell back to an
   in-memory sentinel catalog).
 - `CONSTRAINT_SUPPORT` reflects Iceberg: only `not_null` is enforced; `primary_key` /
