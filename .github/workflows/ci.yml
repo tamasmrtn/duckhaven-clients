@@ -18,6 +18,7 @@ jobs:
     outputs:
       connector: ${{ steps.filter.outputs.connector }}
       dbt: ${{ steps.filter.outputs.dbt }}
+      dlt: ${{ steps.filter.outputs.dlt }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -36,6 +37,9 @@ jobs:
             dbt:
               - *shared
               - 'packages/dbt-duckhaven/**'
+            dlt:
+              - *shared
+              - 'packages/dlt-duckhaven/**'
 
   lint:
     runs-on: ubuntu-latest
@@ -88,6 +92,25 @@ jobs:
           uv run --python ${{ matrix.python-version }} pytest
           packages/dbt-duckhaven/tests/unit
 
+  test-dlt-duckhaven:
+    needs: changes
+    if: needs.changes.outputs.dlt == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # dlt 1.29 supports 3.10–3.14 (Requires-Python >=3.10,<3.15).
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --python ${{ matrix.python-version }}
+      - run: >
+          uv run --python ${{ matrix.python-version }} pytest
+          packages/dlt-duckhaven/tests/unit
+
   build:
     runs-on: ubuntu-latest
     steps:
@@ -97,13 +120,14 @@ jobs:
       - uses: astral-sh/setup-uv@v7
       - run: uv build --package duckhaven-sql-connector
       - run: uv build --package dbt-duckhaven
+      - run: uv build --package dlt-duckhaven
       - run: uvx twine check dist/*
 
   # Single required check: green when every job either succeeded or was intentionally
   # skipped by path filtering. Mark THIS as the required status in branch protection.
   ci-success:
     if: always()
-    needs: [lint, test, test-dbt-duckhaven, build]
+    needs: [lint, test, test-dbt-duckhaven, test-dlt-duckhaven, build]
     runs-on: ubuntu-latest
     steps:
       - name: Verify no upstream job failed

@@ -8,6 +8,7 @@ on:
     tags:
       - "sql-connector-v*"
       - "dbt-duckhaven-v*"
+      - "dlt-duckhaven-v*"
 
 jobs:
   build:
@@ -35,6 +36,10 @@ jobs:
               echo "package=dbt-duckhaven" >> "$GITHUB_OUTPUT"
               echo "env_testpypi=testpypi-dbt-duckhaven" >> "$GITHUB_OUTPUT"
               echo "env_pypi=pypi-dbt-duckhaven" >> "$GITHUB_OUTPUT" ;;
+            dlt-duckhaven-v*)
+              echo "package=dlt-duckhaven" >> "$GITHUB_OUTPUT"
+              echo "env_testpypi=testpypi-dlt-duckhaven" >> "$GITHUB_OUTPUT"
+              echo "env_pypi=pypi-dlt-duckhaven" >> "$GITHUB_OUTPUT" ;;
             *) echo "unrecognized release tag prefix: ${GITHUB_REF_NAME}" >&2; exit 1 ;;
           esac
       - uses: astral-sh/setup-uv@v7

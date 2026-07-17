@@ -28,6 +28,11 @@ test-dbt-integration:
 	uv run pytest packages/dbt-duckhaven/tests/functional packages/dbt-duckhaven/tests/e2e \
 		-p dbt.tests.fixtures.project -m integration
 
+# dlt-duckhaven e2e: a real dlt pipeline (append + merge) against a live DuckHaven; needs
+# DUCKHAVEN_TEST_HOST/WORKSPACE/PAT/CATALOG.
+test-dlt-integration:
+	uv run pytest packages/dlt-duckhaven/tests/e2e -m integration
+
 # Refresh the pinned OpenAPI contract from a running server: make refresh-contract HOST=https://...
 refresh-contract:
 	uv run python packages/duckhaven-sql-connector/scripts/refresh_contract.py $(HOST)
