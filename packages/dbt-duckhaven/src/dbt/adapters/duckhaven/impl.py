@@ -12,13 +12,14 @@ from collections.abc import Sequence
 from dbt_common.contracts.constraints import ConstraintType
 from packaging.version import Version
 
-from dbt.adapters.base.impl import ConstraintSupport
+from dbt.adapters.base.impl import ConstraintSupport, available
 from dbt.adapters.capability import (
     Capability,
     CapabilityDict,
     CapabilitySupport,
     Support,
 )
+from dbt.adapters.duckdb.column import DuckDBColumn
 from dbt.adapters.duckdb.impl import DuckDBAdapter
 
 from .connections import DuckHavenConnectionManager
@@ -62,3 +63,25 @@ class DuckHavenAdapter(DuckDBAdapter):
         if self.duckdb_version >= Version(DUCKHAVEN_MERGE_MIN_VERSION):
             strategies += ["merge", "microbatch"]
         return strategies
+
+    @available.parse(lambda *a, **k: [])
+    def get_column_schema_from_query(self, sql: str) -> list[DuckDBColumn]:
+        """Describe a query's result columns, wrapping DESCRIBE in a SELECT.
+
+        dbt-duckdb issues a bare ``DESCRIBE (<sql>)``, which cannot survive a DuckHaven
+        session: DuckDB reports DESCRIBE as a SELECT statement, so the agent materializes it
+        with ``COPY (<sql>) TO … (FORMAT PARQUET)`` — and ``COPY (DESCRIBE …)`` is a parser
+        error. Selecting from the DESCRIBE makes it a genuine SELECT that wraps cleanly, the
+        same shape duckhaven__get_columns_in_relation relies on. Columns come back in the
+        same (name, type, …) order, so the rest matches dbt-duckdb.
+
+        Snapshots reach this on every run via check_time_data_types.
+        """
+        describe_sql = f"select * from (describe ({sql}))"
+        _, cursor = self.connections.add_select_query(describe_sql)
+        flattened_columns: list[DuckDBColumn] = []
+        for row in cursor.fetchall():
+            name, dtype = row[0], row[1]
+            column = DuckDBColumn(column=name, dtype=dtype)
+            flattened_columns.extend(column.flatten())
+        return flattened_columns

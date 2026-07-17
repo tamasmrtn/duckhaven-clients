@@ -50,3 +50,22 @@ def test_merge_and_microbatch_gated_below_iceberg_merge_support(duckdb_version):
     # serve it. 1.4.5 pins that we are deliberately stricter than dbt-duckdb.
     strategies = DuckHavenAdapter.valid_incremental_strategies(_adapter_on(duckdb_version))
     assert set(strategies) == {"append", "delete+insert"}
+
+
+def test_get_column_schema_from_query_wraps_describe_in_a_select():
+    # dbt-duckdb emits a bare `DESCRIBE (<sql>)`. DuckDB reports DESCRIBE as a SELECT, so the
+    # agent materializes it via `COPY (<sql>) TO ...`, and `COPY (DESCRIBE ...)` is a parser
+    # error. Selecting from the DESCRIBE makes it a real SELECT that wraps cleanly.
+    captured = {}
+
+    class _Connections:
+        def add_select_query(self, sql):
+            captured["sql"] = sql
+            return None, SimpleNamespace(fetchall=lambda: [("id", "INTEGER")])
+
+    adapter = SimpleNamespace(connections=_Connections())
+    columns = DuckHavenAdapter.get_column_schema_from_query(adapter, "select 1 as id")
+
+    assert captured["sql"] == "select * from (describe (select 1 as id))"
+    assert not captured["sql"].lstrip().lower().startswith("describe")
+    assert [(c.column, c.dtype) for c in columns] == [("id", "INTEGER")]
