@@ -39,18 +39,48 @@ my_project:
 `host`, `workspace`, `token`, and `catalog` are required; `agent` is optional (omit to let
 the API pick a compatible connected agent). `dbt init` scaffolds these prompts for you.
 
-## What works in v1
+## What works
 
-Materializations: **table, seed, incremental** (`append` and `delete+insert` strategies),
-and **ephemeral**. Generic and singular tests.
+Materializations: **table, seed, incremental, ephemeral**, and **snapshots** (both the
+`timestamp` and `check` strategies). Generic and singular tests.
+
+### Incremental strategies
+
+`append`, `delete+insert`, `merge`, and `microbatch`.
+
+`merge` and `microbatch` require the **agent's DuckDB to be 1.5.3 or newer** — that is when
+`duckdb-iceberg` gained `MERGE INTO` for Iceberg tables. The adapter checks the agent's
+version and simply won't offer the strategies below that, so you get a clear dbt error
+instead of a mid-run failure.
+
+`merge` emits the explicit `MERGE INTO … WHEN MATCHED THEN UPDATE SET … WHEN NOT MATCHED
+THEN INSERT …` form that duckdb-iceberg documents, rather than dbt-duckdb's DuckDB-native
+`UPDATE BY NAME` / `INSERT BY NAME`. `merge_update_columns`, `merge_exclude_columns`, and
+`incremental_predicates` work as usual. dbt-duckdb's DuckDB-only extras — `merge_clauses`,
+`merge_returning_columns`, `merge_on_using_columns`, `merge_update_condition`,
+`merge_insert_condition`, `merge_update_set_expressions` — **raise a compile-time error**
+rather than being silently ignored, because they depend on syntax Iceberg does not support.
+
+Because Iceberg writes are merge-on-read, a `merge` target must leave `write.update.mode` /
+`write.delete.mode` at `merge-on-read`; DuckDB fails the statement otherwise.
+
+**Microbatch** batches run **serially**, by design: concurrent batches would each take their
+own session (an agent admission slot) and race each other to commit to the same Iceberg
+table. Size `batch_size` so one batch finishes inside the server's 600s per-statement
+limit. Note that each batch leaves a session-local temp table behind for the life of the
+run (dbt-duckdb's incremental materialization only cleans those up on MotherDuck), and a
+session has a fixed 256 MiB budget — so very high batch counts in one run are untested.
 
 ### Not supported (yet)
 
 - **`view` materialization** — DuckDB's Iceberg REST catalog does not implement
   `CREATE VIEW`, so view models fail. Use `table` instead.
 - **Python models** — DuckHaven agents execute SQL only; a Python model fails clearly.
-- **Snapshots** and the **`merge` incremental strategy** — deferred (need Iceberg MERGE
-  / temp-relation semantics that are still stabilizing).
+- **Re-running `dbt seed` over an existing seed** — dbt's seed reset emits `TRUNCATE TABLE`,
+  which the DuckHaven statement policy rejects. Use `dbt seed --full-refresh`, which drops
+  and recreates instead.
+- **`on-schema-change` for incremental models** — the ALTER-driven flow is untested here.
+  (Snapshots *do* handle a new column: that path is covered.)
 - **`external` materialization / dbt-duckdb source plugins** — out of scope.
 
 ### Model constraints
