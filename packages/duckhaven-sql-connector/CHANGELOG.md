@@ -19,6 +19,9 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
   `traceparent` propagation), plus dependency-free instrumentation `Hooks`.
 - Cursor metadata methods (`catalogs`/`schemas`/`tables`/`columns`) over
   `information_schema`, for dbt/BI relation introspection.
+- Connection-scoped `Connection.cancel()` that cancels the session's in-flight statement
+  (for drivers like dbt that abort a run from another thread); the statement's id is now
+  recorded before polling, so a cancel arriving mid-run reaches the running statement.
 - Retry hardening: honors a server `Retry-After` header and bounds retries by a total-time
   budget (`RetryPolicy.max_elapsed`, raising `MaxRetryDurationError`).
 - A pinned OpenAPI contract subset with an anti-drift test, env-gated live integration

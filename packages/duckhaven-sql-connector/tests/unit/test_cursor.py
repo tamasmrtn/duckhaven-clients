@@ -291,3 +291,27 @@ def test_cancel_deletes_query():
     cur.execute("SELECT 1")
     cur.cancel()
     assert cancel.called
+
+
+@respx.mock
+def test_query_id_is_tracked_while_the_statement_is_still_running():
+    # The id must be recorded from the submit response, before polling completes, so a
+    # cancel arriving mid-run reaches the actually-running statement. We capture the id
+    # from inside a poll callback (i.e. while execute() is still blocked polling).
+    conn = open_conn()
+    _submit()
+    cur = conn.cursor()
+    seen = {}
+
+    def _capture(_request):
+        seen["id"] = cur._query_id
+        return httpx.Response(200, json={"id": QUERY_ID, "status": "done", "row_count": 0})
+
+    respx.get(QUERY_URL).mock(side_effect=_capture)
+    respx.get(ROWS_URL).mock(
+        return_value=httpx.Response(
+            200, json={"rows": [], "columns": [], "cursor": None, "total": 0}
+        )
+    )
+    cur.execute("SELECT slow()")
+    assert seen["id"] == QUERY_ID

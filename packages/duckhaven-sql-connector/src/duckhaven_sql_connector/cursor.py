@@ -106,9 +106,12 @@ class Cursor:
             raise
 
         query = response.json()
+        # Record the id before polling so a concurrent cancel() (e.g. dbt aborting from
+        # another thread) can reach the statement while it is still running, not only
+        # after it finishes.
+        self._query_id = query["id"]
         query = self._poll_to_completion(query["id"], query.get("status", "queued"))
 
-        self._query_id = query["id"]
         row_count = query.get("row_count")
         self._rowcount = row_count if isinstance(row_count, int) else -1
 
