@@ -36,6 +36,23 @@ models:
         data_tests: [not_null, unique]
 """
 
+# The `merge` strategy: the second run must update alice in place, not append a duplicate.
+_MERGE = """
+{{ config(materialized='incremental', incremental_strategy='merge', unique_key='id') }}
+{% if is_incremental() %}
+select 1 as id, 'alice-updated' as name
+{% else %}
+select * from {{ ref('people') }}
+{% endif %}
+"""
+
+_SNAPSHOT = """
+{% snapshot people_snap %}
+{{ config(target_schema=schema, unique_key='id', strategy='check', check_cols=['name']) }}
+select * from {{ ref('people_tbl') }}
+{% endsnapshot %}
+"""
+
 
 class TestDuckHavenEndToEnd:
     @pytest.fixture(scope="class")
@@ -47,12 +64,17 @@ class TestDuckHavenEndToEnd:
         return {
             "people_tbl.sql": _TABLE,
             "people_incr.sql": _INCREMENTAL,
+            "people_merge.sql": _MERGE,
             "schema.yml": _SCHEMA_YML,
         }
 
+    @pytest.fixture(scope="class")
+    def snapshots(self):
+        return {"people_snap.sql": _SNAPSHOT}
+
     def test_seed_run_test(self, project):
         assert len(run_dbt(["seed"])) == 1
-        assert len(run_dbt(["run"])) == 2
+        assert len(run_dbt(["run"])) == 3
         run_dbt(["test"])
 
         tbl_count = project.run_sql("select count(*) from {schema}.people_tbl", fetch="one")
@@ -73,11 +95,60 @@ class TestDuckHavenEndToEnd:
         incr_count = project.run_sql("select count(*) from {schema}.people_incr", fetch="one")
         assert incr_count[0] == 2
 
-        # No stale backup/temp relations left behind by the rename swap.
+        # The merge model's second run updates id=1 in place rather than appending it.
+        merge_rows = project.run_sql(
+            "select id, name from {schema}.people_merge order by id", fetch="all"
+        )
+        assert merge_rows == [(1, "alice-updated"), (2, "bob")]
+
+        # No stale backup/temp relations left behind. This also catches the snapshot staging
+        # table regressing from a session-local temp table to a real Iceberg one.
         leftovers = project.run_sql(
             "select count(*) from information_schema.tables "
             "where table_schema = '{schema}' "
-            "and (table_name like '%__dbt_backup' or table_name like '%__dbt_tmp')",
+            "and (table_name like '%__dbt_backup' or table_name like '%__dbt_tmp%')",
             fetch="one",
         )
         assert leftovers[0] == 0
+
+    def test_incremental_full_refresh_rebuilds(self, project):
+        """`dbt run --full-refresh` over an *existing* incremental model.
+
+        dbt-duckdb's incremental materialization rebuilds via a rename swap (rename target to
+        backup, rename the intermediate into place). On an Iceberg REST catalog a rename moves
+        the catalog entry but not the storage location — the same failure the `table`
+        materialization is overridden to avoid. Nothing exercised this path before, so it is
+        unproven rather than known-broken; this pins whichever way it actually behaves.
+
+        Relies on test_seed_run_test having built the project — the tests in this class share
+        one schema and run in definition order. Re-seeding here would fail on an unrelated
+        gap: dbt's seed reset emits TRUNCATE TABLE, which the session policy denies.
+        """
+        run_dbt(["run", "--select", "people_incr", "--full-refresh"])
+
+        count = project.run_sql("select count(*) from {schema}.people_incr", fetch="one")
+        assert count[0] == 2
+
+    def test_snapshot_captures_changes(self, project):
+        # Builds on the project from test_seed_run_test (shared class schema, definition
+        # order) — see the note on test_incremental_full_refresh_rebuilds about re-seeding.
+        assert len(run_dbt(["snapshot"])) == 1
+        current = project.run_sql(
+            "select count(*) from {schema}.people_snap where dbt_valid_to is null", fetch="one"
+        )
+        assert current[0] == 2
+
+        # Change a tracked column at the source, then re-snapshot: the old row must be closed
+        # out (dbt_valid_to set) and a new current row inserted. This is what proves dbt-core's
+        # MERGE-based snapshot_merge_sql actually runs against Iceberg.
+        project.run_sql("update {schema}.people_tbl set name = 'alice2' where id = 1")
+        run_dbt(["snapshot"])
+
+        current = project.run_sql(
+            "select count(*) from {schema}.people_snap where dbt_valid_to is null", fetch="one"
+        )
+        assert current[0] == 2
+        closed = project.run_sql(
+            "select count(*) from {schema}.people_snap where dbt_valid_to is not null", fetch="one"
+        )
+        assert closed[0] == 1
