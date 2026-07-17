@@ -48,13 +48,16 @@ class DuckHavenEnvironment(Environment):
 
     @classmethod
     def is_cancelable(cls) -> bool:
-        # The connector cancels per-statement (DELETE), but dbt's cancel() is
-        # connection-scoped and we don't track the active cursor here. Revisit later.
-        return False
+        return True
 
     @classmethod
     def cancel(cls, connection: Connection) -> None:
-        pass
+        # dbt cancels a run by cancelling the other threads' connections; each handle is
+        # a connector Connection that cancels its in-flight statement (DELETE /queries/id),
+        # freeing the agent's admission slot instead of letting the statement run on.
+        handle = connection.handle
+        if handle is not None:
+            handle.cancel()
 
     def submit_python_job(self, handle, parsed_model: dict, compiled_code: str) -> AdapterResponse:
         raise DbtRuntimeError(

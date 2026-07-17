@@ -35,6 +35,9 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
   run's `CREATE … __dbt_tmp` failed with a Polaris location conflict.
 - `dbt run` identifies dbt to the server via the connector User-Agent
   (`dbt-duckhaven/<version>`), for governed attribution.
+- Query cancellation: aborting a run (Ctrl-C / `--fail-fast`) cancels each session's
+  in-flight statement, freeing the agent's admission slots instead of leaving abandoned
+  queries to run to completion. `is_cancelable()` now returns `True`.
 - `profile_template.yml` so `dbt init` scaffolds the connection prompts.
 
 ### Changed

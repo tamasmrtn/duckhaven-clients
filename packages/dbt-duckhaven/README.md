@@ -100,6 +100,10 @@ provide.
 the duration of the run. There is no deadlock, but keep `threads ≤` the agent's
 admission capacity to avoid queueing/starvation. `threads: 2–4` is a good default.
 
+Cancelling a run (Ctrl-C, or a failure with `--fail-fast`) cancels the in-flight statement
+on each session, so the agent's admission slots are freed promptly instead of running the
+abandoned queries to completion.
+
 ## License
 
 Apache-2.0.

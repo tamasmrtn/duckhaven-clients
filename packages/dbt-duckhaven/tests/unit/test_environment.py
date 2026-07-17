@@ -1,5 +1,7 @@
 """The environment routes handle() through the connector and refuses Python jobs."""
 
+import types
+
 import pytest
 from dbt.adapters.duckhaven import environments
 from dbt.adapters.duckhaven.credentials import DuckHavenCredentials
@@ -49,8 +51,25 @@ def test_binding_char_is_qmark():
     assert DuckHavenEnvironment(make_creds()).get_binding_char() == "?"
 
 
-def test_not_cancelable_in_v1():
-    assert DuckHavenEnvironment.is_cancelable() is False
+def test_is_cancelable():
+    assert DuckHavenEnvironment.is_cancelable() is True
+
+
+def test_cancel_delegates_to_the_connector_handle():
+    cancelled = {"called": False}
+
+    class _Handle:
+        def cancel(self):
+            cancelled["called"] = True
+
+    connection = types.SimpleNamespace(handle=_Handle())
+    DuckHavenEnvironment.cancel(connection)
+    assert cancelled["called"] is True
+
+
+def test_cancel_is_a_noop_when_the_connection_never_opened():
+    # A failed connection has handle=None; cancel must not raise.
+    DuckHavenEnvironment.cancel(types.SimpleNamespace(handle=None))
 
 
 def test_python_models_are_refused():
