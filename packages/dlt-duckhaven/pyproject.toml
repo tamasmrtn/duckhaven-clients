@@ -1,0 +1,72 @@
+[project]
+name = "dlt-duckhaven"
+description = "dlt destination that loads staged Parquet into DuckHaven-governed Iceberg tables through the DuckHaven API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "DuckHaven" }]
+keywords = ["dlt", "duckhaven", "duckdb", "iceberg", "destination"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+]
+# A staged-Parquet dlt destination built on the DuckHaven SQL connector: dlt writes
+# Parquet, we stage it to the workspace object storage and issue the load command
+# through the DuckHaven session API. dlt 1.29 is the interface baseline.
+dependencies = [
+    "dlt>=1.29,<2",
+    "duckhaven-sql-connector>=0.1.0",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+# Client-side staging upload to the workspace object storage. s3fs covers the bundled
+# MinIO/S3 backend (the default); adlfs covers external ADLS Gen2.
+s3 = ["s3fs"]
+az = ["adlfs"]
+# Per-load-job spans; the connector owns transport-level trace propagation.
+otel = ["opentelemetry-api>=1.36"]
+
+[project.urls]
+Homepage = "https://github.com/tamasmrtn/duckhaven-clients"
+Source = "https://github.com/tamasmrtn/duckhaven-clients"
+
+# Third-party dlt destinations are discovered from `dlt-`prefixed distributions via an
+# entry point in group `dlt`; this registers our plugin module so `destination="duckhaven"`
+# resolves to `dlt_duckhaven.destinations.duckhaven`.
+[project.entry-points.dlt]
+dlt_duckhaven = "dlt_duckhaven"
+
+# Co-develop against the local connector, not a published wheel (same as dbt-duckhaven).
+[tool.uv.sources]
+duckhaven-sql-connector = { workspace = true }
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+# Version comes from git tags with a per-package prefix (dlt-duckhaven-vX.Y.Z), so this
+# member versions independently from the same workspace repo. fallback-version keeps
+# source checkouts (no tag) buildable. scm.git.describe_command scopes `git describe` to
+# this prefix too: without it, the nearest tag across the whole repo (e.g. another
+# member's tag) fails tag_regex as a hard error instead of falling back.
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../..", tag_regex = "^dlt-duckhaven-v(?P<version>.+)$", scm = { git = { describe_command = "git describe --dirty --tags --long --abbrev=40 --match dlt-duckhaven-v*" } }, fallback_version = "0.0.0" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/dlt_duckhaven/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dlt_duckhaven"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "README.md", "CHANGELOG.md"]
