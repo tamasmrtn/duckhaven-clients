@@ -1,7 +1,6 @@
 """Connection configuration and retry policy.
 
-``ClientConfig`` is the validated bundle of connection settings — the DuckHaven analog
-of Databricks ``host`` / ``http_path`` / ``token`` — shared by the transport, the
+``ClientConfig`` is the validated bundle of connection settings shared by the transport, the
 session manager, and the cursor.
 """
 
@@ -49,6 +48,9 @@ class ClientConfig:
     # cursor's arraysize, which governs how many buffered rows fetchmany() returns.
     fetch_size: int = 1000
     retry: RetryPolicy = field(default_factory=RetryPolicy)
+    # Optional client identifier appended to the User-Agent, so the server can attribute
+    # traffic to the calling application (e.g. "dbt-duckhaven/1.2.3"). Free text.
+    application: str | None = None
 
     def __post_init__(self) -> None:
         if not self.host or not isinstance(self.host, str):

@@ -10,6 +10,33 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Detect which member changed so we only run that member's test matrix. Shared roots
+  # (workspace config, lockfile, CI itself) trigger both. Skipped jobs are reconciled by
+  # the `ci-success` gate below, which is the single check to mark required.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      connector: ${{ steps.filter.outputs.connector }}
+      dbt: ${{ steps.filter.outputs.dbt }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dorny/paths-filter@v4
+        id: filter
+        with:
+          filters: |
+            shared: &shared
+              - 'pyproject.toml'
+              - 'uv.lock'
+              - 'Makefile'
+              - '.python-version'
+              - '.github/workflows/ci.yml'
+            connector:
+              - *shared
+              - 'packages/duckhaven-sql-connector/**'
+            dbt:
+              - *shared
+              - 'packages/dbt-duckhaven/**'
+
   lint:
     runs-on: ubuntu-latest
     steps:
@@ -22,6 +49,8 @@ jobs:
       - run: uv run ruff format --check .
 
   test:
+    needs: changes
+    if: needs.changes.outputs.connector == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -33,9 +62,31 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
       - run: uv sync --python ${{ matrix.python-version }}
+      # Scoped to the connector so this leg stays green on 3.14, where dbt's stack
+      # (mashumaro) cannot import; dbt-duckhaven is exercised by the job below.
       - run: >
           uv run --python ${{ matrix.python-version }} pytest
+          packages/duckhaven-sql-connector/tests/unit
           --cov=duckhaven_sql_connector --cov-report=term-missing --cov-fail-under=90
+
+  test-dbt-duckhaven:
+    needs: changes
+    if: needs.changes.outputs.dbt == 'true'
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # dbt does not run on 3.14 yet (mashumaro), so cap this member at 3.13.
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: astral-sh/setup-uv@v7
+      - run: uv sync --python ${{ matrix.python-version }}
+      - run: >
+          uv run --python ${{ matrix.python-version }} pytest
+          packages/dbt-duckhaven/tests/unit
 
   build:
     runs-on: ubuntu-latest
@@ -45,4 +96,22 @@ jobs:
           fetch-depth: 0
       - uses: astral-sh/setup-uv@v7
       - run: uv build --package duckhaven-sql-connector
+      - run: uv build --package dbt-duckhaven
       - run: uvx twine check dist/*
+
+  # Single required check: green when every job either succeeded or was intentionally
+  # skipped by path filtering. Mark THIS as the required status in branch protection.
+  ci-success:
+    if: always()
+    needs: [lint, test, test-dbt-duckhaven, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify no upstream job failed
+        run: |
+          for result in ${{ join(needs.*.result, ' ') }}; do
+            if [ "$result" != "success" ] && [ "$result" != "skipped" ]; then
+              echo "A required job did not pass: $result"
+              exit 1
+            fi
+          done
+          echo "All required jobs passed or were skipped."

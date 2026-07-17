@@ -5,3 +5,8 @@ services:
   api:
     environment:
       SQL_SESSIONS_ENABLED: "true"
+  agent:
+    # The dbt-duckhaven conformance harness holds one session (setup/asserts) while a
+    # `dbt` invocation opens another, so the agent must fit several concurrent held
+    # sessions — each reserves its own DuckDB memory_limit. Give it headroom.
+    mem_limit: 4g

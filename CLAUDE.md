@@ -13,7 +13,7 @@ repo** and published to PyPI under **Apache-2.0**. Members live under `packages/
 with `dbt-duckhaven` and `dlt-duckhaven` planned (both will depend on the connector as a
 `{ workspace = true }` member). Each member is a **pure HTTP client of DuckHaven's public
 REST API** (PAT bearer auth) and versions/publishes independently via a tag prefix (e.g.
-`sql-connector-vX.Y.Z`). Prior art worth studying: `databricks-sql-python`.
+`sql-connector-vX.Y.Z`).
 
 Tooling: **uv**, **hatchling + hatch-vcs** (tag-derived version), **Ruff** (lint/format, no
 mypy), pre-commit, GitHub Actions (CI matrix Python 3.10–3.14; tag-triggered Trusted

@@ -9,6 +9,7 @@ and the connection is marked dead; the caller opens a new one.
 
 from __future__ import annotations
 
+import weakref
 from typing import Any
 
 from ._params import quote_identifier
@@ -38,6 +39,9 @@ class Connection:
         self.active_catalog = active_catalog
         self._closed = False
         self._dead = False
+        # Live cursors, so a connection-scoped cancel() can reach the in-flight
+        # statement. Weak so a finished cursor is not kept alive by this set.
+        self._cursors: weakref.WeakSet[Cursor] = weakref.WeakSet()
 
     @classmethod
     def open(
@@ -74,7 +78,20 @@ class Connection:
 
     def cursor(self) -> Cursor:
         self._ensure_usable()
-        return Cursor(self)
+        cursor = Cursor(self)
+        self._cursors.add(cursor)
+        return cursor
+
+    def cancel(self) -> None:
+        """Best-effort cancel of the in-flight statement on this session.
+
+        DB-API has no cancel, but dbt drives one connection per thread and aborts a
+        run by cancelling the *other* threads' connections. Statements run serially
+        per session, so at most one cursor has a live statement; cancelling each known
+        cursor covers it, and a cursor whose statement already finished is a no-op.
+        """
+        for cursor in list(self._cursors):
+            cursor.cancel()
 
     # -- Transactions (autocommit session; documented no-ops) ---------------
 
@@ -137,6 +154,7 @@ def connect(
     http_timeout: float = 60.0,
     tls_verify: bool = True,
     retry: RetryPolicy | None = None,
+    application: str | None = None,
     hooks: Hooks | None = None,
 ) -> Connection:
     """Open a DuckHaven SQL session and return a DB-API 2.0 Connection."""
@@ -151,5 +169,6 @@ def connect(
         http_timeout=http_timeout,
         tls_verify=tls_verify,
         retry=retry or RetryPolicy(),
+        application=application,
     )
     return Connection.open(config, hooks=hooks)

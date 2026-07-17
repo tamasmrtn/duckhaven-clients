@@ -1,0 +1,19 @@
+# Drives `dbt init` prompts for the duckhaven adapter.
+fixed:
+  type: duckhaven
+prompts:
+  host:
+    hint: 'DuckHaven API base URL, e.g. https://duckhaven.internal'
+  workspace:
+    hint: 'DuckHaven workspace slug'
+  token:
+    hint: 'DuckHaven PAT (dh_pat_...)'
+    hide_input: true
+  catalog:
+    hint: 'Polaris catalog (dbt database) that dbt builds objects in'
+  schema:
+    hint: 'Polaris namespace that dbt builds objects in'
+  threads:
+    hint: '1 or more (each thread opens one DuckHaven session)'
+    type: 'int'
+    default: 4

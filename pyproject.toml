@@ -17,6 +17,11 @@ dev = [
     "pyarrow>=15",
     "opentelemetry-api>=1.36",
     "opentelemetry-sdk>=1.36",
+    # dbt's standard adapter conformance harness, for the dbt-duckhaven member.
+    "dbt-tests-adapter>=1.10",
+    # Renders the dbt-duckhaven macros in unit tests (present transitively via
+    # dbt-common, pinned here so the render harness doesn't rely on a transitive dep).
+    "jinja2>=3.1",
 ]
 
 [tool.ruff]
@@ -32,7 +37,10 @@ known-first-party = ["duckhaven_sql_connector"]
 
 [tool.pytest.ini_options]
 addopts = "-ra"
-testpaths = ["packages/duckhaven-sql-connector/tests/unit"]
+testpaths = [
+    "packages/duckhaven-sql-connector/tests/unit",
+    "packages/dbt-duckhaven/tests/unit",
+]
 markers = [
     "integration: live tests against a real DuckHaven; opt-in via DUCKHAVEN_TEST_HOST.",
 ]

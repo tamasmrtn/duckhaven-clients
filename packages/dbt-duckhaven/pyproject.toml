@@ -1,0 +1,56 @@
+[project]
+name = "dbt-duckhaven"
+description = "dbt adapter that runs DuckDB models on DuckHaven compute through the DuckHaven API"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "DuckHaven" }]
+keywords = ["dbt", "duckhaven", "duckdb", "adapter", "iceberg"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+]
+# Reuse dbt-duckdb's DuckDB dialect, macros, and Iceberg-aware materializations;
+# we swap only the connection layer for the DuckHaven session API via the connector.
+dependencies = [
+    "dbt-duckdb>=1.10,<2",
+    "duckhaven-sql-connector",
+]
+dynamic = ["version"]
+
+[project.optional-dependencies]
+# Adapter-level spans per node; the connector owns transport-level trace propagation.
+otel = ["opentelemetry-api>=1.36"]
+
+[project.urls]
+Homepage = "https://github.com/tamasmrtn/duckhaven-clients"
+Source = "https://github.com/tamasmrtn/duckhaven-clients"
+
+[tool.uv.sources]
+duckhaven-sql-connector = { workspace = true }
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+# Version comes from git tags with a per-package prefix (dbt-duckhaven-vX.Y.Z), so this
+# member versions independently from the same workspace repo. fallback-version keeps
+# source checkouts (no tag) buildable.
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../..", tag_regex = "^dbt-duckhaven-v(?P<version>.+)$", fallback_version = "0.0.0" }
+
+# The adapter and its bundled dbt macros both ship under the shared `dbt` namespace.
+[tool.hatch.build.targets.wheel]
+packages = ["src/dbt"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "README.md", "CHANGELOG.md"]

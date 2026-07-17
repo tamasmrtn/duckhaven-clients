@@ -1,8 +1,7 @@
 # duckhaven-sql-connector
 
 A [PEP 249 (DB-API 2.0)](https://peps.python.org/pep-0249/) Python client for
-[DuckHaven](https://github.com/tamasmrtn/duckhaven-clients)'s SQL **session** API — the DuckHaven analog of
-`databricks-sql-connector`.
+[DuckHaven](https://github.com/tamasmrtn/duckhaven-clients)'s SQL **session** API.
 
 It is a **pure HTTP client of DuckHaven's public REST API**: it authenticates with a
 DuckHaven Personal Access Token (`dh_pat_…`), opens a SQL session bound to one compute
