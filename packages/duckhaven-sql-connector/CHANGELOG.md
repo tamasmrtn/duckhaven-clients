@@ -6,6 +6,8 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-17
+
 ### Added
 
 - Initial DB-API 2.0 (PEP 249) client for DuckHaven's SQL session API: `connect`,
