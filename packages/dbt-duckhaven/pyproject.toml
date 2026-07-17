@@ -43,10 +43,12 @@ build-backend = "hatchling.build"
 
 # Version comes from git tags with a per-package prefix (dbt-duckhaven-vX.Y.Z), so this
 # member versions independently from the same workspace repo. fallback-version keeps
-# source checkouts (no tag) buildable.
+# source checkouts (no tag) buildable. scm.git.describe_command scopes `git describe` to
+# this prefix too: without it, the nearest tag across the whole repo (e.g. another
+# member's tag) fails tag_regex as a hard error instead of falling back.
 [tool.hatch.version]
 source = "vcs"
-raw-options = { root = "../..", tag_regex = "^dbt-duckhaven-v(?P<version>.+)$", fallback_version = "0.0.0" }
+raw-options = { root = "../..", tag_regex = "^dbt-duckhaven-v(?P<version>.+)$", scm = { git = { describe_command = "git describe --dirty --tags --long --abbrev=40 --match dbt-duckhaven-v*" } }, fallback_version = "0.0.0" }
 
 # The adapter and its bundled dbt macros both ship under the shared `dbt` namespace.
 [tool.hatch.build.targets.wheel]

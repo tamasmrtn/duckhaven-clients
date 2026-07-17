@@ -40,10 +40,12 @@ build-backend = "hatchling.build"
 
 # Version comes from git tags with a per-package prefix (sql-connector-vX.Y.Z), so
 # every member versions independently from the same workspace repo. fallback-version
-# keeps source checkouts (no tag) buildable.
+# keeps source checkouts (no tag) buildable. scm.git.describe_command scopes `git
+# describe` to this prefix too: without it, the nearest tag across the whole repo (e.g.
+# another member's tag) fails tag_regex as a hard error instead of falling back.
 [tool.hatch.version]
 source = "vcs"
-raw-options = { root = "../..", tag_regex = "^sql-connector-v(?P<version>.+)$", fallback_version = "0.0.0" }
+raw-options = { root = "../..", tag_regex = "^sql-connector-v(?P<version>.+)$", scm = { git = { describe_command = "git describe --dirty --tags --long --abbrev=40 --match sql-connector-v*" } }, fallback_version = "0.0.0" }
 
 [tool.hatch.build.hooks.vcs]
 version-file = "src/duckhaven_sql_connector/_version.py"
