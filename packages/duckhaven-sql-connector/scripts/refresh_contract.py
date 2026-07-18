@@ -22,10 +22,20 @@ WANT: dict[str, set[str]] = {
     "/workspaces/{ws}/sql/sessions": {"post"},
     "/sql/sessions/{session_id}": {"get", "delete"},
     "/sql/sessions/{session_id}/statements": {"post"},
+    "/sql/sessions/{session_id}/staging-files": {"post"},
     "/queries/{query_id}": {"get", "delete"},
     "/queries/{query_id}/rows": {"get"},
 }
-SCHEMAS = ("SqlSessionCreate", "SqlSessionOut", "SqlStatementCreate", "QueryOut", "RowsPageOut")
+SCHEMAS = (
+    "SqlSessionCreate",
+    "SqlSessionOut",
+    "SqlStatementCreate",
+    "StagingFilesCreate",
+    "StagedFileOut",
+    "StagingFilesOut",
+    "QueryOut",
+    "RowsPageOut",
+)
 DEST = Path(__file__).resolve().parents[1] / "contract" / "duckhaven-openapi.subset.json"
 
 

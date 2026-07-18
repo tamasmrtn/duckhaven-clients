@@ -8,12 +8,11 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ### Added
 
-- `Connection.vend_staging_credentials()` → `StagingCredentials(uri, credentials,
-  expires_at)`: vends per-load, scoped, short-lived credentials to stage bulk files under
-  a session's `staging_uri` (`POST …/sql/sessions/{id}/staging-credentials`), used by the
-  dlt `duckhaven` destination. **Depends on a server endpoint not yet in the pinned
-  contract subset**; extend `contract/` + `scripts/refresh_contract.py` once the server
-  ships it.
+- `Connection.stage_files(names)` → `StagingFiles(files=[StagedFile(name, key, put_url,
+  get_url)], expires_at)`: presigns a PUT (upload) and GET (read) URL per file under a
+  session's stage (`POST …/sql/sessions/{id}/staging-files`), used by the dlt `duckhaven`
+  destination. The client uploads bulk data to `put_url` with a plain HTTP PUT and the
+  agent reads `get_url` over httpfs — no storage credentials on either side.
 
 ## [0.1.0] - 2026-07-17
 

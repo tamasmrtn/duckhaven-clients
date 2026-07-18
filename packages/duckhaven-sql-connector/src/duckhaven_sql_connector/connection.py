@@ -10,6 +10,7 @@ and the connection is marked dead; the caller opens a new one.
 from __future__ import annotations
 
 import weakref
+from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,17 +23,23 @@ from .dbapi import OperationalError, ProgrammingError
 
 
 @dataclass(frozen=True)
-class StagingCredentials:
-    """Scoped, short-lived credentials to stage a load's bulk files under a session's
-    ``staging_uri``.
+class StagedFile:
+    """A presigned staging file: upload to ``put_url`` (HTTP PUT), read from ``get_url``.
 
-    ``credentials`` is a backend-specific mapping the caller maps to its storage client
-    (e.g. S3 access key/secret/session token + endpoint, or an Azure SAS token). On the
-    bundled MinIO backend it is prefix-scoped but not true STS; real STS applies to
-    external object stores. Never a long-lived storage secret."""
+    ``key`` is the assigned object-storage location (``s3://…`` / ``abfss://…``) under the
+    session's staging prefix. The URLs are opaque, short-lived, and backend-agnostic."""
 
-    uri: str
-    credentials: dict[str, Any]
+    name: str
+    key: str
+    put_url: str
+    get_url: str
+
+
+@dataclass(frozen=True)
+class StagingFiles:
+    """The presigned files for one staging request, and when the URLs expire."""
+
+    files: list[StagedFile]
     expires_at: str | None = None
 
 
@@ -111,27 +118,32 @@ class Connection:
 
     # -- Staging ------------------------------------------------------------
 
-    def vend_staging_credentials(self) -> StagingCredentials:
-        """Vend scoped, short-lived credentials to stage a load's bulk files under this
-        session's ``staging_uri`` (``POST …/sql/sessions/{id}/staging-credentials``).
+    def stage_files(self, names: Sequence[str]) -> StagingFiles:
+        """Presign a PUT (upload) and GET (read) URL per file under this session's stage
+        (``POST …/sql/sessions/{id}/staging-files``).
 
-        A client (e.g. the dlt ``duckhaven`` destination) uploads Parquet to the returned
-        ``uri`` with the returned ``credentials``, then issues the load command through the
-        session; the agent reads the staged files back. The credential is per-load and
-        scoped to the session's staging prefix. A reaped/closed session answers 409 → the
-        connection is marked dead (open a new one), mirroring statement execution.
+        A client (e.g. the dlt ``duckhaven`` destination) uploads bulk data to each
+        ``put_url`` with a plain HTTP PUT, then issues a load command that reads the
+        ``get_url`` through the session — the agent runs it over httpfs, no storage secret.
+        ``names`` are bare file names (no path separators). A reaped/closed session answers
+        409 → the connection is marked dead (open a new one), mirroring statement execution.
         """
         self._ensure_usable()
         try:
-            response = self._transport.post(f"/sql/sessions/{self._session_id}/staging-credentials")
+            response = self._transport.post(
+                f"/sql/sessions/{self._session_id}/staging-files",
+                json={"files": list(names)},
+            )
         except OperationalError as exc:
             if exc.status_code == 409:
                 self._mark_dead()
             raise
         data = response.json()
-        return StagingCredentials(
-            uri=data["uri"],
-            credentials=data.get("credentials") or {},
+        return StagingFiles(
+            files=[
+                StagedFile(name=f["name"], key=f["key"], put_url=f["put_url"], get_url=f["get_url"])
+                for f in data["files"]
+            ],
             expires_at=data.get("expires_at"),
         )
 
