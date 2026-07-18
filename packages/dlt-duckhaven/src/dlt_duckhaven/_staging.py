@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 from typing import TYPE_CHECKING, Any
 
+from dlt_duckhaven import _telemetry
+
 if TYPE_CHECKING:
     from duckhaven_sql_connector import Connection
 
@@ -51,6 +53,7 @@ def stage_file(conn: Connection, local_path: str, load_id: str) -> str:
     """Upload ``local_path`` under the session's staging prefix and return its remote URI."""
     creds = conn.vend_staging_credentials()
     remote_uri = f"{creds.uri.rstrip('/')}/{load_id}/{os.path.basename(local_path)}"
-    fs = _open_filesystem(creds.credentials)
-    fs.put_file(local_path, remote_uri)
+    with _telemetry.load_span("dlt_duckhaven.stage", {"dlt.staging_uri": remote_uri}):
+        fs = _open_filesystem(creds.credentials)
+        fs.put_file(local_path, remote_uri)
     return remote_uri

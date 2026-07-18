@@ -30,3 +30,6 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
   with `DESCRIBE` instead of `information_schema.columns`, which is unreliable for attached
   Iceberg (Polaris) catalogs. The exact DuckDB DESCRIBE type spellings are validated by the
   gated e2e (append → schema evolution → merge idempotency).
+- Optional OpenTelemetry spans (`otel` extra): each load job and staging upload emits a
+  span (`dlt_duckhaven.load_job`, `dlt_duckhaven.stage`) that parents the connector's HTTP
+  spans, so a dlt load traces end-to-end. No-op when the extra is absent.

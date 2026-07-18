@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from dlt.common.destination.client import HasFollowupJobs, RunnableLoadJob
 from dlt.destinations.job_impl import ReferenceFollowupJobRequest
 
-from dlt_duckhaven import _staging
+from dlt_duckhaven import _staging, _telemetry
 
 if TYPE_CHECKING:
     from dlt_duckhaven.client import DuckHavenJobClient
@@ -43,20 +43,24 @@ class DuckHavenCopyJob(RunnableLoadJob, HasFollowupJobs):
         self._sql_client = self._job_client.sql_client
         qualified_table_name = self._sql_client.make_qualified_table_name(self.load_table_name)
 
-        if ReferenceFollowupJobRequest.is_reference_job(self._file_path):
-            # An explicit filesystem staging destination already uploaded the file.
-            remote_uri = ReferenceFollowupJobRequest.resolve_reference(self._file_path)
-        else:
-            # Destination-managed staging: upload the local file with a vended credential.
-            remote_uri = _staging.stage_file(
-                self._sql_client.native_connection, self._file_path, self._load_id
-            )
+        with _telemetry.load_span(
+            "dlt_duckhaven.load_job",
+            {"dlt.table": self.load_table_name, "dlt.load_id": self._load_id},
+        ):
+            if ReferenceFollowupJobRequest.is_reference_job(self._file_path):
+                # An explicit filesystem staging destination already uploaded the file.
+                remote_uri = ReferenceFollowupJobRequest.resolve_reference(self._file_path)
+            else:
+                # Destination-managed staging: upload the local file with a vended credential.
+                remote_uri = _staging.stage_file(
+                    self._sql_client.native_connection, self._file_path, self._load_id
+                )
 
-        source_format, options = _reader_for(remote_uri)
-        # The agent reads the staged prefix with its own catalog-scoped access — no
-        # credential travels in the load SQL. BY NAME/union_by_name tolerates column
-        # evolution across files.
-        self._sql_client.execute_sql(
-            f"INSERT INTO {qualified_table_name} BY NAME"
-            f" SELECT * FROM {source_format}('{remote_uri}'{options})"
-        )
+            source_format, options = _reader_for(remote_uri)
+            # The agent reads the staged prefix with its own catalog-scoped access — no
+            # credential travels in the load SQL. BY NAME/union_by_name tolerates column
+            # evolution across files.
+            self._sql_client.execute_sql(
+                f"INSERT INTO {qualified_table_name} BY NAME"
+                f" SELECT * FROM {source_format}('{remote_uri}'{options})"
+            )
