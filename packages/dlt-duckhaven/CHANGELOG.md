@@ -14,3 +14,12 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
   `DuckHavenTypeMapper` (JSON→VARCHAR, microsecond timestamps, HUGEINT rejected).
 - `DuckHavenClientConfiguration` / `DuckHavenCredentials` (`host`/`workspace`/`agent`/
   `catalog` + a `dh_pat_…` token), mirroring the DuckHaven session-API config shape.
+- Load path (append): `DuckHavenSqlClient` (opens a session via the connector, drives
+  statements through the session cursor, qualifies `catalog.schema.table`, maps connector
+  errors to dlt errors), `DuckHavenJobClient` (staging-dataset-aware SQL job client + the
+  `insert_values` fallback + `SupportsStagingDestination`), and `DuckHavenCopyJob` — which
+  stages a load's Parquet to the workspace object storage with a per-load API-vended
+  credential (`_staging`) and issues `INSERT INTO … SELECT * FROM read_parquet(…)` through
+  the session (the agent reads the staged files with its own access; no credential in the
+  load SQL). **Live loading depends on the server-side staging-credential vend endpoint**;
+  the end-to-end test stays gated until it ships.
