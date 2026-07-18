@@ -40,6 +40,7 @@ addopts = "-ra"
 testpaths = [
     "packages/duckhaven-sql-connector/tests/unit",
     "packages/dbt-duckhaven/tests/unit",
+    "packages/dlt-duckhaven/tests/unit",
 ]
 markers = [
     "integration: live tests against a real DuckHaven; opt-in via DUCKHAVEN_TEST_HOST.",
@@ -47,7 +48,7 @@ markers = [
 
 [tool.coverage.run]
 branch = true
-source = ["duckhaven_sql_connector"]
+source = ["duckhaven_sql_connector", "dlt_duckhaven"]
 omit = ["*/tests/*", "*/_version.py"]
 
 [tool.coverage.report]

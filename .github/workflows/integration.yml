@@ -30,7 +30,8 @@ jobs:
     outputs:
       connector: ${{ steps.filter.outputs.connector }}
       dbt: ${{ steps.filter.outputs.dbt }}
-      any: ${{ steps.filter.outputs.connector == 'true' || steps.filter.outputs.dbt == 'true' }}
+      dlt: ${{ steps.filter.outputs.dlt }}
+      any: ${{ steps.filter.outputs.connector == 'true' || steps.filter.outputs.dbt == 'true' || steps.filter.outputs.dlt == 'true' }}
     steps:
       - uses: actions/checkout@v7
       - uses: dorny/paths-filter@v4
@@ -50,6 +51,9 @@ jobs:
             dbt:
               - *shared
               - 'packages/dbt-duckhaven/**'
+            dlt:
+              - *shared
+              - 'packages/dlt-duckhaven/**'
 
   integration:
     needs: changes
@@ -109,6 +113,10 @@ jobs:
       - name: Run dbt-duckhaven conformance + e2e
         if: needs.changes.outputs.dbt == 'true'
         run: make test-dbt-integration
+
+      - name: Run dlt-duckhaven e2e
+        if: needs.changes.outputs.dlt == 'true'
+        run: make test-dlt-integration
 
       - name: Dump stack logs on failure
         if: failure()
