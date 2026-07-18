@@ -23,3 +23,10 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
   the session (the agent reads the staged files with its own access; no credential in the
   load SQL). **Live loading depends on the server-side staging-credential vend endpoint**;
   the end-to-end test stays gated until it ships.
+- Write dispositions `replace` and `merge`: delete-insert merge and insert-from-staging /
+  truncate-and-insert replace (Iceberg truncation via `DELETE FROM`, not `TRUNCATE`) via
+  the staging dataset — inherited from the SQL job client and covered by tests.
+- Schema evolution: `DuckHavenJobClient.get_storage_tables` introspects existing columns
+  with `DESCRIBE` instead of `information_schema.columns`, which is unreliable for attached
+  Iceberg (Polaris) catalogs. The exact DuckDB DESCRIBE type spellings are validated by the
+  gated e2e (append → schema evolution → merge idempotency).
