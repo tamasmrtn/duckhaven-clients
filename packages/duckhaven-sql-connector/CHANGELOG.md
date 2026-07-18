@@ -6,6 +6,15 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Added
+
+- `Connection.vend_staging_credentials()` → `StagingCredentials(uri, credentials,
+  expires_at)`: vends per-load, scoped, short-lived credentials to stage bulk files under
+  a session's `staging_uri` (`POST …/sql/sessions/{id}/staging-credentials`), used by the
+  dlt `duckhaven` destination. **Depends on a server endpoint not yet in the pinned
+  contract subset**; extend `contract/` + `scripts/refresh_contract.py` once the server
+  ships it.
+
 ## [0.1.0] - 2026-07-17
 
 ### Added
