@@ -112,8 +112,9 @@ def test_get_storage_tables_parses_describe_output():
     assert columns["amount"]["precision"] == 10
     assert columns["amount"]["scale"] == 2
     assert columns["name"]["data_type"] == "text"
-    # DESCRIBE targets the fully-qualified table, not INFORMATION_SCHEMA.
-    assert client.sql_client.execute_sql.call_args.args[0].startswith("DESCRIBE ")
+    # Introspects via DESCRIBE (wrapped in a SELECT so the session can materialize it),
+    # not INFORMATION_SCHEMA.
+    assert client.sql_client.execute_sql.call_args.args[0].startswith("SELECT * FROM (DESCRIBE ")
 
 
 def test_get_storage_tables_missing_table_yields_no_columns():

@@ -1,6 +1,7 @@
 """DuckHavenSqlClient: opens a session via the connector, drives statements through the
 session cursor, qualifies catalog.schema.table, and maps connector errors to dlt errors."""
 
+from datetime import datetime
 from unittest.mock import MagicMock
 
 import dlt_duckhaven.sql_client as sql_client_mod
@@ -111,3 +112,34 @@ def test_execute_query_closes_cursor(monkeypatch):
     with client.execute_query("SELECT 1") as curr:
         assert curr.fetchall() == [(1,)]
     cursor.close.assert_called_once()
+
+
+@pytest.mark.parametrize(
+    "value,expected_type",
+    [
+        ("2026-07-18T14:51:00+00:00", datetime),
+        ("2026-07-18 14:51:00.123456", datetime),
+        ("2026-07-18T14:51:00Z", datetime),
+        ("not a date", str),
+        ("2026-07-18", str),  # date-only, no time part -> left as-is
+        (42, int),
+        (None, type(None)),
+    ],
+)
+def test_coerce_value(value, expected_type):
+    # The results API returns untyped JSON; timestamps arrive as ISO strings and must be
+    # coerced to datetime (dlt calls pendulum.instance on them).
+    assert type(sql_client_mod._coerce_value(value)) is expected_type
+
+
+def test_execute_query_coerces_timestamp_columns(monkeypatch):
+    cursor = _fake_cursor(
+        description=[("ts", None, None, None, None, None, None)],
+        rows=[("2026-07-18T14:51:00+00:00",)],
+    )
+    _patch_connect(monkeypatch, cursor)
+    client = _client()
+    client.open_connection()
+    with client.execute_query("SELECT ts FROM t") as curr:
+        (row,) = curr.fetchall()
+    assert isinstance(row[0], datetime)

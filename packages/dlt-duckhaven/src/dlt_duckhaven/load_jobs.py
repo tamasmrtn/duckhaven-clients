@@ -27,7 +27,9 @@ _READERS = {
 
 
 def _reader_for(uri: str) -> tuple[str, str]:
-    ext = uri.rsplit(".", 1)[-1].lower()
+    # Strip any presigned-URL query string before reading the file extension.
+    path = uri.split("?", 1)[0]
+    ext = path.rsplit(".", 1)[-1].lower()
     reader = _READERS.get(ext)
     if reader is None:
         raise ValueError(f"unsupported staging file format: {ext!r} ({uri})")
@@ -51,15 +53,15 @@ class DuckHavenCopyJob(RunnableLoadJob, HasFollowupJobs):
                 # An explicit filesystem staging destination already uploaded the file.
                 remote_uri = ReferenceFollowupJobRequest.resolve_reference(self._file_path)
             else:
-                # Destination-managed staging: upload the local file with a vended credential.
+                # Destination-managed staging: upload the local file, then read its
+                # presigned GET URL. The agent fetches it over httpfs — no credential
+                # travels in the load SQL.
                 remote_uri = _staging.stage_file(
-                    self._sql_client.native_connection, self._file_path, self._load_id
+                    self._sql_client.native_connection, self._file_path
                 )
 
             source_format, options = _reader_for(remote_uri)
-            # The agent reads the staged prefix with its own catalog-scoped access — no
-            # credential travels in the load SQL. BY NAME/union_by_name tolerates column
-            # evolution across files.
+            # BY NAME/union_by_name tolerates column evolution across files.
             self._sql_client.execute_sql(
                 f"INSERT INTO {qualified_table_name} BY NAME"
                 f" SELECT * FROM {source_format}('{remote_uri}'{options})"

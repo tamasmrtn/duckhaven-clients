@@ -12,18 +12,20 @@ writes the Iceberg table. **Control goes through the API; bulk data goes through
 staging** — the same split Databricks and MotherDuck use.
 
 > **Status: alpha.** The destination, its capabilities/type mapping, staged loads
-> (`append`/`replace`/`merge`), and schema evolution are implemented and unit-tested. The
-> live end-to-end path is **gated on a server-side staging-credential endpoint** that is not
-> yet shipped (`POST …/sql/sessions/{id}/staging-credentials`); until then a real pipeline
-> run cannot complete. See `CHANGELOG.md`.
+> (`append`/`replace`/`merge`), and schema evolution are implemented and tested. Loading
+> uses the session's presigned-URL stage
+> (`POST …/sql/sessions/{id}/staging-files`); a DuckHaven with that endpoint and
+> `SQL_SESSIONS_ENABLED=true` is required at runtime. See `CHANGELOG.md`.
 
 ## Install
 
 ```sh
-pip install "dlt-duckhaven[s3]"      # s3fs for the default MinIO/S3 staging backend
-# pip install "dlt-duckhaven[az]"    # adlfs for external ADLS Gen2
-# pip install "dlt-duckhaven[otel]"  # per-load-job spans
+pip install dlt-duckhaven
+# pip install "dlt-duckhaven[otel]"  # optional per-load-job spans
 ```
+
+No storage SDK (s3fs/adlfs) is needed — staged files are uploaded to a presigned URL over
+plain HTTPS.
 
 ## Configure
 
@@ -90,11 +92,13 @@ instrumentation is a no-op.
 
 ## Governance & staging
 
-Bulk Parquet is staged to the workspace object storage using a **per-load, API-vended,
-scoped credential** — never a long-lived storage secret on the client. The load `COPY` is
-read by the agent using its own catalog-scoped storage access. On the bundled MinIO backend
-(which has no STS) the vended credential is prefix-scoped; true short-lived STS applies to
-external S3.
+Bulk Parquet is staged to the workspace object storage via a **presigned-URL stage** — the
+session's `staging-files` endpoint returns a short-lived `put_url` (upload) and `get_url`
+(read) per file, scoped to the session's staging prefix. The client uploads to `put_url`
+with a plain HTTP PUT; the agent reads `get_url` over httpfs. **No storage credentials live
+on the client or the agent** — all backend-specific signing (S3/MinIO SigV4, Azure SAS)
+happens in the API, which already owns the storage integration. Every load statement is
+authorized and audited at the API, so a dlt load is fully governed.
 
 ## License
 

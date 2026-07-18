@@ -24,14 +24,12 @@ classifiers = [
 dependencies = [
     "dlt>=1.29,<2",
     "duckhaven-sql-connector>=0.1.0",
+    # Streaming HTTP PUT of staged Parquet to presigned URLs (also a dlt dependency).
+    "requests>=2.26",
 ]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-# Client-side staging upload to the workspace object storage. s3fs covers the bundled
-# MinIO/S3 backend (the default); adlfs covers external ADLS Gen2.
-s3 = ["s3fs"]
-az = ["adlfs"]
 # Per-load-job spans; the connector owns transport-level trace propagation.
 otel = ["opentelemetry-api>=1.36"]
 

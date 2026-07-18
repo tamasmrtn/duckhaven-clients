@@ -83,7 +83,10 @@ class DuckHavenJobClient(InsertValuesJobClient, SupportsStagingDestination):
             columns: TTableSchemaColumns = {}
             qualified = self.sql_client.make_qualified_table_name(table_name)
             try:
-                rows = self.sql_client.execute_sql(f"DESCRIBE {qualified}")
+                # DESCRIBE wrapped in a SELECT so the DuckHaven session can materialize the
+                # result (it wraps result-returning statements in `COPY (<sql>) TO`, which a
+                # bare DESCRIBE is not valid inside).
+                rows = self.sql_client.execute_sql(f"SELECT * FROM (DESCRIBE {qualified})")
             except DatabaseUndefinedRelation:
                 yield table_name, {}
                 continue
