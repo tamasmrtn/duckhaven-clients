@@ -25,7 +25,7 @@ except ImportError:  # pragma: no cover - source checkout without a build
 
 from ._telemetry import Hooks
 from .config import ClientConfig, RetryPolicy
-from .connection import Connection, connect
+from .connection import Connection, StagingCredentials, connect
 from .cursor import Cursor
 from .dbapi import (
     BINARY,
@@ -64,6 +64,7 @@ __all__ = [
     "Cursor",
     "ClientConfig",
     "RetryPolicy",
+    "StagingCredentials",
     "Hooks",
     # globals
     "apilevel",

@@ -10,6 +10,7 @@ and the connection is marked dead; the caller opens a new one.
 from __future__ import annotations
 
 import weakref
+from dataclasses import dataclass
 from typing import Any
 
 from ._params import quote_identifier
@@ -18,6 +19,21 @@ from .client import Transport
 from .config import ClientConfig, RetryPolicy
 from .cursor import Cursor
 from .dbapi import OperationalError, ProgrammingError
+
+
+@dataclass(frozen=True)
+class StagingCredentials:
+    """Scoped, short-lived credentials to stage a load's bulk files under a session's
+    ``staging_uri``.
+
+    ``credentials`` is a backend-specific mapping the caller maps to its storage client
+    (e.g. S3 access key/secret/session token + endpoint, or an Azure SAS token). On the
+    bundled MinIO backend it is prefix-scoped but not true STS; real STS applies to
+    external object stores. Never a long-lived storage secret."""
+
+    uri: str
+    credentials: dict[str, Any]
+    expires_at: str | None = None
 
 
 class Connection:
@@ -92,6 +108,32 @@ class Connection:
         """
         for cursor in list(self._cursors):
             cursor.cancel()
+
+    # -- Staging ------------------------------------------------------------
+
+    def vend_staging_credentials(self) -> StagingCredentials:
+        """Vend scoped, short-lived credentials to stage a load's bulk files under this
+        session's ``staging_uri`` (``POST …/sql/sessions/{id}/staging-credentials``).
+
+        A client (e.g. the dlt ``duckhaven`` destination) uploads Parquet to the returned
+        ``uri`` with the returned ``credentials``, then issues the load command through the
+        session; the agent reads the staged files back. The credential is per-load and
+        scoped to the session's staging prefix. A reaped/closed session answers 409 → the
+        connection is marked dead (open a new one), mirroring statement execution.
+        """
+        self._ensure_usable()
+        try:
+            response = self._transport.post(f"/sql/sessions/{self._session_id}/staging-credentials")
+        except OperationalError as exc:
+            if exc.status_code == 409:
+                self._mark_dead()
+            raise
+        data = response.json()
+        return StagingCredentials(
+            uri=data["uri"],
+            credentials=data.get("credentials") or {},
+            expires_at=data.get("expires_at"),
+        )
 
     # -- Transactions (autocommit session; documented no-ops) ---------------
 
