@@ -6,6 +6,8 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-19
+
 ### Added
 
 - `Connection.stage_files(names)` → `StagingFiles(files=[StagedFile(name, key, put_url,
