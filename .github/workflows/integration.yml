@@ -114,15 +114,6 @@ jobs:
         if: needs.changes.outputs.dbt == 'true'
         run: make test-dbt-integration
 
-      # The dlt destination stages Parquet by HTTP PUT to a presigned URL the API signs
-      # for the compose-network MinIO host (`S3_ENDPOINT=minio:9000`, so the in-network
-      # agent can read it back). The test client runs on the host, which can't resolve
-      # `minio`, so map it to the published MinIO port. The SigV4 `Host: minio:9000` stays
-      # intact, so the signature still matches.
-      - name: Route the MinIO staging host to the published port (dlt e2e)
-        if: needs.changes.outputs.dlt == 'true'
-        run: echo "127.0.0.1 minio" | sudo tee -a /etc/hosts
-
       - name: Run dlt-duckhaven e2e
         if: needs.changes.outputs.dlt == 'true'
         run: make test-dlt-integration
