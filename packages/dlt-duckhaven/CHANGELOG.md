@@ -6,6 +6,8 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-07-19
+
 ### Added
 
 - Destination factory `duckhaven` (registered so `destination="duckhaven"` resolves), its
