@@ -9,8 +9,10 @@ schema being set (the dataset schema may not exist yet on first load).
 
 from __future__ import annotations
 
+import re
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
+from datetime import datetime
 from typing import TYPE_CHECKING, Any, AnyStr, ClassVar
 
 from dlt.common.destination import DestinationCapabilitiesContext
@@ -33,6 +35,41 @@ from dlt_duckhaven.configuration import DuckHavenClientConfiguration
 
 if TYPE_CHECKING:
     from duckhaven_sql_connector import Connection
+
+# The DuckHaven results API returns rows as JSON with no column types, so timestamps come
+# back as ISO-8601 strings. dlt (like any DB-API consumer) expects datetime objects for
+# timestamp columns — e.g. it does `pendulum.instance(row)` on `_dlt_version.inserted_at`.
+# Convert strings that strictly look like a datetime; everything else passes through
+# unchanged. (A proper fix is a typed/Arrow result disposition on the server.)
+_ISO_DATETIME_RE = re.compile(
+    r"^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(\.\d+)?([+-]\d{2}:?\d{2}|Z)?$"
+)
+
+
+def _coerce_value(value: Any) -> Any:
+    if not isinstance(value, str) or not _ISO_DATETIME_RE.match(value):
+        return value
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        return value
+
+
+def _coerce_row(row: tuple[Any, ...] | None) -> tuple[Any, ...] | None:
+    return None if row is None else tuple(_coerce_value(v) for v in row)
+
+
+class _DuckHavenCursorImpl(DBApiCursorImpl):
+    """Cursor that coerces ISO-8601 timestamp strings to ``datetime`` on fetch."""
+
+    def fetchone(self, *args: Any, **kwargs: Any) -> Any:
+        return _coerce_row(self.native_cursor.fetchone(*args, **kwargs))
+
+    def fetchmany(self, *args: Any, **kwargs: Any) -> list[tuple[Any, ...]]:
+        return [_coerce_row(r) for r in self.native_cursor.fetchmany(*args, **kwargs)]
+
+    def fetchall(self, *args: Any, **kwargs: Any) -> list[tuple[Any, ...]]:
+        return [_coerce_row(r) for r in self.native_cursor.fetchall(*args, **kwargs)]
 
 
 class DuckHavenSqlClient(SqlClientBase["Connection"]):
@@ -120,7 +157,7 @@ class DuckHavenSqlClient(SqlClientBase["Connection"]):
                 for part in query.split(";"):
                     if part.strip():
                         cursor.execute(part)
-            yield DBApiCursorImpl(cursor)
+            yield _DuckHavenCursorImpl(cursor)
         finally:
             cursor.close()
 

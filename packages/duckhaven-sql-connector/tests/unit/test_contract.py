@@ -50,6 +50,14 @@ def test_request_bodies_match_what_the_connector_sends(spec):
     assert {"agent_id", "catalog"} <= _props(spec, "SqlSessionCreate")
     # run_statement body
     assert {"sql", "timeout_s"} <= _props(spec, "SqlStatementCreate")
+    # stage_files body
+    assert {"files"} <= _props(spec, "StagingFilesCreate")
+
+
+def test_staging_files_endpoint(spec):
+    assert "200" in _op(spec, "/sql/sessions/{session_id}/staging-files", "post")["responses"]
+    assert {"name", "key", "put_url", "get_url"} <= _props(spec, "StagedFileOut")
+    assert {"files", "expires_at"} <= _props(spec, "StagingFilesOut")
 
 
 def test_response_bodies_match_what_the_connector_reads(spec):

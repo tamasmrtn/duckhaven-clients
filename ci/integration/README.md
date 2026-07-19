@@ -34,3 +34,8 @@ admin's PAT:
 DH_ADMIN_PAT=dh_pat_… DH_WORKSPACE=dev DH_CATALOG=sales python3 ci/integration/seed.py
 # then export the printed DUCKHAVEN_TEST_* and: make test-integration
 ```
+
+The dlt e2e (`make test-dlt-integration`) stages Parquet by HTTP PUT to a presigned URL. The
+API signs the upload URL for its client-facing endpoint (`S3_ENDPOINT_PUBLIC`, default
+`http://localhost:9000` in the bundled compose) and the agent-read URL for the in-network
+endpoint (`minio:9000`) — so a client on the host uploads with no extra host setup.

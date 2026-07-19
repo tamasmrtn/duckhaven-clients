@@ -336,6 +336,72 @@
         ],
         "title": "SqlStatementCreate",
         "type": "object"
+      },
+      "StagedFileOut": {
+        "properties": {
+          "get_url": {
+            "title": "Get Url",
+            "type": "string"
+          },
+          "key": {
+            "title": "Key",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "put_url": {
+            "title": "Put Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "key",
+          "put_url",
+          "get_url"
+        ],
+        "title": "StagedFileOut",
+        "type": "object"
+      },
+      "StagingFilesCreate": {
+        "properties": {
+          "files": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files"
+        ],
+        "title": "StagingFilesCreate",
+        "type": "object"
+      },
+      "StagingFilesOut": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/StagedFileOut"
+            },
+            "title": "Files",
+            "type": "array"
+          }
+        },
+        "required": [
+          "files",
+          "expires_at"
+        ],
+        "title": "StagingFilesOut",
+        "type": "object"
       }
     }
   },
@@ -719,6 +785,92 @@
           }
         },
         "summary": "Get Session",
+        "tags": [
+          "sql-sessions"
+        ]
+      }
+    },
+    "/sql/sessions/{session_id}/staging-files": {
+      "post": {
+        "description": "Presign a PUT (upload) and GET (read) URL per file under the session's\nstage. Backend-specific presigning stays in the API; the client uploads with a\nplain HTTP PUT and the agent reads the GET URL over httpfs (no storage secret).",
+        "operationId": "create_staging_files_sql_sessions__session_id__staging_files_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "session_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Session Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "authorization",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          },
+          {
+            "in": "cookie",
+            "name": "session",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StagingFilesCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StagingFilesOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Create Staging Files",
         "tags": [
           "sql-sessions"
         ]

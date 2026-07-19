@@ -11,7 +11,7 @@ own project under **Apache-2.0**.
 |---------|--------|---------|
 | [`duckhaven-sql-connector`](packages/duckhaven-sql-connector) | in progress | DB-API 2.0 (PEP 249) client for DuckHaven's SQL session/statement API — the shared transport for the two below. |
 | `dbt-duckhaven` | planned | dbt-duckdb environment that routes through the connector. |
-| `dlt-duckhaven` | planned | dlt destination that stages Parquet + loads through the connector. |
+| [`dlt-duckhaven`](packages/dlt-duckhaven) | in progress | dlt destination that stages Parquet + loads through the connector. |
 
 `dbt-duckhaven` and `dlt-duckhaven` will depend on `duckhaven-sql-connector` as a
 `{ workspace = true }` member, so they build against the local connector during
