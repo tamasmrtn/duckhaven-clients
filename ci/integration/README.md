@@ -34,3 +34,17 @@ admin's PAT:
 DH_ADMIN_PAT=dh_pat_… DH_WORKSPACE=dev DH_CATALOG=sales python3 ci/integration/seed.py
 # then export the printed DUCKHAVEN_TEST_* and: make test-integration
 ```
+
+### dlt e2e: resolving the MinIO staging host
+
+`make test-dlt-integration` stages Parquet by HTTP PUT to a presigned URL the API signs for
+the compose-network MinIO host (`S3_ENDPOINT=http://minio:9000`, so the in-network agent can
+read it back over httpfs). The test client runs on the host, which can't resolve `minio`, so
+map it to the published MinIO port before running:
+
+```sh
+echo "127.0.0.1 minio" | sudo tee -a /etc/hosts   # undo: sudo sed -i '/127.0.0.1 minio/d' /etc/hosts
+```
+
+The presigned request keeps `Host: minio:9000`, so the SigV4 signature still matches — it
+just connects to the published port. CI does the same in `integration.yml`.
