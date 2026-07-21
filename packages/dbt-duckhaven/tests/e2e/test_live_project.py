@@ -72,6 +72,19 @@ class TestDuckHavenEndToEnd:
     def snapshots(self):
         return {"people_snap.sql": _SNAPSHOT}
 
+    def test_seed_reruns_over_an_existing_seed(self, project):
+        """`dbt seed` twice over the same seed, without `--full-refresh`.
+
+        dbt's seed reset emits `TRUNCATE TABLE`, which the statement policy used to
+        reject, making this the documented "use --full-refresh" caveat. The policy now
+        admits it, so the plain re-run must work. Runs first so it owns a fresh seed,
+        before the shared-project tests below build on it.
+        """
+        assert len(run_dbt(["seed"])) == 1
+        assert len(run_dbt(["seed"])) == 1
+        count = project.run_sql("select count(*) from {schema}.people", fetch="one")
+        assert count[0] == 2
+
     def test_seed_run_test(self, project):
         assert len(run_dbt(["seed"])) == 1
         assert len(run_dbt(["run"])) == 3
@@ -121,8 +134,7 @@ class TestDuckHavenEndToEnd:
         unproven rather than known-broken; this pins whichever way it actually behaves.
 
         Relies on test_seed_run_test having built the project — the tests in this class share
-        one schema and run in definition order. Re-seeding here would fail on an unrelated
-        gap: dbt's seed reset emits TRUNCATE TABLE, which the session policy denies.
+        one schema and run in definition order.
         """
         run_dbt(["run", "--select", "people_incr", "--full-refresh"])
 
@@ -131,7 +143,7 @@ class TestDuckHavenEndToEnd:
 
     def test_snapshot_captures_changes(self, project):
         # Builds on the project from test_seed_run_test (shared class schema, definition
-        # order) — see the note on test_incremental_full_refresh_rebuilds about re-seeding.
+        # order).
         assert len(run_dbt(["snapshot"])) == 1
         current = project.run_sql(
             "select count(*) from {schema}.people_snap where dbt_valid_to is null", fetch="one"
