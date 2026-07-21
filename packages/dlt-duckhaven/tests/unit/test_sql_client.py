@@ -133,6 +133,7 @@ def test_coerce_value(value, expected_type):
 
 
 def test_execute_query_coerces_timestamp_columns(monkeypatch):
+    """A server reporting no types (pre-`column_schema`) falls back to sniffing."""
     cursor = _fake_cursor(
         description=[("ts", None, None, None, None, None, None)],
         rows=[("2026-07-18T14:51:00+00:00",)],
@@ -143,3 +144,81 @@ def test_execute_query_coerces_timestamp_columns(monkeypatch):
     with client.execute_query("SELECT ts FROM t") as curr:
         (row,) = curr.fetchall()
     assert isinstance(row[0], datetime)
+
+
+# -- Type-directed coercion, when the server reports column types ---------------------
+
+
+def _typed_cursor(types, row):
+    cursor = _fake_cursor(
+        description=[(f"c{i}", t, None, None, None, None, None) for i, t in enumerate(types)],
+        rows=[row],
+    )
+    # _fake_cursor only stubs fetchall; the mask has to apply on every fetch path.
+    cursor.fetchone.return_value = row
+    cursor.fetchmany.return_value = [row]
+    return cursor
+
+
+def _fetch_one_row(monkeypatch, cursor, method="fetchall"):
+    _patch_connect(monkeypatch, cursor)
+    client = _client()
+    client.open_connection()
+    with client.execute_query("SELECT * FROM t") as curr:
+        result = getattr(curr, method)()
+    return result[0] if method != "fetchone" else result
+
+
+def test_varchar_holding_an_iso_string_is_left_alone(monkeypatch):
+    """The bug this replaces: a genuine VARCHAR that happens to hold an ISO-8601 string
+    was silently landed in the destination as a datetime."""
+    cursor = _typed_cursor(
+        ["TIMESTAMP WITH TIME ZONE", "VARCHAR"],
+        ("2024-01-02T03:04:05+00:00", "2024-05-06T07:08:09Z"),
+    )
+    ts, txt = _fetch_one_row(monkeypatch, cursor)
+    assert isinstance(ts, datetime)
+    assert txt == "2024-05-06T07:08:09Z"
+    assert isinstance(txt, str)
+
+
+@pytest.mark.parametrize(
+    "type_code",
+    ["DATE", "TIME", "TIMESTAMP", "TIMESTAMP WITH TIME ZONE", "TIMESTAMP_NS", "timestamp"],
+)
+def test_temporal_types_are_recognized(type_code):
+    assert sql_client_mod._is_temporal(type_code)
+
+
+@pytest.mark.parametrize("type_code", ["VARCHAR", "BIGINT", "DECIMAL(18,4)", "BLOB", None])
+def test_non_temporal_types_are_not(type_code):
+    assert not sql_client_mod._is_temporal(type_code)
+
+
+def test_date_only_value_on_a_date_column_is_converted(monkeypatch):
+    cursor = _typed_cursor(["DATE"], ("2024-05-06",))
+    (value,) = _fetch_one_row(monkeypatch, cursor)
+    assert isinstance(value, datetime)
+
+
+def test_null_in_a_temporal_column_stays_none(monkeypatch):
+    cursor = _typed_cursor(["TIMESTAMP"], (None,))
+    (value,) = _fetch_one_row(monkeypatch, cursor)
+    assert value is None
+
+
+def test_decimal_value_is_not_touched(monkeypatch):
+    """Values are already through JSON; the client must not invent precision."""
+    cursor = _typed_cursor(["DECIMAL(18,4)"], (12.3456,))
+    (value,) = _fetch_one_row(monkeypatch, cursor)
+    assert value == 12.3456
+
+
+@pytest.mark.parametrize("method", ["fetchone", "fetchmany", "fetchall"])
+def test_every_fetch_method_is_type_directed(monkeypatch, method):
+    cursor = _typed_cursor(
+        ["TIMESTAMP", "VARCHAR"], ("2024-01-02T03:04:05", "2024-05-06T07:08:09Z")
+    )
+    row = _fetch_one_row(monkeypatch, cursor, method)
+    assert isinstance(row[0], datetime)
+    assert isinstance(row[1], str)
