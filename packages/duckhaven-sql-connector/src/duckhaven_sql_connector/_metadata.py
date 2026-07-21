@@ -126,7 +126,11 @@ def columns_query(
             "which describes one relation (information_schema.columns cannot introspect "
             "Iceberg tables). Enumerate relations with tables() first."
         )
-    if any(w in table_name for w in "%_"):
+    # Only `%` is treated as a pattern. `_` is a LIKE wildcard too, but it is a literal in
+    # virtually every real table name (`raw_events`, `stg_orders`), and the name goes into
+    # DESCRIBE as a quoted identifier where it can only ever match itself — so rejecting it
+    # would break ordinary use to guard against an ambiguity that cannot arise.
+    if "%" in table_name:
         raise ProgrammingError(
             f"columns() takes an exact table_name, not the pattern {table_name!r}: "
             "DESCRIBE names a single relation."

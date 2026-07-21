@@ -5,6 +5,11 @@ Idempotent. Ensures a first admin (consuming ``DH_SETUP_TOKEN`` on a fresh stack
 workspace, a catalog on bundled storage, and a **service-account PAT** that is a member of
 the workspace — the governed principal the connector is designed to authenticate as.
 
+It also provisions a **second workspace holding a scoped catalog**, so the integration
+suites can cover the enumeration denials that only reproduce under a scoped attachment.
+That has to be a separate workspace: the denial is evaluated per *workspace*, so attaching
+a scoped catalog beside the open one would break every open-catalog assertion too.
+
 Auth: set ``DH_ADMIN_PAT`` to drive everything as an existing admin (handy locally), or
 leave it unset to run the setup-token + login flow (what CI does against a fresh stack).
 
@@ -29,6 +34,9 @@ CATALOG = os.environ.get("DH_CATALOG", "analytics")
 ADMIN_EMAIL = os.environ.get("DH_ADMIN_EMAIL", "admin@ci.local")
 ADMIN_PASSWORD = os.environ.get("DH_ADMIN_PASSWORD", "ci-admin-password-123")
 SA_NAME = os.environ.get("DH_SA_NAME", "connector-ci")
+# Scoped-catalog fixture. Deliberately its own workspace — see the module docstring.
+SCOPED_WORKSPACE = os.environ.get("DH_SCOPED_WORKSPACE", "scoped")
+SCOPED_CATALOG = os.environ.get("DH_SCOPED_CATALOG", "scoped")
 
 _opener = urllib.request.build_opener(
     urllib.request.HTTPCookieProcessor(http.cookiejar.CookieJar())
@@ -79,17 +87,39 @@ def authenticate() -> None:
     must(status == 200, f"auth/login -> {status} {data}")
 
 
-def ensure_workspace() -> None:
-    status, data = call("POST", "/api/workspaces", {"slug": WORKSPACE, "name": WORKSPACE.title()})
-    must(status in (201, 409), f"create workspace -> {status} {data}")
+def ensure_workspace(slug: str) -> None:
+    status, data = call("POST", "/api/workspaces", {"slug": slug, "name": slug.title()})
+    must(status in (201, 409), f"create workspace {slug} -> {status} {data}")
 
 
-def ensure_catalog() -> None:
-    status, catalogs = call("GET", f"/api/workspaces/{WORKSPACE}/catalogs")
+def ensure_catalog(workspace: str, catalog: str) -> None:
+    status, catalogs = call("GET", f"/api/workspaces/{workspace}/catalogs")
     must(status == 200, f"list catalogs -> {status} {catalogs}")
-    if not any(c.get("slug") == CATALOG or c.get("name") == CATALOG for c in catalogs):
-        status, data = call("POST", f"/api/workspaces/{WORKSPACE}/catalogs", {"name": CATALOG})
-        must(status in (201, 409), f"create catalog -> {status} {data}")
+    if not any(c.get("slug") == catalog or c.get("name") == catalog for c in catalogs):
+        status, data = call("POST", f"/api/workspaces/{workspace}/catalogs", {"name": catalog})
+        must(status in (201, 409), f"create catalog {catalog} -> {status} {data}")
+
+
+def scope_catalog(workspace: str, catalog: str, sa_id: str) -> None:
+    """Flip the attachment to `scoped` and grant the CI principal writer on the catalog.
+
+    Under a scoped attachment the engine refuses to enumerate metadata — information_schema
+    and friends answer 403 — because it cannot filter those listings by grant. A
+    catalog-level writer grant leaves the principal able to read and write its objects, so
+    what the suites exercise is the enumeration behaviour, not a lack of access.
+    """
+    status, data = call(
+        "PATCH",
+        f"/api/workspaces/{workspace}/catalogs/{catalog}/access-mode",
+        {"access_mode": "scoped"},
+    )
+    must(status == 200, f"set access-mode scoped -> {status} {data}")
+    status, data = call(
+        "PUT",
+        f"/api/workspaces/{workspace}/catalogs/{catalog}/grants",
+        {"user_id": sa_id, "tier": "writer"},
+    )
+    must(status in (200, 201, 409), f"grant writer on {catalog} -> {status} {data}")
 
 
 def ensure_service_account() -> str:
@@ -112,13 +142,13 @@ def mint_pat(sa_id: str) -> str:
     return data["token"]
 
 
-def add_member(sa_id: str) -> None:
-    status, members = call("GET", f"/api/workspaces/{WORKSPACE}/members")
+def add_member(workspace: str, sa_id: str) -> None:
+    status, members = call("GET", f"/api/workspaces/{workspace}/members")
     must(status == 200, f"list members -> {status} {members}")
     if any(m.get("user_id") == sa_id for m in members):
         return
     status, data = call(
-        "POST", f"/api/workspaces/{WORKSPACE}/members", {"user_id": sa_id, "role": "writer"}
+        "POST", f"/api/workspaces/{workspace}/members", {"user_id": sa_id, "role": "writer"}
     )
     must(status == 201, f"add member -> {status} {data}")
 
@@ -129,6 +159,8 @@ def emit(pat: str) -> None:
         "DUCKHAVEN_TEST_WORKSPACE": WORKSPACE,
         "DUCKHAVEN_TEST_CATALOG": CATALOG,
         "DUCKHAVEN_TEST_PAT": pat,
+        "DUCKHAVEN_TEST_SCOPED_WORKSPACE": SCOPED_WORKSPACE,
+        "DUCKHAVEN_TEST_SCOPED_CATALOG": SCOPED_CATALOG,
     }
     github_env = os.environ.get("GITHUB_ENV")
     if github_env:
@@ -143,10 +175,19 @@ def emit(pat: str) -> None:
 
 def main() -> None:
     authenticate()
-    ensure_workspace()
-    ensure_catalog()
     sa_id = ensure_service_account()
-    add_member(sa_id)
+
+    ensure_workspace(WORKSPACE)
+    ensure_catalog(WORKSPACE, CATALOG)
+    add_member(WORKSPACE, sa_id)
+
+    # Separate workspace: a scoped attachment disables metadata enumeration for every
+    # session in its workspace, so it must not sit beside the open catalog above.
+    ensure_workspace(SCOPED_WORKSPACE)
+    ensure_catalog(SCOPED_WORKSPACE, SCOPED_CATALOG)
+    add_member(SCOPED_WORKSPACE, sa_id)
+    scope_catalog(SCOPED_WORKSPACE, SCOPED_CATALOG, sa_id)
+
     emit(mint_pat(sa_id))
 
 

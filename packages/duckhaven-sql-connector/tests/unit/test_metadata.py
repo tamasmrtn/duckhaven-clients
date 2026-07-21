@@ -58,3 +58,11 @@ def test_columns_query_rejects_a_table_pattern():
     # DESCRIBE names one relation; a LIKE pattern would silently describe nothing.
     with pytest.raises(ProgrammingError, match="exact table_name"):
         columns_query("c", "s", "orders%")
+
+
+def test_underscores_in_a_table_name_are_literal():
+    """`_` is a LIKE wildcard, but it is a literal in most real table names and DESCRIBE
+    takes the name as a quoted identifier, so it must not be rejected as a pattern."""
+    sql, params = columns_query("c", "s", "raw_events")
+    assert 'FROM (DESCRIBE "c"."s"."raw_events")' in sql
+    assert params == ["c", "s", "raw_events"]
