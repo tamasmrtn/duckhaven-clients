@@ -1,41 +1,24 @@
 import pytest
 
-from duckhaven_sql_connector._metadata import (
-    catalogs_query,
-    columns_query,
-    schemas_query,
-    tables_query,
-)
+from duckhaven_sql_connector._metadata import _like_match, columns_query
 from duckhaven_sql_connector.dbapi import ProgrammingError
 
 
-def test_catalogs_query_has_no_params():
-    sql, params = catalogs_query()
-    assert "information_schema.schemata" in sql
-    assert "DISTINCT catalog_name" in sql
-    assert params == []
-
-
-def test_schemas_query_applies_filters():
-    sql, params = schemas_query(catalog="sales", schema_name="pub%")
-    assert "catalog_name = ?" in sql
-    assert "schema_name LIKE ?" in sql
-    assert params == ["sales", "pub%"]
-
-
-def test_tables_query_without_filters_binds_nothing():
-    sql, params = tables_query()
-    assert "information_schema.tables" in sql
-    assert "WHERE TRUE" in sql
-    assert "?" not in sql
-    assert params == []
-
-
-def test_tables_query_partial_filter():
-    sql, params = tables_query(schema_name="public")
-    assert "table_schema LIKE ?" in sql
-    assert "table_catalog = ?" not in sql
-    assert params == ["public"]
+@pytest.mark.parametrize(
+    ("value", "pattern", "expected"),
+    [
+        ("orders", None, True),
+        ("orders", "orders", True),
+        ("orders", "ord%", True),
+        ("orders", "%ers", True),
+        ("orders", "cust%", False),
+        ("t1", "t_", True),
+        ("t22", "t_", False),
+        ("Orders", "orders", False),
+    ],
+)
+def test_like_match(value, pattern, expected):
+    assert _like_match(value, pattern) is expected
 
 
 def test_columns_query_describes_the_qualified_relation():

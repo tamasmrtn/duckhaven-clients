@@ -22,8 +22,28 @@ if TYPE_CHECKING:
 
 
 class ResultSet:
+    @classmethod
+    def from_rows(cls, columns: list[str], rows: list[tuple[Any, ...]]) -> ResultSet:
+        """A finished result built from rows the client already has.
+
+        Backs the metadata methods that read DuckHaven's REST browse endpoints rather
+        than running SQL, so they still hand back an ordinary cursor to fetch from. It
+        never touches the transport.
+        """
+        result = cls(None, "", fetch_size=len(rows) or 1)
+        result.columns = columns
+        result._buffer.extend(rows)
+        result.total = len(rows)
+        result._started = True
+        result._exhausted = True
+        return result
+
     def __init__(
-        self, transport: Transport, query_id: str, fetch_size: int, hooks: Hooks | None = None
+        self,
+        transport: Transport | None,
+        query_id: str,
+        fetch_size: int,
+        hooks: Hooks | None = None,
     ) -> None:
         self._transport = transport
         self._query_id = query_id

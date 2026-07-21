@@ -205,15 +205,22 @@ class Cursor:
     def fetchall(self) -> list[tuple[Any, ...]]:
         return self._require_result().fetchall()
 
-    # -- Metadata (dbt/BI relation introspection via information_schema) -----
+    # -- Metadata (dbt/BI relation introspection) ---------------------------
 
     def catalogs(self) -> Cursor:
-        """Execute a query listing catalogs (`catalog_name`). Fetch the rows to read them."""
-        return self._run_metadata(_metadata.catalogs_query())
+        """List catalogs (`catalog_name`). Fetch the rows to read them."""
+        transport, workspace = self._browse_target()
+        return self._local_metadata(_metadata.fetch_catalogs(transport, workspace))
 
     def schemas(self, *, catalog: str | None = None, schema_name: str | None = None) -> Cursor:
-        """Execute a query listing schemas, optionally filtered by catalog / name pattern."""
-        return self._run_metadata(_metadata.schemas_query(catalog, schema_name))
+        """List schemas, optionally filtered by catalog / name pattern.
+
+        Costs one request per catalog in scope; pass ``catalog=`` to make it one.
+        """
+        transport, workspace = self._browse_target()
+        return self._local_metadata(
+            _metadata.fetch_schemas(transport, workspace, catalog, schema_name)
+        )
 
     def tables(
         self,
@@ -222,8 +229,33 @@ class Cursor:
         schema_name: str | None = None,
         table_name: str | None = None,
     ) -> Cursor:
-        """Execute a query listing tables, optionally filtered by catalog/schema/name."""
-        return self._run_metadata(_metadata.tables_query(catalog, schema_name, table_name))
+        """List tables, optionally filtered by catalog/schema/name.
+
+        Costs one request per catalog in scope plus one per schema; pass ``catalog=`` and
+        ``schema_name=`` to keep that to two.
+        """
+        transport, workspace = self._browse_target()
+        return self._local_metadata(
+            _metadata.fetch_tables(transport, workspace, catalog, schema_name, table_name)
+        )
+
+    def _browse_target(self) -> tuple[Any, str]:
+        """Check the cursor is usable, then hand back what the browse calls need.
+
+        Called *before* the listing is fetched: a closed cursor must raise rather than
+        issue requests.
+        """
+        self._ensure_open()
+        return self._connection._transport, self._connection._config.workspace
+
+    def _local_metadata(self, listing: tuple[list[str], list[tuple[Any, ...]]]) -> Cursor:
+        """Present a client-assembled listing as an ordinary finished result set."""
+        columns, rows = listing
+        self._query_id = None
+        self._result = ResultSet.from_rows(columns, rows)
+        self._description = _describe(columns, None)
+        self._rowcount = len(rows)
+        return self
 
     def columns(
         self,

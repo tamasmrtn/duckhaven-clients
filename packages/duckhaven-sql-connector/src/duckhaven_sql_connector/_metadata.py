@@ -1,70 +1,101 @@
-"""SQL builders for the cursor's catalog/schema/table/column metadata methods.
+"""Backends for the cursor's catalog/schema/table/column metadata methods.
 
-dbt and BI tools introspect relations through the DB-API metadata methods. Columns come
-from ``DESCRIBE`` — the only thing that reports an attached Iceberg table's real schema
-(see :func:`columns_query`) — wrapped in a ``SELECT`` so it can be projected and filtered.
+dbt and BI tools introspect relations through the DB-API metadata methods. Neither of the
+two obvious SQL routes works on DuckHaven, so this module takes a different one for each:
 
-Filters are bound as ``qmark`` parameters (rendered safely client-side): ``catalog`` is an
-exact match; ``schema``/``table``/``column`` are ``LIKE`` patterns, matching the DB-API
-convention. Relation names are quoted identifiers, not parameters.
+* **Columns** come from ``DESCRIBE`` (see :func:`columns_query`), wrapped in a ``SELECT``
+  so they can be projected and filtered. ``information_schema.columns`` reports a
+  placeholder for attached Iceberg tables.
+* **Catalog, schema and table listings** come from DuckHaven's REST browse endpoints.
+  Engine-side enumeration — ``information_schema.*``, ``duckdb_tables()`` and friends,
+  ``SHOW``, the enumerating ``PRAGMA``s — is rejected outright once *any* catalog in the
+  workspace uses a scoped attachment, because DuckDB computes those listings across every
+  attachment and cannot narrow them to the caller's grants. The REST endpoints can, and
+  they behave identically on open catalogs, so they are the single path here.
+
+Column filters are bound as ``qmark`` parameters (rendered safely client-side) and
+relation names are quoted identifiers; the REST listings are filtered client-side by
+:func:`_like_match`. ``catalog`` is an exact match; ``schema``/``table``/``column`` are
+``LIKE`` patterns, matching the DB-API convention.
 """
 
 from __future__ import annotations
 
-from typing import Any
+import fnmatch
+import re
+from typing import TYPE_CHECKING, Any
 
 from ._params import quote_identifier
 from .dbapi import ProgrammingError
 
+if TYPE_CHECKING:
+    from .client import Transport
+
 _Query = tuple[str, list[Any]]
-
-# The six columns DuckDB's DESCRIBE returns, in order:
-# (column_name, column_type, null, key, default, extra).
-_DESCRIBE_COLUMNS = ("column_name", "column_type", "null")
+# Column names and rows for a listing the client assembled itself.
+_Rows = tuple[list[str], list[tuple[Any, ...]]]
 
 
-def _build(select: str, table: str, filters: list[tuple[str, str, Any]], order: str) -> _Query:
-    clauses = [f"SELECT {select} FROM {table} WHERE TRUE"]
-    params: list[Any] = []
-    for column, op, value in filters:
-        if value is not None:
-            clauses.append(f"AND {column} {op} ?")
-            params.append(value)
-    clauses.append(f"ORDER BY {order}")
-    return " ".join(clauses), params
+def _like_match(value: str, pattern: str | None) -> bool:
+    """Match ``value`` against a SQL ``LIKE`` pattern, case-sensitively.
+
+    The listings come back as JSON rather than a result set, so the ``LIKE`` filters the
+    DB-API convention expects are applied here instead of by the engine. ``%``/``_``
+    translate to ``fnmatch``'s ``*``/``?``; the glob's own metacharacters are escaped
+    first so a literal ``[`` in a name cannot open a character class.
+    """
+    if pattern is None:
+        return True
+    translated = fnmatch.translate(pattern.replace("[", "[[]").replace("%", "*").replace("_", "?"))
+    return re.match(translated, value) is not None
 
 
-def catalogs_query() -> _Query:
-    return (
-        "SELECT DISTINCT catalog_name FROM information_schema.schemata ORDER BY catalog_name",
-        [],
-    )
+def _catalog_slugs(transport: Transport, workspace: str, catalog: str | None) -> list[str]:
+    if catalog is not None:
+        return [catalog]
+    listing = transport.get(f"/workspaces/{workspace}/catalogs").json()
+    return sorted(c["slug"] for c in listing)
 
 
-def schemas_query(catalog: str | None = None, schema_name: str | None = None) -> _Query:
-    return _build(
-        "catalog_name, schema_name",
-        "information_schema.schemata",
-        [("catalog_name", "=", catalog), ("schema_name", "LIKE", schema_name)],
-        "catalog_name, schema_name",
-    )
+def fetch_catalogs(transport: Transport, workspace: str) -> _Rows:
+    """Catalogs attached to the workspace (``GET /workspaces/{ws}/catalogs``)."""
+    return ["catalog_name"], [(slug,) for slug in _catalog_slugs(transport, workspace, None)]
 
 
-def tables_query(
+def fetch_schemas(
+    transport: Transport,
+    workspace: str,
+    catalog: str | None = None,
+    schema_name: str | None = None,
+) -> _Rows:
+    """Schemas, one request per catalog in scope."""
+    rows: list[tuple[Any, ...]] = []
+    for slug in _catalog_slugs(transport, workspace, catalog):
+        listing = transport.get(f"/workspaces/{workspace}/catalogs/{slug}/schemas").json()
+        rows += [(slug, s["name"]) for s in listing if _like_match(s["name"], schema_name)]
+    return ["catalog_name", "schema_name"], sorted(rows)
+
+
+def fetch_tables(
+    transport: Transport,
+    workspace: str,
     catalog: str | None = None,
     schema_name: str | None = None,
     table_name: str | None = None,
-) -> _Query:
-    return _build(
-        "table_catalog, table_schema, table_name, table_type",
-        "information_schema.tables",
-        [
-            ("table_catalog", "=", catalog),
-            ("table_schema", "LIKE", schema_name),
-            ("table_name", "LIKE", table_name),
-        ],
-        "table_catalog, table_schema, table_name",
-    )
+) -> _Rows:
+    """Tables, one request per catalog plus one per schema in scope."""
+    _, schemas = fetch_schemas(transport, workspace, catalog, schema_name)
+    rows: list[tuple[Any, ...]] = []
+    for cat, schema in schemas:
+        listing = transport.get(
+            f"/workspaces/{workspace}/catalogs/{cat}/schemas/{schema}/tables"
+        ).json()
+        rows += [
+            (cat, schema, t["name"], t.get("table_type"))
+            for t in listing
+            if _like_match(t["name"], table_name)
+        ]
+    return ["table_catalog", "table_schema", "table_name", "table_type"], sorted(rows)
 
 
 def columns_query(
