@@ -51,8 +51,9 @@ class _Relation:
 
 
 class _Adapter:
-    def __init__(self, recorder: _Recorder) -> None:
+    def __init__(self, recorder: _Recorder, relations: list[dict] | None = None) -> None:
         self._recorder = recorder
+        self._relations = relations or []
 
     @staticmethod
     def quote(value: str) -> str:
@@ -60,6 +61,10 @@ class _Adapter:
 
     def add_query(self, sql, bindings=None, abridge_sql_log=False):
         self._recorder.queries.append((str(sql), list(bindings or [])))
+
+    def list_relation_names(self, database, schema):
+        self._recorder.listed.append((database, schema))
+        return self._relations
 
 
 class _CompilerError(Exception):
@@ -81,6 +86,8 @@ class _Recorder:
         self.statements: list[tuple[str, str]] = []
         self.queries: list[tuple[str, list]] = []
         self.calls: list[tuple] = []
+        # (database, schema) pairs adapter.list_relation_names was asked for.
+        self.listed: list[tuple[str, str]] = []
         self.returned = None
 
     @property
@@ -93,7 +100,7 @@ class _Recorder:
         return f"<{name}>"
 
 
-def _render(macro: str, *args, run_query_rows=None, config=None) -> _Recorder:
+def _render(macro: str, *args, run_query_rows=None, config=None, relations=None) -> _Recorder:
     """Render one macro and return the recorder holding the SQL it emitted."""
     recorder = _Recorder()
     env = jinja2.Environment(extensions=["jinja2.ext.do"])
@@ -109,7 +116,7 @@ def _render(macro: str, *args, run_query_rows=None, config=None) -> _Recorder:
             "load_result": lambda name: type("R", (), {"table": "COLUMNS_TABLE"}),
             "sql_convert_columns_in_relation": lambda table: table,
             "return": lambda value: setattr(recorder, "returned", value) or "",
-            "adapter": _Adapter(recorder),
+            "adapter": _Adapter(recorder, relations),
             "this": _Relation(),
             "config": _Config(config),
             "exceptions": type(
@@ -154,11 +161,11 @@ def test_get_columns_in_relation_uses_describe_not_information_schema():
 
 
 def test_drop_schema_drops_relations_then_schema_without_cascade():
-    rows = [
-        {"table_name": "orders", "table_type": "BASE TABLE"},
+    relations = [
+        {"table_name": "orders", "table_type": "MANAGED"},
         {"table_name": "orders_view", "table_type": "VIEW"},
     ]
-    rec = _render("duckhaven__drop_schema", _Relation(), run_query_rows=rows)
+    rec = _render("duckhaven__drop_schema", _Relation(), relations=relations)
     names = [name for name, _ in rec.statements]
     # One drop per relation, then the schema drop.
     assert names == ["drop_1", "drop_2", "drop_schema"]
@@ -168,6 +175,23 @@ def test_drop_schema_drops_relations_then_schema_without_cascade():
     schema_drop = dict(rec.statements)["drop_schema"].lower()
     assert "drop schema if exists" in schema_drop
     assert "cascade" not in rec.statement_sql.lower()
+
+
+def test_drop_schema_lists_relations_via_the_adapter_not_information_schema():
+    """information_schema.tables is rejected outright on a workspace with any scoped
+    catalog attached, which made this macro fail on every drop_schema there."""
+    rec = _render(
+        "duckhaven__drop_schema",
+        _Relation(),
+        relations=[{"table_name": "orders", "table_type": "MANAGED"}],
+    )
+    assert rec.listed == [("sales", "analytics")]
+    assert "information_schema" not in rec.statement_sql.lower()
+
+
+def test_drop_schema_of_an_empty_schema_only_drops_the_schema():
+    rec = _render("duckhaven__drop_schema", _Relation(), relations=[])
+    assert [name for name, _ in rec.statements] == ["drop_schema"]
 
 
 def test_drop_relation_has_no_cascade():

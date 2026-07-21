@@ -64,16 +64,39 @@ class DuckHavenAdapter(DuckDBAdapter):
             strategies += ["merge", "microbatch"]
         return strategies
 
+    @available.parse_list
+    def list_relation_names(self, database: str, schema: str) -> list[dict[str, str]]:
+        """Relations in a schema, as ``{"table_name", "table_type"}`` dicts.
+
+        Listing them in SQL is not possible on a workspace that has any scoped catalog
+        attached: ``information_schema.tables``, ``duckdb_tables()``, ``SHOW TABLES`` and
+        ``PRAGMA show_tables`` are all rejected there, because DuckDB computes those
+        listings across every attachment and cannot narrow them to the caller's grants.
+        The connector's ``tables()`` reads DuckHaven's REST browse endpoint, which does
+        filter by grant and behaves the same on an open catalog.
+
+        Used by ``duckhaven__drop_schema``, which has to enumerate a schema's relations to
+        drop them one by one (the Iceberg REST catalog rejects ``DROP SCHEMA … CASCADE``).
+        """
+        connection = self.connections.get_thread_connection()
+        cursor = connection.handle.cursor()
+        try:
+            cursor.tables(catalog=database, schema_name=schema)
+            return [{"table_name": row[2], "table_type": row[3]} for row in cursor.fetchall()]
+        finally:
+            cursor.close()
+
     @available.parse(lambda *a, **k: [])
     def get_column_schema_from_query(self, sql: str) -> list[DuckDBColumn]:
         """Describe a query's result columns, wrapping DESCRIBE in a SELECT.
 
-        dbt-duckdb issues a bare ``DESCRIBE (<sql>)``, which cannot survive a DuckHaven
-        session: DuckDB reports DESCRIBE as a SELECT statement, so the agent materializes it
-        with ``COPY (<sql>) TO … (FORMAT PARQUET)`` — and ``COPY (DESCRIBE …)`` is a parser
-        error. Selecting from the DESCRIBE makes it a genuine SELECT that wraps cleanly, the
-        same shape duckhaven__get_columns_in_relation relies on. Columns come back in the
-        same (name, type, …) order, so the rest matches dbt-duckdb.
+        dbt-duckdb issues a bare ``DESCRIBE (<sql>)``. A current DuckHaven materializes
+        that fine, but the wrapped form is the one to keep: it is the only spelling that
+        also works against an older agent, which materialized results as
+        ``COPY (<sql>) TO … (FORMAT PARQUET)`` — and ``COPY (DESCRIBE …)`` is a parser
+        error. It is also what DuckHaven grant-checks as metadata-only on a scoped
+        catalog. Columns come back in the same (name, type, …) order, so the rest matches
+        dbt-duckdb, and it is the same shape duckhaven__get_columns_in_relation relies on.
 
         Snapshots reach this on every run via check_time_data_types.
         """

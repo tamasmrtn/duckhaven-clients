@@ -52,10 +52,46 @@ def test_merge_and_microbatch_gated_below_iceberg_merge_support(duckdb_version):
     assert set(strategies) == {"append", "delete+insert"}
 
 
+def test_list_relation_names_uses_the_connector_browse_listing():
+    """SQL enumeration (information_schema, duckdb_tables(), SHOW, PRAGMA show_tables) is
+    rejected on a workspace with any scoped catalog attached, so the listing has to come
+    from the connector's tables(), which reads the grant-filtered REST endpoint."""
+    captured = {}
+
+    class _Cursor:
+        closed = False
+
+        def tables(self, catalog=None, schema_name=None):
+            captured["filters"] = (catalog, schema_name)
+
+        def fetchall(self):
+            return [
+                ("sales", "analytics", "orders", "MANAGED"),
+                ("sales", "analytics", "customers", "MANAGED"),
+            ]
+
+        def close(self):
+            type(self).closed = True
+
+    cursor = _Cursor()
+    connection = SimpleNamespace(handle=SimpleNamespace(cursor=lambda: cursor))
+    adapter = SimpleNamespace(connections=SimpleNamespace(get_thread_connection=lambda: connection))
+
+    relations = DuckHavenAdapter.list_relation_names(adapter, "sales", "analytics")
+
+    assert captured["filters"] == ("sales", "analytics")
+    assert relations == [
+        {"table_name": "orders", "table_type": "MANAGED"},
+        {"table_name": "customers", "table_type": "MANAGED"},
+    ]
+    assert _Cursor.closed
+
+
 def test_get_column_schema_from_query_wraps_describe_in_a_select():
-    # dbt-duckdb emits a bare `DESCRIBE (<sql>)`. DuckDB reports DESCRIBE as a SELECT, so the
-    # agent materializes it via `COPY (<sql>) TO ...`, and `COPY (DESCRIBE ...)` is a parser
-    # error. Selecting from the DESCRIBE makes it a real SELECT that wraps cleanly.
+    # dbt-duckdb emits a bare `DESCRIBE (<sql>)`. Selecting from it is the spelling that
+    # works everywhere: an older agent materialized results via `COPY (<sql>) TO ...`, and
+    # `COPY (DESCRIBE ...)` is a parser error, and DuckHaven grant-checks the wrapped form
+    # as metadata-only on a scoped catalog.
     captured = {}
 
     class _Connections:
