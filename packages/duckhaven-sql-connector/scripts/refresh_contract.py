@@ -35,6 +35,9 @@ SCHEMAS = (
     "StagingFilesOut",
     "QueryOut",
     "RowsPageOut",
+    # Referenced by QueryOut.column_schema and RowsPageOut.column_schema; without it the
+    # pinned subset carries a dangling $ref.
+    "ColumnSchemaOut",
 )
 DEST = Path(__file__).resolve().parents[1] / "contract" / "duckhaven-openapi.subset.json"
 

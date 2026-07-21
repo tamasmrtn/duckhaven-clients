@@ -1,6 +1,25 @@
 {
   "components": {
     "schemas": {
+      "ColumnSchemaOut": {
+        "description": "One result column's name and DuckDB logical type.\n\n``type`` is spelled the way DuckDB itself prints a logical type \u2014 the same\nstring ``DESCRIBE`` returns in its ``column_type`` column. That spelling is\nself-describing and re-parses exactly, including parameterized and nested\ntypes (``DECIMAL(38,10)``, ``STRUCT(a INTEGER, b VARCHAR)``, ``ENUM('e', 'f')``,\n``INTEGER[2]``), so no separate precision/scale fields are carried.\n\nNo ``nullable`` field: DuckDB relations carry no reliable nullability\n(``DESCRIBE`` reports ``YES`` unconditionally), so reporting it would be\ninventing data.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type"
+        ],
+        "title": "ColumnSchemaOut",
+        "type": "object"
+      },
       "QueryOut": {
         "properties": {
           "agent_id": {
@@ -14,6 +33,20 @@
               }
             ],
             "title": "Agent Id"
+          },
+          "column_schema": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ColumnSchemaOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Schema"
           },
           "duration_ms": {
             "anyOf": [
@@ -111,6 +144,18 @@
             ],
             "title": "Schedule Id"
           },
+          "session_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Session Id"
+          },
           "sql": {
             "title": "Sql",
             "type": "string"
@@ -170,6 +215,20 @@
       },
       "RowsPageOut": {
         "properties": {
+          "column_schema": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ColumnSchemaOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Column Schema"
+          },
           "columns": {
             "items": {
               "type": "string"
@@ -264,6 +323,51 @@
             ],
             "title": "Agent Id"
           },
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name"
+          },
+          "client_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Version"
+          },
+          "close_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Close Reason"
+          },
+          "closed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Closed At"
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -290,6 +394,18 @@
             "title": "Last Active At",
             "type": "string"
           },
+          "opened_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Opened At"
+          },
           "staging_uri": {
             "anyOf": [
               {
@@ -304,10 +420,28 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
           }
         },
         "required": [
           "id",
+          "workspace_id",
           "status",
           "agent_id",
           "active_catalog",
