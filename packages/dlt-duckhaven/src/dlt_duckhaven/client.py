@@ -83,9 +83,12 @@ class DuckHavenJobClient(InsertValuesJobClient, SupportsStagingDestination):
             columns: TTableSchemaColumns = {}
             qualified = self.sql_client.make_qualified_table_name(table_name)
             try:
-                # DESCRIBE wrapped in a SELECT so the DuckHaven session can materialize the
-                # result (it wraps result-returning statements in `COPY (<sql>) TO`, which a
-                # bare DESCRIBE is not valid inside).
+                # DESCRIBE wrapped in a SELECT. A bare DESCRIBE also works on a current
+                # server, but the wrapped form is what to keep: it is projectable, it is
+                # what DuckHaven's grant check recognizes as metadata-only on a scoped
+                # catalog, and it is the one spelling that works on every server
+                # generation — older agents materialize results as `COPY (<sql>) TO`,
+                # which a bare DESCRIBE is not valid inside.
                 rows = self.sql_client.execute_sql(f"SELECT * FROM (DESCRIBE {qualified})")
             except DatabaseUndefinedRelation:
                 yield table_name, {}
