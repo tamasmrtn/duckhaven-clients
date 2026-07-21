@@ -6,6 +6,14 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A `VARCHAR` column holding an ISO-8601-looking string (e.g. `"2024-05-06T07:08:09Z"`) is
+  no longer silently converted to a `datetime` on the way to the destination. Timestamp
+  coercion now follows the column types the server reports rather than matching each
+  value's shape against a regex. Against a server that reports no types the previous
+  shape-based behaviour is kept unchanged, so nothing regresses on an older deployment.
+
 ## [0.1.0] - 2026-07-19
 
 ### Added

@@ -82,6 +82,15 @@ constrains dlt types to Iceberg-safe DuckDB types (JSON → `VARCHAR`, microseco
 timestamps, no 128-bit integers). Schema evolution (new columns on a later run) is applied
 with `ALTER TABLE … ADD COLUMN`.
 
+### Reading values back
+
+DuckHaven returns rows as JSON, so temporal values arrive as ISO-8601 strings and are
+converted back to `datetime` on the way out. Which columns get converted is decided from
+the column types the server reports, so a `VARCHAR` column that happens to hold an
+ISO-8601-looking string stays the string it is. Against a server that reports no column
+types the destination falls back to recognizing datetimes by their shape, which *can*
+misread such a `VARCHAR` — the reason the typed path exists.
+
 ## Observability
 
 With the `otel` extra, each load job and staging upload emits an OpenTelemetry span
