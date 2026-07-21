@@ -26,8 +26,23 @@ _POLL_GRACE = 30.0
 
 _PENDING = ("queued", "running")
 
-# A 7-tuple with only the column name known; DuckHaven's rows page carries no types.
-_DESCRIPTION_FILLER = (None, None, None, None, None, None)
+
+def _describe(columns: list[str], schema: list[tuple[str, str]] | None) -> list[tuple[Any, ...]]:
+    """Build PEP 249 ``description`` 7-tuples for a result's columns.
+
+    ``type_code`` is DuckHaven's ``column_schema`` type — DuckDB's own logical-type
+    spelling (``"DECIMAL(18,4)"``, ``"STRUCT(a INTEGER, b VARCHAR)"``), the same string
+    ``DESCRIBE`` prints. PEP 249 leaves ``type_code`` implementation-defined, so a type
+    name is a legal value for it. It is ``None`` against a server that does not report
+    the schema, which is what the field was before DuckHaven grew it.
+
+    The remaining five fields (display_size, internal_size, precision, scale, null_ok)
+    stay ``None``: the precision/scale are already inside the type string, and DuckDB
+    relations carry no reliable nullability.
+    """
+    types = dict(schema or ())
+    return [(name, types.get(name), None, None, None, None, None) for name in columns]
+
 
 # Standalone transaction-control statements. The DuckHaven session is autocommit (each
 # statement commits via Polaris), so these carry no server-side meaning — and submitting a
@@ -76,6 +91,18 @@ class Cursor:
     def rowcount(self) -> int:
         return self._rowcount
 
+    @property
+    def column_types(self) -> list[str] | None:
+        """The result columns' DuckDB types, or ``None`` when the server reported none.
+
+        A convenience over ``[d[1] for d in description]`` for callers that want the
+        types on their own — e.g. to decide whether a value needs decoding.
+        """
+        if self._description is None:
+            return None
+        types = [d[1] for d in self._description]
+        return None if all(t is None for t in types) else types
+
     # -- Execution ----------------------------------------------------------
 
     def execute(self, operation: str, parameters: Sequence[Any] | None = None) -> Cursor:
@@ -120,7 +147,7 @@ class Cursor:
         )
         self._result.ensure_started()
         cols = self._result.columns
-        self._description = [(name, *_DESCRIPTION_FILLER) for name in cols] if cols else None
+        self._description = _describe(cols, self._result.column_schema) if cols else None
         return self
 
     def executemany(self, operation: str, seq_of_parameters: Sequence[Sequence[Any]]) -> Cursor:
