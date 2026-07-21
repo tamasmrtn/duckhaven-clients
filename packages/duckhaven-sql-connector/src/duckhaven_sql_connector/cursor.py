@@ -233,7 +233,15 @@ class Cursor:
         table_name: str | None = None,
         column_name: str | None = None,
     ) -> Cursor:
-        """Execute a query listing columns, optionally filtered by catalog/schema/table/name."""
+        """Execute a query listing one relation's columns; fetch the rows to read them.
+
+        ``table_name`` is **required and exact** — DuckHaven reports columns with
+        ``DESCRIBE``, which names a single relation. Enumerate relations with
+        :meth:`tables` first. Rows keep the familiar shape ``(table_catalog,
+        table_schema, table_name, column_name, ordinal_position, data_type,
+        is_nullable)``; ``data_type`` is DuckDB's spelling, the same string a query
+        result reports in its column types.
+        """
         return self._run_metadata(
             _metadata.columns_query(catalog, schema_name, table_name, column_name)
         )
