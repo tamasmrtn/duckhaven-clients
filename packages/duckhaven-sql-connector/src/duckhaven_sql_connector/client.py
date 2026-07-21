@@ -68,9 +68,15 @@ class Transport:
             base_url=config.base_url,
             headers={
                 "Authorization": f"Bearer {config.token}",
-                "User-Agent": (
-                    f"duckhaven-sql-connector/{__version__}"
-                    + (f" {config.application}" if config.application else "")
+                # The calling application leads, because DuckHaven records a session's
+                # client from the *first* product token of the User-Agent. With the
+                # connector first, every dbt and dlt session was attributed to
+                # "duckhaven-sql-connector" and the actual workload was lost.
+                "User-Agent": " ".join(
+                    filter(
+                        None,
+                        (config.application, f"duckhaven-sql-connector/{__version__}"),
+                    )
                 ),
             },
             verify=config.tls_verify,

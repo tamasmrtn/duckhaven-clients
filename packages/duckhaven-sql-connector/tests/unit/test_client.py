@@ -3,6 +3,7 @@ import pytest
 import respx
 
 from duckhaven_sql_connector import dbapi
+from duckhaven_sql_connector._version import __version__
 from duckhaven_sql_connector.client import Transport
 from duckhaven_sql_connector.config import ClientConfig, RetryPolicy
 
@@ -31,12 +32,16 @@ def test_sends_bearer_and_user_agent():
 
 
 @respx.mock
-def test_application_is_appended_to_user_agent():
+def test_application_leads_the_user_agent():
+    """DuckHaven attributes a session from the *first* product token, so the calling
+    application has to come first or the workload is recorded as the connector itself."""
     route = respx.get(f"{BASE}/probe").mock(return_value=httpx.Response(200, json={}))
     _transport(application="dbt-duckhaven/1.2.3").get("/probe")
     ua = route.calls.last.request.headers["user-agent"]
-    assert ua.startswith("duckhaven-sql-connector/")
-    assert ua.endswith(" dbt-duckhaven/1.2.3")
+    assert ua.startswith("dbt-duckhaven/1.2.3 ")
+    assert ua.endswith(f"duckhaven-sql-connector/{__version__}")
+    # This is the split the server applies (services/sql_sessions/client_info.py).
+    assert ua.split(" ", 1)[0].partition("/")[::2] == ("dbt-duckhaven", "1.2.3")
 
 
 @respx.mock
