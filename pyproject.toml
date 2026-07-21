@@ -7,7 +7,7 @@ members = ["packages/*"]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.15",
+    "ruff>=0.15.22",
     "pytest>=8.3",
     "pytest-cov>=5.0",
     "respx>=0.21",
@@ -15,7 +15,7 @@ dev = [
     "twine>=5.1",
     # Installed so the optional-extra code paths (arrow, otel) are exercised in tests.
     "pyarrow>=15",
-    "opentelemetry-api>=1.36",
+    "opentelemetry-api>=1.44.0",
     "opentelemetry-sdk>=1.36",
     # dbt's standard adapter conformance harness, for the dbt-duckhaven member.
     "dbt-tests-adapter>=1.10",

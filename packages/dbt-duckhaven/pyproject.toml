@@ -28,7 +28,7 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 # Adapter-level spans per node; the connector owns transport-level trace propagation.
-otel = ["opentelemetry-api>=1.36"]
+otel = ["opentelemetry-api>=1.44.0"]
 
 [project.urls]
 Homepage = "https://github.com/tamasmrtn/duckhaven-clients"
