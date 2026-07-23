@@ -6,6 +6,15 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-23
+
+### Changed
+
+- Require `duckhaven-sql-connector>=0.3.0`: the timestamp-coercion fix below reads the
+  result column types that connector version reports (`description` `type_code`). Against
+  an older connector the value carries no type and the destination falls back to the
+  previous shape-based heuristic.
+
 ### Fixed
 
 - A `VARCHAR` column holding an ISO-8601-looking string (e.g. `"2024-05-06T07:08:09Z"`) is

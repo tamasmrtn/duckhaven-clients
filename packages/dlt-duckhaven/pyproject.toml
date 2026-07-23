@@ -23,7 +23,7 @@ classifiers = [
 # through the DuckHaven session API. dlt 1.29 is the interface baseline.
 dependencies = [
     "dlt>=1.29,<2",
-    "duckhaven-sql-connector>=0.2.0",
+    "duckhaven-sql-connector>=0.3.0",
     # Streaming HTTP PUT of staged Parquet to presigned URLs (also a dlt dependency).
     "requests>=2.26",
 ]
