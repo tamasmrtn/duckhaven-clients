@@ -22,7 +22,7 @@ classifiers = [
 # we swap only the connection layer for the DuckHaven session API via the connector.
 dependencies = [
     "dbt-duckdb>=1.10,<2",
-    "duckhaven-sql-connector>=0.1.0",
+    "duckhaven-sql-connector>=0.3.0",
 ]
 dynamic = ["version"]
 

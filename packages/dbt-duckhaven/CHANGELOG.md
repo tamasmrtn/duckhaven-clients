@@ -6,6 +6,8 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-23
+
 ### Fixed
 
 - `drop_schema` no longer fails on a workspace with a scoped catalog attached. It listed a
@@ -17,6 +19,9 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ### Changed
 
+- Require `duckhaven-sql-connector>=0.3.0`: the scoped-catalog `drop_schema` fix relies on
+  that version's REST-backed `cursor.tables()`. Against an older connector, `tables()` runs
+  over `information_schema`, which is exactly what the fix routes around.
 - Re-running `dbt seed` over an existing seed now works against a server whose statement
   policy admits `TRUNCATE TABLE`, and is covered by the e2e suite. The README caveat is now
   conditional: on an older server the reset is still rejected and `--full-refresh` is still
