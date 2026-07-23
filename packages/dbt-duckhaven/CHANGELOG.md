@@ -20,7 +20,9 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 - Re-running `dbt seed` over an existing seed now works against a server whose statement
   policy admits `TRUNCATE TABLE`, and is covered by the e2e suite. The README caveat is now
   conditional: on an older server the reset is still rejected and `--full-refresh` is still
-  needed, and there is no capability endpoint for the adapter to detect that from.
+  needed. The adapter does not detect which case applies — `GET /api/version` reports a
+  build version and a coarse API-contract number, but the `TRUNCATE` allowance was additive
+  and moves neither, and there is no feature registry to check.
 
 ## [0.1.0] - 2026-07-17
 
