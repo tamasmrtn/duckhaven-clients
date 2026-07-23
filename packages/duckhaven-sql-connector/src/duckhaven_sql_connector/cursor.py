@@ -26,8 +26,23 @@ _POLL_GRACE = 30.0
 
 _PENDING = ("queued", "running")
 
-# A 7-tuple with only the column name known; DuckHaven's rows page carries no types.
-_DESCRIPTION_FILLER = (None, None, None, None, None, None)
+
+def _describe(columns: list[str], schema: list[tuple[str, str]] | None) -> list[tuple[Any, ...]]:
+    """Build PEP 249 ``description`` 7-tuples for a result's columns.
+
+    ``type_code`` is DuckHaven's ``column_schema`` type — DuckDB's own logical-type
+    spelling (``"DECIMAL(18,4)"``, ``"STRUCT(a INTEGER, b VARCHAR)"``), the same string
+    ``DESCRIBE`` prints. PEP 249 leaves ``type_code`` implementation-defined, so a type
+    name is a legal value for it. It is ``None`` against a server that does not report
+    the schema, which is what the field was before DuckHaven grew it.
+
+    The remaining five fields (display_size, internal_size, precision, scale, null_ok)
+    stay ``None``: the precision/scale are already inside the type string, and DuckDB
+    relations carry no reliable nullability.
+    """
+    types = dict(schema or ())
+    return [(name, types.get(name), None, None, None, None, None) for name in columns]
+
 
 # Standalone transaction-control statements. The DuckHaven session is autocommit (each
 # statement commits via Polaris), so these carry no server-side meaning — and submitting a
@@ -76,6 +91,18 @@ class Cursor:
     def rowcount(self) -> int:
         return self._rowcount
 
+    @property
+    def column_types(self) -> list[str] | None:
+        """The result columns' DuckDB types, or ``None`` when the server reported none.
+
+        A convenience over ``[d[1] for d in description]`` for callers that want the
+        types on their own — e.g. to decide whether a value needs decoding.
+        """
+        if self._description is None:
+            return None
+        types = [d[1] for d in self._description]
+        return None if all(t is None for t in types) else types
+
     # -- Execution ----------------------------------------------------------
 
     def execute(self, operation: str, parameters: Sequence[Any] | None = None) -> Cursor:
@@ -120,7 +147,7 @@ class Cursor:
         )
         self._result.ensure_started()
         cols = self._result.columns
-        self._description = [(name, *_DESCRIPTION_FILLER) for name in cols] if cols else None
+        self._description = _describe(cols, self._result.column_schema) if cols else None
         return self
 
     def executemany(self, operation: str, seq_of_parameters: Sequence[Sequence[Any]]) -> Cursor:
@@ -178,15 +205,22 @@ class Cursor:
     def fetchall(self) -> list[tuple[Any, ...]]:
         return self._require_result().fetchall()
 
-    # -- Metadata (dbt/BI relation introspection via information_schema) -----
+    # -- Metadata (dbt/BI relation introspection) ---------------------------
 
     def catalogs(self) -> Cursor:
-        """Execute a query listing catalogs (`catalog_name`). Fetch the rows to read them."""
-        return self._run_metadata(_metadata.catalogs_query())
+        """List catalogs (`catalog_name`). Fetch the rows to read them."""
+        transport, workspace = self._browse_target()
+        return self._local_metadata(_metadata.fetch_catalogs(transport, workspace))
 
     def schemas(self, *, catalog: str | None = None, schema_name: str | None = None) -> Cursor:
-        """Execute a query listing schemas, optionally filtered by catalog / name pattern."""
-        return self._run_metadata(_metadata.schemas_query(catalog, schema_name))
+        """List schemas, optionally filtered by catalog / name pattern.
+
+        Costs one request per catalog in scope; pass ``catalog=`` to make it one.
+        """
+        transport, workspace = self._browse_target()
+        return self._local_metadata(
+            _metadata.fetch_schemas(transport, workspace, catalog, schema_name)
+        )
 
     def tables(
         self,
@@ -195,8 +229,33 @@ class Cursor:
         schema_name: str | None = None,
         table_name: str | None = None,
     ) -> Cursor:
-        """Execute a query listing tables, optionally filtered by catalog/schema/name."""
-        return self._run_metadata(_metadata.tables_query(catalog, schema_name, table_name))
+        """List tables, optionally filtered by catalog/schema/name.
+
+        Costs one request per catalog in scope plus one per schema; pass ``catalog=`` and
+        ``schema_name=`` to keep that to two.
+        """
+        transport, workspace = self._browse_target()
+        return self._local_metadata(
+            _metadata.fetch_tables(transport, workspace, catalog, schema_name, table_name)
+        )
+
+    def _browse_target(self) -> tuple[Any, str]:
+        """Check the cursor is usable, then hand back what the browse calls need.
+
+        Called *before* the listing is fetched: a closed cursor must raise rather than
+        issue requests.
+        """
+        self._ensure_open()
+        return self._connection._transport, self._connection._config.workspace
+
+    def _local_metadata(self, listing: tuple[list[str], list[tuple[Any, ...]]]) -> Cursor:
+        """Present a client-assembled listing as an ordinary finished result set."""
+        columns, rows = listing
+        self._query_id = None
+        self._result = ResultSet.from_rows(columns, rows)
+        self._description = _describe(columns, None)
+        self._rowcount = len(rows)
+        return self
 
     def columns(
         self,
@@ -206,7 +265,15 @@ class Cursor:
         table_name: str | None = None,
         column_name: str | None = None,
     ) -> Cursor:
-        """Execute a query listing columns, optionally filtered by catalog/schema/table/name."""
+        """Execute a query listing one relation's columns; fetch the rows to read them.
+
+        ``table_name`` is **required and exact** — DuckHaven reports columns with
+        ``DESCRIBE``, which names a single relation. Enumerate relations with
+        :meth:`tables` first. Rows keep the familiar shape ``(table_catalog,
+        table_schema, table_name, column_name, ordinal_position, data_type,
+        is_nullable)``; ``data_type`` is DuckDB's spelling, the same string a query
+        result reports in its column types.
+        """
         return self._run_metadata(
             _metadata.columns_query(catalog, schema_name, table_name, column_name)
         )

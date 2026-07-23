@@ -6,6 +6,42 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Added
+
+- `Connection.server_version()` reads `GET /api/version`, returning a `ServerVersion(version,
+  api_version)` — the release/build version and the integer API-contract version — or `None`
+  against a server predating the endpoint (404). Session-independent, so it still answers
+  after the session has gone dead. Provenance and coarse compatibility for support and
+  diagnostics; `api_version` moves only on a breaking change, so it is not a feature flag.
+- `Cursor.description` now reports each result column's type in PEP 249's `type_code`
+  field, spelled the way DuckDB prints a logical type (`DECIMAL(18,4)`,
+  `TIMESTAMP WITH TIME ZONE`, `STRUCT(a INTEGER, b VARCHAR)`). `Cursor.column_types`
+  exposes the same list on its own. Both are `None` against a server or agent that does not
+  report types, which is what `type_code` always was before, so existing readers are
+  unaffected. Values are deliberately **not** cast to the declared type: results travel as
+  JSON, so `DECIMAL` and `HUGEINT` have already lost precision and casting would hide that
+  rather than fix it.
+
+### Changed
+
+- **Breaking:** `Cursor.columns()` now requires an exact `table_name` and raises
+  `ProgrammingError` without one (or given a `%` pattern). It reports columns with
+  `DESCRIBE` instead of `information_schema.columns`, which cannot introspect an attached
+  Iceberg table — it returns a single `__`/`UNKNOWN` placeholder row, and *inconsistently*,
+  so the previous implementation returned wrong columns non-deterministically with no
+  error. Enumerate with `tables()`, then call `columns()` per relation. The returned row
+  shape is unchanged.
+- `Cursor.catalogs()`, `schemas()` and `tables()` now read DuckHaven's REST browse
+  endpoints instead of `information_schema`. Engine-side enumeration is rejected outright
+  on any workspace with a scoped catalog attached — including for sessions whose active
+  catalog is open — because the engine cannot filter those listings by grant. The browse
+  endpoints can, and behave identically on open catalogs. Same methods, same row shapes,
+  same `LIKE` filtering; they now cost one request per catalog in scope, plus one per
+  schema for `tables()`, so pass `catalog=`/`schema_name=` where you can.
+- The `User-Agent` now leads with the calling application (`application=`) rather than
+  appending it. DuckHaven attributes a session from the *first* product token, so dbt and
+  dlt sessions were previously all recorded as `duckhaven-sql-connector`.
+
 ## [0.2.0] - 2026-07-19
 
 ### Added

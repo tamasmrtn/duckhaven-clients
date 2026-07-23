@@ -6,6 +6,24 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `drop_schema` no longer fails on a workspace with a scoped catalog attached. It listed a
+  schema's relations with `information_schema.tables`, which DuckHaven rejects there
+  (the engine cannot filter those listings by grant) — and the rejection applies to every
+  session in the workspace, including models on an open catalog. The listing now comes from
+  the new `adapter.list_relation_names`, which reads DuckHaven's grant-filtered REST browse
+  endpoint. dbt drops its test schemas this way, so this affected ordinary runs.
+
+### Changed
+
+- Re-running `dbt seed` over an existing seed now works against a server whose statement
+  policy admits `TRUNCATE TABLE`, and is covered by the e2e suite. The README caveat is now
+  conditional: on an older server the reset is still rejected and `--full-refresh` is still
+  needed. The adapter does not detect which case applies — `GET /api/version` reports a
+  build version and a coarse API-contract number, but the `TRUNCATE` allowance was additive
+  and moves neither, and there is no feature registry to check.
+
 ## [0.1.0] - 2026-07-17
 
 ### Added

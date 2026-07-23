@@ -66,3 +66,18 @@ def test_response_bodies_match_what_the_connector_reads(spec):
     )
     assert {"id", "status", "row_count", "error"} <= _props(spec, "QueryOut")
     assert {"rows", "columns", "cursor", "total"} <= _props(spec, "RowsPageOut")
+
+
+def test_result_column_types_are_reported_on_both_surfaces(spec):
+    # The connector fills description[1] from the rows page; the query surface spells it
+    # identically, so a drift in either is a break.
+    assert "column_schema" in _props(spec, "RowsPageOut")
+    assert "column_schema" in _props(spec, "QueryOut")
+    assert {"name", "type"} <= _props(spec, "ColumnSchemaOut")
+
+
+def test_column_schema_is_optional(spec):
+    """It must stay nullable and non-required: a server or agent predating the field
+    reports no types, and the connector leaves type_code None rather than failing."""
+    for schema in ("RowsPageOut", "QueryOut"):
+        assert "column_schema" not in spec["components"]["schemas"][schema].get("required", [])

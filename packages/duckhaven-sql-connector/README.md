@@ -61,17 +61,58 @@ exponential backoff; a server `Retry-After` header is honored, and retries are b
 both a max-attempt count and a total-time budget (`RetryPolicy.max_elapsed`). Statement
 submits are never auto-retried.
 
-## Metadata
+## Column types
 
-For relation introspection (as dbt and BI tools need), the cursor exposes metadata methods
-that query the server's `information_schema`; fetch the rows as usual:
+`cursor.description` carries the result's column types in PEP 249's `type_code` field,
+spelled the way DuckDB prints a logical type — the same string `DESCRIBE` returns, so it is
+self-describing for parameterized and nested types:
 
 ```python
-cur.tables(schema_name="public")
+cur.execute("SELECT id, amount, created_at FROM sales.orders")
+[(d[0], d[1]) for d in cur.description]
+# [('id', 'BIGINT'), ('amount', 'DECIMAL(18,4)'), ('created_at', 'TIMESTAMP WITH TIME ZONE')]
+cur.column_types  # the same types on their own
+```
+
+Both are `None` against a server (or agent) older than this field, so code that reads them
+should tolerate that.
+
+> **Values are not re-typed to match.** Results travel as JSON, so a `DECIMAL` or `HUGEINT`
+> arrives as a float with its precision **already lost**, a `BLOB` as hex text, an
+> `INTERVAL` as an ISO-8601 duration, and temporal types as ISO-8601 strings. The connector
+> reports the true type but does not cast the value, because casting could not restore
+> precision that was gone before the client saw it — it would only hide the loss.
+
+## Metadata
+
+For relation introspection (as dbt and BI tools need), the cursor exposes metadata methods;
+fetch the rows as usual:
+
+```python
+cur.tables(catalog="sales", schema_name="public")
 for catalog, schema, name, table_type in cur.fetchall():
     ...
-# also: cur.catalogs(), cur.schemas(catalog=…), cur.columns(table_name=…)
+
+cur.columns(catalog="sales", schema_name="public", table_name="orders")
+for catalog, schema, table, column, position, data_type, is_nullable in cur.fetchall():
+    ...
+# also: cur.catalogs(), cur.schemas(catalog=…)
 ```
+
+Two things are worth knowing about how these work:
+
+- **`columns()` needs an exact `table_name`.** It reports columns with `DESCRIBE`, which
+  describes one relation. `information_schema.columns` is not usable: for an attached
+  Iceberg table it returns a single placeholder row (`__` / `UNKNOWN`) instead of the real
+  columns, and inconsistently so — a table something has already touched in the session
+  reports correctly while the rest do not — so it returns wrong data rather than failing.
+  Use `tables()` to enumerate, then `columns()` per relation. `data_type` is DuckDB's
+  spelling, the same vocabulary a query result reports.
+- **`catalogs()`, `schemas()` and `tables()` read DuckHaven's REST browse endpoints**, not
+  SQL. Engine-side enumeration is refused on any workspace with a scoped catalog attached,
+  since the engine cannot filter those listings by grant; the REST endpoints can, and
+  behave identically on open catalogs. They cost one request per catalog in scope, plus one
+  per schema for `tables()`, so pass `catalog=` and `schema_name=` when you can.
 
 ## Arrow results
 
@@ -88,6 +129,24 @@ table = cur.fetch_arrow_table()
   client spans join the DuckHaven server trace. It is a no-op when the extra isn't installed.
 - **Hooks** — pass `connect(..., hooks=Hooks(...))` to observe request timings, retries, and
   rows fetched without any OpenTelemetry dependency (a client library runs no metrics server).
+
+## Server version
+
+`conn.server_version()` reports the server's release and API-contract version:
+
+```python
+v = conn.server_version()
+if v is None:
+    ...  # server predates GET /api/version — assume the oldest supported behaviour
+else:
+    print(v.version, v.api_version)  # e.g. "1.4.0", 1
+```
+
+`version` is the build/release version; `api_version` is an integer bumped only on a
+breaking API change. It is a provenance and coarse-compatibility signal, **not** a feature
+list — an additive change (a new field, a newly admitted statement) moves neither — so it
+is for support and diagnostics rather than for gating behaviour. A server too old to expose
+the endpoint returns `None`.
 
 ## Compatibility
 

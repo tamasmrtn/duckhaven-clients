@@ -226,29 +226,7 @@ def test_execute_on_closed_cursor_raises():
 
 
 @respx.mock
-def test_catalogs_metadata_issues_information_schema_query():
-    conn = open_conn()
-    statements = _submit(status="done", row_count=2)
-    respx.get(ROWS_URL).mock(
-        return_value=httpx.Response(
-            200,
-            json={
-                "rows": [{"catalog_name": "sales"}, {"catalog_name": "raw"}],
-                "columns": ["catalog_name"],
-                "cursor": None,
-                "total": 2,
-            },
-        )
-    )
-    cur = conn.cursor()
-    cur.catalogs()
-    sent = json.loads(statements.calls.last.request.content)["sql"]
-    assert "DISTINCT catalog_name FROM information_schema.schemata" in sent
-    assert [r[0] for r in cur.fetchall()] == ["sales", "raw"]
-
-
-@respx.mock
-def test_tables_metadata_renders_like_filter():
+def test_columns_metadata_submits_a_wrapped_describe():
     conn = open_conn()
     statements = _submit(status="done", row_count=1)
     respx.get(ROWS_URL).mock(
@@ -260,21 +238,33 @@ def test_tables_metadata_renders_like_filter():
                         "table_catalog": "sales",
                         "table_schema": "public",
                         "table_name": "orders",
-                        "table_type": "BASE TABLE",
+                        "column_name": "id",
+                        "ordinal_position": 1,
+                        "data_type": "BIGINT",
+                        "is_nullable": "YES",
                     }
                 ],
-                "columns": ["table_catalog", "table_schema", "table_name", "table_type"],
+                "columns": [
+                    "table_catalog",
+                    "table_schema",
+                    "table_name",
+                    "column_name",
+                    "ordinal_position",
+                    "data_type",
+                    "is_nullable",
+                ],
                 "cursor": None,
                 "total": 1,
             },
         )
     )
     cur = conn.cursor()
-    cur.tables(schema_name="public")
+    cur.columns(catalog="sales", schema_name="public", table_name="orders")
     sent = json.loads(statements.calls.last.request.content)["sql"]
-    assert "information_schema.tables" in sent
-    assert "table_schema LIKE 'public'" in sent  # qmark rendered client-side
-    assert cur.fetchall()[0][2] == "orders"
+    assert 'FROM (DESCRIBE "sales"."public"."orders")' in sent
+    assert "information_schema" not in sent
+    assert "'sales' AS table_catalog" in sent  # qmark rendered client-side
+    assert cur.fetchall()[0][5] == "BIGINT"
 
 
 @respx.mock

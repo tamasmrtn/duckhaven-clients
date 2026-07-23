@@ -12,11 +12,30 @@ against a **real DuckHaven**, on every PR and on push to `main`.
    [`compose.sessions.yml`](compose.sessions.yml) to set `SQL_SESSIONS_ENABLED=true`.
 3. Reads the fresh API container's first-boot setup token and runs [`seed.py`](seed.py),
    which provisions — **through the public API only** — an admin, a workspace, a catalog on
-   bundled storage, and a **service-account PAT** that is a workspace member.
+   bundled storage, and a **service-account PAT** that is a workspace member. It also
+   provisions a **second workspace holding a scoped catalog** (see below).
 4. Exports `DUCKHAVEN_TEST_*` and runs `make test-integration`.
 
 No GitHub secrets are used (the setup token comes from the fresh container), so it runs on
 fork PRs too.
+
+## The scoped-catalog workspace
+
+Under a **scoped** catalog attachment DuckHaven refuses engine-side metadata enumeration —
+`information_schema.*`, `duckdb_tables()` and friends, `SHOW`, and the enumerating
+`PRAGMA`s all answer 403 — because the engine computes those listings across every
+attachment and cannot narrow them to the caller's grants. The connector's `catalogs()`,
+`schemas()` and `tables()` read the REST browse endpoints instead, which do filter by
+grant; that only reproduces against a real scoped attachment, so the seed provisions one.
+
+It lives in its **own workspace** (`DUCKHAVEN_TEST_SCOPED_WORKSPACE` /
+`DUCKHAVEN_TEST_SCOPED_CATALOG`) rather than beside the open catalog, because the denial is
+evaluated per *workspace*: one scoped attachment disables `information_schema` for every
+session in that workspace, including ones whose active catalog is open. Putting the two
+together would break the open-catalog tests.
+
+The scoped tests skip when those two variables are unset, so the suite still runs against a
+stack that has no scoped catalog.
 
 ## Image tag
 

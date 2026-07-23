@@ -133,7 +133,13 @@ def _set_duckhaven_capabilities(
     # are connector-side no-ops, so DDL transactions are unavailable.
     caps.supports_ddl_transactions = False
     caps.supports_multiple_statements = False
-    # Iceberg has no cheap TRUNCATE; replace truncation is done via `DELETE FROM` (Athena).
+    # Replace truncation is done via `DELETE FROM` (as the Athena destination does).
+    # DuckHaven's statement policy does now admit `TRUNCATE TABLE`, but there is nothing
+    # to gain by switching: DuckDB's grammar turns TRUNCATE into the very same
+    # DeleteStatement, so the two compile to an identical plan, and on Iceberg neither is
+    # the cheap metadata-only operation the name suggests — emptying a table writes
+    # positional delete files either way. Staying on DELETE also keeps this working
+    # against a server whose policy predates the TRUNCATE allowance.
     caps.supports_truncate_command = False
     caps.supported_merge_strategies = ["delete-insert"]
     caps.supported_replace_strategies = ["insert-from-staging", "truncate-and-insert"]

@@ -1,42 +1,68 @@
-from duckhaven_sql_connector._metadata import (
-    catalogs_query,
-    columns_query,
-    schemas_query,
-    tables_query,
+import pytest
+
+from duckhaven_sql_connector._metadata import _like_match, columns_query
+from duckhaven_sql_connector.dbapi import ProgrammingError
+
+
+@pytest.mark.parametrize(
+    ("value", "pattern", "expected"),
+    [
+        ("orders", None, True),
+        ("orders", "orders", True),
+        ("orders", "ord%", True),
+        ("orders", "%ers", True),
+        ("orders", "cust%", False),
+        ("t1", "t_", True),
+        ("t22", "t_", False),
+        ("Orders", "orders", False),
+    ],
 )
+def test_like_match(value, pattern, expected):
+    assert _like_match(value, pattern) is expected
 
 
-def test_catalogs_query_has_no_params():
-    sql, params = catalogs_query()
-    assert "information_schema.schemata" in sql
-    assert "DISTINCT catalog_name" in sql
-    assert params == []
+def test_columns_query_describes_the_qualified_relation():
+    sql, params = columns_query("c", "s", "t")
+    # DESCRIBE, not information_schema.columns: the latter returns a ('__', 'UNKNOWN')
+    # placeholder for attached Iceberg tables.
+    assert 'FROM (DESCRIBE "c"."s"."t")' in sql
+    assert "information_schema" not in sql
+    # catalog/schema/table are synthesized, since DESCRIBE reports none of them.
+    assert params == ["c", "s", "t"]
+    assert sql.endswith("ORDER BY ordinal_position")
 
 
-def test_schemas_query_applies_filters():
-    sql, params = schemas_query(catalog="sales", schema_name="pub%")
-    assert "catalog_name = ?" in sql
-    assert "schema_name LIKE ?" in sql
-    assert params == ["sales", "pub%"]
+def test_columns_query_unqualified_relation():
+    sql, params = columns_query(table_name="t")
+    assert 'FROM (DESCRIBE "t")' in sql
+    assert params == [None, None, "t"]
 
 
-def test_tables_query_without_filters_binds_nothing():
-    sql, params = tables_query()
-    assert "information_schema.tables" in sql
-    assert "WHERE TRUE" in sql
-    assert "?" not in sql
-    assert params == []
+def test_columns_query_quotes_the_relation_identifiers():
+    sql, _ = columns_query(None, 'we"ird', "t")
+    assert 'FROM (DESCRIBE "we""ird"."t")' in sql
 
 
-def test_tables_query_partial_filter():
-    sql, params = tables_query(schema_name="public")
-    assert "table_schema LIKE ?" in sql
-    assert "table_catalog = ?" not in sql
-    assert params == ["public"]
-
-
-def test_columns_query_all_filters_and_order():
+def test_columns_query_filters_by_column_name():
     sql, params = columns_query("c", "s", "t", "col%")
+    assert "WHERE column_name LIKE ?" in sql
     assert params == ["c", "s", "t", "col%"]
-    assert "information_schema.columns" in sql
-    assert sql.endswith("ORDER BY table_catalog, table_schema, table_name, ordinal_position")
+
+
+def test_columns_query_requires_a_table_name():
+    with pytest.raises(ProgrammingError, match="requires table_name"):
+        columns_query("c", "s")
+
+
+def test_columns_query_rejects_a_table_pattern():
+    # DESCRIBE names one relation; a LIKE pattern would silently describe nothing.
+    with pytest.raises(ProgrammingError, match="exact table_name"):
+        columns_query("c", "s", "orders%")
+
+
+def test_underscores_in_a_table_name_are_literal():
+    """`_` is a LIKE wildcard, but it is a literal in most real table names and DESCRIBE
+    takes the name as a quoted identifier, so it must not be rejected as a pattern."""
+    sql, params = columns_query("c", "s", "raw_events")
+    assert 'FROM (DESCRIBE "c"."s"."raw_events")' in sql
+    assert params == ["c", "s", "raw_events"]

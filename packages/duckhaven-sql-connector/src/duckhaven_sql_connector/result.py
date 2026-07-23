@@ -22,8 +22,28 @@ if TYPE_CHECKING:
 
 
 class ResultSet:
+    @classmethod
+    def from_rows(cls, columns: list[str], rows: list[tuple[Any, ...]]) -> ResultSet:
+        """A finished result built from rows the client already has.
+
+        Backs the metadata methods that read DuckHaven's REST browse endpoints rather
+        than running SQL, so they still hand back an ordinary cursor to fetch from. It
+        never touches the transport.
+        """
+        result = cls(None, "", fetch_size=len(rows) or 1)
+        result.columns = columns
+        result._buffer.extend(rows)
+        result.total = len(rows)
+        result._started = True
+        result._exhausted = True
+        return result
+
     def __init__(
-        self, transport: Transport, query_id: str, fetch_size: int, hooks: Hooks | None = None
+        self,
+        transport: Transport | None,
+        query_id: str,
+        fetch_size: int,
+        hooks: Hooks | None = None,
     ) -> None:
         self._transport = transport
         self._query_id = query_id
@@ -34,6 +54,10 @@ class ResultSet:
         self._started = False
         self._exhausted = False
         self.columns: list[str] = []
+        # The result's column types as ``(name, duckdb_type)``, when the server reports
+        # them. ``None`` against a server (or agent) predating the ``column_schema``
+        # field, and for DDL/DML, which has no result schema at all.
+        self.column_schema: list[tuple[str, str]] | None = None
         self.total = 0
 
     def _load_page(self) -> None:
@@ -47,8 +71,13 @@ class ResultSet:
             rows = page["rows"]
             self.total = page.get("total", 0) or 0
             self._next_cursor = page.get("cursor")
+            # Deliberately outside the required-key set: an older server omits the field
+            # entirely, which is not a malformed page.
+            schema = page.get("column_schema")
         except (ValueError, KeyError, TypeError) as exc:
             raise InterfaceError("malformed rows page from server") from exc
+        if not self._started and schema:
+            self.column_schema = [(c["name"], c["type"]) for c in schema]
         self.columns = columns
         for row in rows:
             self._buffer.append(tuple(row.get(col) for col in columns))

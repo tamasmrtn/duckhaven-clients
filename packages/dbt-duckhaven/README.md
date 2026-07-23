@@ -76,9 +76,15 @@ session has a fixed 256 MiB budget — so very high batch counts in one run are 
 - **`view` materialization** — DuckDB's Iceberg REST catalog does not implement
   `CREATE VIEW`, so view models fail. Use `table` instead.
 - **Python models** — DuckHaven agents execute SQL only; a Python model fails clearly.
-- **Re-running `dbt seed` over an existing seed** — dbt's seed reset emits `TRUNCATE TABLE`,
-  which the DuckHaven statement policy rejects. Use `dbt seed --full-refresh`, which drops
-  and recreates instead.
+- **Re-running `dbt seed` over an existing seed, on an older server** — dbt's seed reset
+  emits `TRUNCATE TABLE`. DuckHaven's statement policy admits it, but only since the
+  release that added it; against a server predating that, the statement is rejected and
+  you need `dbt seed --full-refresh`, which drops and recreates instead. The adapter does
+  not detect which case you are in: the server's `GET /api/version` reports a build version
+  and a coarse API-contract number, but `TRUNCATE` admission was an additive change that
+  moves neither, and there is no feature registry to check — so the adapter cannot choose
+  for you. Note that on Iceberg `TRUNCATE` is not the cheap metadata-only operation the name
+  suggests — it writes positional delete files just as the equivalent `DELETE` would.
 - **`on-schema-change` for incremental models** — the ALTER-driven flow is untested here.
   (Snapshots *do* handle a new column: that path is covered.)
 - **`external` materialization / dbt-duckdb source plugins** — out of scope.
