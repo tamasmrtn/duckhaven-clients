@@ -8,6 +8,11 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ### Added
 
+- `Connection.server_version()` reads `GET /api/version`, returning a `ServerVersion(version,
+  api_version)` — the release/build version and the integer API-contract version — or `None`
+  against a server predating the endpoint (404). Session-independent, so it still answers
+  after the session has gone dead. Provenance and coarse compatibility for support and
+  diagnostics; `api_version` moves only on a breaking change, so it is not a feature flag.
 - `Cursor.description` now reports each result column's type in PEP 249's `type_code`
   field, spelled the way DuckDB prints a logical type (`DECIMAL(18,4)`,
   `TIMESTAMP WITH TIME ZONE`, `STRUCT(a INTEGER, b VARCHAR)`). `Cursor.column_types`

@@ -13,7 +13,7 @@ import os
 
 import pytest
 
-from duckhaven_sql_connector import ProgrammingError, connect
+from duckhaven_sql_connector import ProgrammingError, ServerVersion, connect
 
 pytestmark = pytest.mark.integration
 
@@ -82,3 +82,13 @@ def test_metadata_catalogs_and_tables(conn):
     cur.tables()
     assert cur.description is not None
     assert "table_name" in [col[0] for col in cur.description]
+
+
+def test_server_version(conn):
+    # Robust to either server generation: a server predating GET /api/version returns None,
+    # a newer one returns a well-formed ServerVersion.
+    version = conn.server_version()
+    assert version is None or isinstance(version, ServerVersion)
+    if version is not None:
+        assert isinstance(version.version, str) and version.version
+        assert isinstance(version.api_version, int)

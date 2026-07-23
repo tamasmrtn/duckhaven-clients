@@ -23,6 +23,20 @@ from .dbapi import OperationalError, ProgrammingError
 
 
 @dataclass(frozen=True)
+class ServerVersion:
+    """What a DuckHaven server reports about itself (``GET /api/version``).
+
+    ``version`` is the release/build version (the git tag the image was built from);
+    ``api_version`` is the API contract version, an integer bumped only on a breaking
+    change. Additive changes (a new field, a newly admitted statement) move neither, so
+    this is provenance and a coarse compatibility signal — not a feature list.
+    """
+
+    version: str
+    api_version: int
+
+
+@dataclass(frozen=True)
 class StagedFile:
     """A presigned staging file: upload to ``put_url`` (HTTP PUT), read from ``get_url``.
 
@@ -115,6 +129,27 @@ class Connection:
         """
         for cursor in list(self._cursors):
             cursor.cancel()
+
+    # -- Server introspection -----------------------------------------------
+
+    def server_version(self) -> ServerVersion | None:
+        """The server's release and API-contract version (``GET /api/version``).
+
+        Returns ``None`` against a server predating the endpoint, which answers 404 — by
+        the server's own contract that means "assume the oldest supported behaviour". The
+        call is independent of the session, so it still answers after the session has gone
+        dead (useful for diagnostics); it raises only once the connection itself is closed.
+        """
+        if self._closed:
+            raise ProgrammingError("connection is closed")
+        try:
+            response = self._transport.get("/version")
+        except ProgrammingError as exc:
+            if exc.status_code == 404:
+                return None
+            raise
+        data = response.json()
+        return ServerVersion(version=data["version"], api_version=data["api_version"])
 
     # -- Staging ------------------------------------------------------------
 

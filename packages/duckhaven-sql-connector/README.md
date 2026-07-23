@@ -130,6 +130,24 @@ table = cur.fetch_arrow_table()
 - **Hooks** — pass `connect(..., hooks=Hooks(...))` to observe request timings, retries, and
   rows fetched without any OpenTelemetry dependency (a client library runs no metrics server).
 
+## Server version
+
+`conn.server_version()` reports the server's release and API-contract version:
+
+```python
+v = conn.server_version()
+if v is None:
+    ...  # server predates GET /api/version — assume the oldest supported behaviour
+else:
+    print(v.version, v.api_version)  # e.g. "1.4.0", 1
+```
+
+`version` is the build/release version; `api_version` is an integer bumped only on a
+breaking API change. It is a provenance and coarse-compatibility signal, **not** a feature
+list — an additive change (a new field, a newly admitted statement) moves neither — so it
+is for support and diagnostics rather than for gating behaviour. A server too old to expose
+the endpoint returns `None`.
+
 ## Compatibility
 
 The exact server endpoints and fields this client depends on are pinned in
