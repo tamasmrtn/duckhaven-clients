@@ -6,6 +6,24 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Changed
+
+- `agent_forbidden` — the error a DuckHaven server returns when the caller may see an agent
+  but holds too low a per-agent tier to run on it — is now mapped to `ProgrammingError` by
+  its slug rather than by its status code. It already landed there via the 403 default, so
+  nothing changes today; the mapping now holds if the server ever sends the slug on a
+  status that defaults elsewhere (a 409 would otherwise read as reconnect-and-retry, the
+  wrong advice for an access denial).
+
+### Documentation
+
+- The README now describes the two shapes an agent-access denial takes at `connect()`: a
+  403 `agent_forbidden` when the agent is visible but your tier is too low, and a bare 404
+  `Agent not found` when the agent is restricted and you hold no grant — the server hides
+  such an agent rather than forbidding it, so it is indistinguishable from a deleted one.
+  Also notes that omitting `agent` restricts auto-pick to agents you may use, which can
+  report no agent available where an unrestricted deployment would have connected.
+
 ## [0.3.0] - 2026-07-23
 
 ### Added

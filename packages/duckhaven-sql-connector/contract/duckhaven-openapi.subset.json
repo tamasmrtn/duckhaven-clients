@@ -132,6 +132,18 @@
             ],
             "title": "Row Count"
           },
+          "running_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running At"
+          },
           "schedule_id": {
             "anyOf": [
               {

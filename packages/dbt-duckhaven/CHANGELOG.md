@@ -6,6 +6,16 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Documentation
+
+- The `agent:` profile option now documents what a per-agent access denial looks like from
+  dbt. Both shapes fail the run at connection time as `Failed to connect`: *"Agent not
+  found"* can mean the id is correct but restricted to people who have been granted it
+  (a restricted agent you hold no grant on is hidden, not reported as forbidden, so it
+  reads identically to a deleted one), while *"requires the 'use' tier"* means the agent is
+  visible to you but your grant is too low. Omitting `agent:` narrows auto-pick to agents
+  you may use rather than falling back to one you cannot run on.
+
 ## [0.2.0] - 2026-07-23
 
 ### Fixed
