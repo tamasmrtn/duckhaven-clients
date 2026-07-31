@@ -155,14 +155,4 @@ def test_retry_budget_exceeded_raises_max_retry_duration():
         transport.get("/probe")
 
 
-def test_retry_after_parses_http_date():
-    from datetime import datetime, timedelta, timezone
-    from email.utils import format_datetime
-
-    from duckhaven_sql_connector.client import _retry_after_seconds
-
-    future = datetime.now(tz=timezone.utc) + timedelta(seconds=30)
-    resp = httpx.Response(503, headers={"Retry-After": format_datetime(future)})
-    assert 20 < _retry_after_seconds(resp) <= 30
-    assert _retry_after_seconds(httpx.Response(503)) is None
-    assert _retry_after_seconds(httpx.Response(503, headers={"Retry-After": "garbage"})) is None
+# Retry-After parsing itself is tested in test_errors.py, where the helper lives.

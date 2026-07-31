@@ -12,8 +12,6 @@ from __future__ import annotations
 import random
 import time
 from collections.abc import Callable
-from datetime import datetime, timezone
-from email.utils import parsedate_to_datetime
 from typing import Any
 
 import httpx
@@ -22,7 +20,7 @@ from . import __version__
 from ._telemetry import Hooks, client_span, inject_traceparent
 from .config import ClientConfig, RetryPolicy
 from .dbapi import MaxRetryDurationError
-from .errors import map_http_error, map_transport_error
+from .errors import _retry_after_seconds, map_http_error, map_transport_error
 
 _IDEMPOTENT = frozenset({"GET", "DELETE"})
 
@@ -31,23 +29,6 @@ def _backoff_delay(attempt: int, policy: RetryPolicy) -> float:
     """Capped exponential backoff with full jitter for retry ``attempt`` (0-based)."""
     ceiling = min(policy.backoff_max, policy.backoff_base * (2**attempt))
     return random.uniform(0, ceiling)
-
-
-def _retry_after_seconds(response: httpx.Response) -> float | None:
-    """Parse a Retry-After header (delta-seconds or an HTTP date) into seconds, or None."""
-    value = response.headers.get("Retry-After")
-    if value is None:
-        return None
-    value = value.strip()
-    if value.isdigit():
-        return float(value)
-    try:
-        when = parsedate_to_datetime(value)
-    except (TypeError, ValueError):
-        return None
-    if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    return max(0.0, (when - datetime.now(tz=timezone.utc)).total_seconds())
 
 
 class Transport:

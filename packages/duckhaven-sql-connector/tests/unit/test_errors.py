@@ -35,6 +35,8 @@ def test_exception_hierarchy_matches_pep249():
         (403, "grant_denied", dbapi.ProgrammingError),
         (403, "agent_forbidden", dbapi.ProgrammingError),
         (422, "agent_incompatible", dbapi.ProgrammingError),
+        (503, "compute_starting", dbapi.OperationalError),
+        (503, "compute_unavailable", dbapi.OperationalError),
         (409, "session_not_open", dbapi.OperationalError),
         (409, "catalog_read_only", dbapi.OperationalError),
         (503, "session_open_failed", dbapi.OperationalError),
@@ -80,6 +82,57 @@ def test_agent_forbidden_slug_wins_over_the_status_default():
     """
     exc = map_http_error(_resp(409, json={"detail": {"error": "agent_forbidden", "detail": "no"}}))
     assert isinstance(exc, dbapi.ProgrammingError)
+
+
+def test_compute_codes_win_over_the_status_default():
+    """As with agent_forbidden: the slug classifies, not the status.
+
+    503 already defaults to OperationalError, so listing the compute codes only bites if
+    a server sends one on a status that maps elsewhere — 422 would otherwise read as a
+    caller error, when in fact the caller need only wait.
+    """
+    for code in ("compute_starting", "compute_unavailable"):
+        exc = map_http_error(_resp(422, json={"detail": {"error": code, "detail": "x"}}))
+        assert isinstance(exc, dbapi.OperationalError), code
+
+
+def test_retry_after_is_carried_onto_the_raised_error():
+    """Connection.open reads this to pace its retry, so it must survive the mapping."""
+    exc = map_http_error(
+        httpx.Response(
+            503,
+            json={"detail": {"error": "compute_starting", "detail": "starting"}},
+            headers={"Retry-After": "5"},
+        )
+    )
+    assert exc.retry_after == 5.0
+    assert map_http_error(_resp(503, json={"detail": "x"})).retry_after is None
+
+
+def test_retry_after_parses_an_http_date_and_rejects_nonsense():
+    from datetime import datetime, timedelta, timezone
+    from email.utils import format_datetime
+
+    from duckhaven_sql_connector.errors import _retry_after_seconds
+
+    future = datetime.now(tz=timezone.utc) + timedelta(seconds=30)
+    assert (
+        20
+        < _retry_after_seconds(
+            httpx.Response(503, headers={"Retry-After": format_datetime(future)})
+        )
+        <= 30
+    )
+    assert _retry_after_seconds(httpx.Response(503)) is None
+    # A malformed value is ignored rather than raised: the caller falls back to its own
+    # backoff, which is always safe.
+    assert _retry_after_seconds(httpx.Response(503, headers={"Retry-After": "soon"})) is None
+    # A date already in the past clamps to zero, never negative.
+    past = datetime.now(tz=timezone.utc) - timedelta(seconds=30)
+    assert (
+        _retry_after_seconds(httpx.Response(503, headers={"Retry-After": format_datetime(past)}))
+        == 0.0
+    )
 
 
 def test_404_disabled_is_operational_but_missing_is_programming():
