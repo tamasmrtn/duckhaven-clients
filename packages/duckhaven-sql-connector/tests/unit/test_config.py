@@ -22,6 +22,9 @@ def test_defaults():
     assert isinstance(cfg.retry, RetryPolicy)
     assert cfg.agent is None
     assert cfg.application is None
+    # Matches the server's ELASTIC_PROVISIONING_DEADLINE_S, past which it fails a
+    # pending session itself — so waiting longer could not succeed.
+    assert cfg.compute_wait == 300.0
 
 
 @pytest.mark.parametrize(
@@ -35,6 +38,8 @@ def test_defaults():
         {"http_timeout": -1},
         {"fetch_size": 0},
         {"agent": "warehouse-a"},
+        # 0 is legal (disables the cold-start wait); negative is not.
+        {"compute_wait": -1},
     ],
 )
 def test_invalid_config_raises_interface_error(over):

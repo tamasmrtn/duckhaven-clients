@@ -6,6 +6,33 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Added
+
+- `connect(compute_wait=…)` — `connect()` now waits out an **elastic cold start** instead of
+  failing it. A DuckHaven deployment running elastic compute can be scaled to zero when a client
+  connects, in which case the server starts an agent and hands the session back before it is
+  usable; the connector polls it to `open` and returns a working connection. Previously this was
+  a hard `OperationalError` with no client-side workaround, which made an idle elastic pool
+  unusable from this connector and therefore from `dbt-duckhaven` and `dlt-duckhaven`.
+
+  `compute_wait` (default 300s, `0` to disable) is the total wall-clock budget; the default
+  matches the server's own provisioning deadline, past which it abandons the pending session, so
+  waiting longer could not succeed. Exhausting it raises `MaxRetryDurationError`. A server that
+  reports compute *cannot* start (`compute_unavailable`) or an agent that never arrives
+  (`provisioning_timeout`) raises straight away rather than consuming the budget.
+
+  Nothing changes against warm compute or a server without elastic compute: the open is the
+  single request it has always been, with no extra round trip.
+- `Error.retry_after` carries a response's `Retry-After` in seconds, so callers can pace their own
+  retries the way the connector now paces its own.
+
+### Fixed
+
+- `Connection.open` checked neither the HTTP status nor the returned session's status, so a
+  session the server accepted but had not opened yet produced a `Connection` that looked usable
+  and failed on its first statement with a 409. Anything not `open` is now either waited out or
+  raised.
+
 ### Changed
 
 - `agent_forbidden` — the error a DuckHaven server returns when the caller may see an agent

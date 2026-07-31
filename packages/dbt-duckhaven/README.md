@@ -39,6 +39,12 @@ my_project:
 `host`, `workspace`, `token`, and `catalog` are required; `agent` is optional (omit to let
 the API pick a compatible connected agent). `dbt init` scaffolds these prompts for you.
 
+If the DuckHaven deployment runs elastic compute and has scaled to zero, the first
+connection of a run now waits while an agent starts — up to five minutes — instead of
+failing with `Failed to connect`. Later connections in the same run reuse the warm agent,
+so the cost is paid once. A run against a deployment that cannot start compute at all
+still fails immediately rather than waiting out that budget.
+
 A DuckHaven server can restrict which agents a profile may target, and a denial fails the
 run at connection time with `Failed to connect`. If you named an `agent` and see *"Agent
 not found"*, the id may be right but restricted to people who have been granted it —

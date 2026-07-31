@@ -67,6 +67,11 @@ audited at the API, so a dlt load is fully governed.
 | `catalog` | recommended | DuckHaven (Polaris) catalog that qualifies loaded tables. |
 | `agent` | no | Explicit compute (an agent UUID); omit to let the API auto-pick. |
 
+If the DuckHaven deployment runs elastic compute and has scaled to zero, `open_connection`
+now waits while an agent starts — up to five minutes — instead of failing the load. A
+deployment that cannot start compute at all still fails immediately rather than waiting
+out that budget.
+
 A DuckHaven server can restrict which agents a pipeline may target. A denial fails
 `open_connection`, so the load stops before any job runs. *"Agent not found"* on an `agent`
 you know exists means it is restricted and you hold no grant — such an agent is hidden

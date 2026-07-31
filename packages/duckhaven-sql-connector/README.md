@@ -78,6 +78,28 @@ exponential backoff; a server `Retry-After` header is honored, and retries are b
 both a max-attempt count and a total-time budget (`RetryPolicy.max_elapsed`). Statement
 submits are never auto-retried.
 
+## Cold start
+
+A DuckHaven deployment can run **elastic compute**, scaling to zero when nothing is
+running. Connecting then has to start an agent first, which takes seconds on a container
+host and up to a minute on a cloud one. `connect()` waits that out rather than failing:
+the server hands back the session before it is usable and the connector polls it to
+`open`, so the wait is invisible apart from a slower first connection.
+
+```python
+connect(..., compute_wait=300.0)   # the default; 0 fails immediately instead
+```
+
+`compute_wait` is the total wall-clock budget for that wait. The default matches the
+server's own provisioning deadline, past which it gives up on the pending session — so
+waiting longer could not succeed. Exhausting the budget raises `MaxRetryDurationError`.
+
+Waiting only happens while the server reports the session as still coming up. If compute
+*cannot* be started at all, or the agent never reports for duty, the server says so and
+`connect()` raises an `OperationalError` carrying the reason (`compute_unavailable`,
+`provisioning_timeout`) instead of waiting out the full budget. Against a server without
+elastic compute nothing changes: no compute is ever starting, so nothing is ever waited on.
+
 ## Column types
 
 `cursor.description` carries the result's column types in PEP 249's `type_code` field,

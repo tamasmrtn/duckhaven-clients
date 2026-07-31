@@ -8,6 +8,9 @@ preserving the slug and status on the raised error.
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
+
 import httpx
 
 from .dbapi import (
@@ -29,7 +32,35 @@ _PROGRAMMING_CODES = frozenset(
         "agent_forbidden",
     }
 )
-_OPERATIONAL_CODES = frozenset({"session_not_open", "catalog_read_only", "session_open_failed"})
+_OPERATIONAL_CODES = frozenset(
+    {
+        "session_not_open",
+        "catalog_read_only",
+        "session_open_failed",
+        # Elastic compute is starting (or could not be started) for this session. Not
+        # the caller's fault and not a permanent state — the connector waits these out
+        # rather than failing the connect. See Connection._open_session.
+        "compute_starting",
+        "compute_unavailable",
+    }
+)
+
+
+def _retry_after_seconds(response: httpx.Response) -> float | None:
+    """Parse a Retry-After header (delta-seconds or an HTTP date) into seconds, or None."""
+    value = response.headers.get("Retry-After")
+    if value is None:
+        return None
+    value = value.strip()
+    if value.isdigit():
+        return float(value)
+    try:
+        when = parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, (when - datetime.now(tz=timezone.utc)).total_seconds())
 
 
 def _parse_body(response: httpx.Response) -> tuple[str | None, str]:
@@ -83,7 +114,13 @@ def map_http_error(response: httpx.Response) -> Error:
         exc_type = DatabaseError
 
     rendered = f"[{status}] {message}" if message else f"[{status}]"
-    return exc_type(rendered, code=code, status_code=status, detail=message or None)
+    return exc_type(
+        rendered,
+        code=code,
+        status_code=status,
+        detail=message or None,
+        retry_after=_retry_after_seconds(response),
+    )
 
 
 def map_transport_error(exc: httpx.TransportError) -> OperationalError:

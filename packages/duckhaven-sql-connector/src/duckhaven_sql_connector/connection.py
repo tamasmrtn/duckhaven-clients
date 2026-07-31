@@ -5,6 +5,10 @@ agent has attached a DuckDB connection) and returns a Connection pinned to that 
 and its agent. ``close`` deletes the session. If the session is reaped, hits its
 max-lifetime, or its agent disconnects, the next statement gets a 409 → OperationalError
 and the connection is marked dead; the caller opens a new one.
+
+A deployment running elastic compute can legitimately have nothing running when a client
+connects. The server then parks the session and starts an agent, and ``Connection.open``
+waits that out (up to ``compute_wait``) instead of failing — see ``_open_session``.
 """
 
 from __future__ import annotations
@@ -19,7 +23,26 @@ from ._telemetry import Hooks
 from .client import Transport
 from .config import ClientConfig, RetryPolicy
 from .cursor import Cursor
-from .dbapi import OperationalError, ProgrammingError
+from .dbapi import MaxRetryDurationError, OperationalError, ProgrammingError
+
+# The server-side wait we ask for on session open. Deliberately small and chosen by us:
+# the server's own budget is operator-tunable (up to 120s), and a block longer than
+# ``http_timeout`` would abort the request socket-side while the server went on to open
+# the session — orphaning one nobody holds. Bounding it here removes that entirely, and
+# ``_await_open`` carries the rest of a cold start by polling.
+_OPEN_WAIT_TIMEOUT_S = 10.0
+
+# Poll cadence while compute starts. A cold start runs to tens of seconds, so
+# sub-second polling would only burn requests to no purpose.
+_SESSION_POLL_START = 1.0
+_SESSION_POLL_MAX = 5.0
+
+# Fallback wait when the server says to retry but sends no Retry-After.
+_COMPUTE_RETRY_DELAY_S = 5.0
+
+# Statuses a session passes through before it can run statements. Anything else is
+# terminal: the session will never open, so waiting on it is pointless.
+_SESSION_NOT_READY = ("pending", "opening")
 
 
 @dataclass(frozen=True)
@@ -89,14 +112,8 @@ class Connection:
         hooks: Hooks | None = None,
     ) -> Connection:
         transport = transport or Transport(config, hooks=hooks)
-        body: dict[str, Any] = {}
-        if config.agent is not None:
-            body["agent_id"] = config.agent
-        if config.catalog is not None:
-            body["catalog"] = config.catalog
         try:
-            response = transport.post(f"/workspaces/{config.workspace}/sql/sessions", json=body)
-            data = response.json()
+            data = cls._open_session(transport, config)
         except Exception:
             transport.close()
             raise
@@ -110,6 +127,89 @@ class Connection:
         )
         conn._apply_defaults()
         return conn
+
+    @classmethod
+    def _open_session(cls, transport: Transport, config: ClientConfig) -> dict[str, Any]:
+        """Open the session, waiting out an elastic cold start, and return the open row.
+
+        Against warm compute this is the single POST it has always been. When DuckHaven
+        has to start an agent first it parks the session and — because we ask for
+        ``on_wait_timeout="continue"`` — hands it straight back ``202`` still ``pending``,
+        so the waiting happens here rather than failing the connect.
+
+        Returns the session as the server last described it, which is *not* necessarily
+        the body of the original response: a pending session carries no ``agent_id``
+        until an agent claims it.
+        """
+        path = f"/workspaces/{config.workspace}/sql/sessions"
+        body: dict[str, Any] = {}
+        if config.agent is not None:
+            body["agent_id"] = config.agent
+        if config.catalog is not None:
+            body["catalog"] = config.catalog
+        if config.compute_wait > 0:
+            # Ask to be handed the pending session rather than a 503. Both fields are
+            # optional and ignored by a server that predates them, which then behaves
+            # exactly as it does today.
+            body["wait_timeout_s"] = _OPEN_WAIT_TIMEOUT_S
+            body["on_wait_timeout"] = "continue"
+
+        deadline = transport._monotonic() + config.compute_wait
+        attempt = 0
+        while True:
+            try:
+                response = transport.post(path, json=body)
+            except OperationalError as exc:
+                # The server gave up holding the request but kept the compute it started,
+                # so re-posting is the sanctioned way to wait: the retry lands on the
+                # agent already coming up. Reached only when `continue` did not take
+                # effect — a gateway dropping the unknown field, say — since a cold pool
+                # normally answers 202. Every other 503, including the plain "no agent
+                # available" of a server without elastic compute, raises as before:
+                # retrying those would never produce an agent.
+                if exc.code != "compute_starting":
+                    raise
+                delay = exc.retry_after if exc.retry_after is not None else _COMPUTE_RETRY_DELAY_S
+                if transport._monotonic() + delay > deadline:
+                    raise
+                attempt += 1
+                transport._on_retry("POST", path, attempt)
+                transport._sleep(delay)
+                continue
+
+            session = response.json()
+            if session.get("status") == "open":
+                return session
+            return cls._await_open(transport, config, session, deadline)
+
+    @staticmethod
+    def _await_open(
+        transport: Transport, config: ClientConfig, session: dict[str, Any], deadline: float
+    ) -> dict[str, Any]:
+        """Poll a session the server handed back unopened until it opens, or raise.
+
+        Checked before the first sleep so a session that is already open costs no extra
+        request, and stopped the moment the status turns terminal — the server records
+        *why* in ``error`` (``compute_unavailable``, ``provisioning_timeout``,
+        ``open_timeout``), which is more use to the caller than a timeout would be.
+        """
+        session_id = session["id"]
+        delay = _SESSION_POLL_START
+        while True:
+            status = session.get("status")
+            if status == "open":
+                return session
+            if status not in _SESSION_NOT_READY:
+                reason = session.get("error") or "no reason recorded"
+                raise OperationalError(f"session {status}: {reason}", code=session.get("error"))
+            if transport._monotonic() + delay > deadline:
+                raise MaxRetryDurationError(
+                    f"compute did not become available within {config.compute_wait}s "
+                    f"(session is {status})"
+                )
+            transport._sleep(delay)
+            delay = min(delay * 2, _SESSION_POLL_MAX)
+            session = transport.get(f"/sql/sessions/{session_id}").json()
 
     # -- Cursors ------------------------------------------------------------
 
@@ -243,10 +343,15 @@ def connect(
     http_timeout: float = 60.0,
     tls_verify: bool = True,
     retry: RetryPolicy | None = None,
+    compute_wait: float = 300.0,
     application: str | None = None,
     hooks: Hooks | None = None,
 ) -> Connection:
-    """Open a DuckHaven SQL session and return a DB-API 2.0 Connection."""
+    """Open a DuckHaven SQL session and return a DB-API 2.0 Connection.
+
+    ``compute_wait`` is how long to wait if the server has to start elastic compute
+    before it can open the session; 0 fails immediately instead.
+    """
     config = ClientConfig(
         host=host,
         workspace=workspace,
@@ -258,6 +363,7 @@ def connect(
         http_timeout=http_timeout,
         tls_verify=tls_verify,
         retry=retry or RetryPolicy(),
+        compute_wait=compute_wait,
         application=application,
     )
     return Connection.open(config, hooks=hooks)

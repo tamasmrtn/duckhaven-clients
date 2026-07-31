@@ -5,8 +5,14 @@ import pytest
 import respx
 
 from duckhaven_sql_connector import connect
+from duckhaven_sql_connector.client import Transport
 from duckhaven_sql_connector.connection import Connection
-from duckhaven_sql_connector.dbapi import InterfaceError, OperationalError, ProgrammingError
+from duckhaven_sql_connector.dbapi import (
+    InterfaceError,
+    MaxRetryDurationError,
+    OperationalError,
+    ProgrammingError,
+)
 
 from .dh_support import (
     AGENT_ID,
@@ -18,9 +24,12 @@ from .dh_support import (
     STATEMENTS_URL,
     make_config,
     make_transport,
+    mock_cold_open,
     mock_open_session,
     open_conn,
+    pending_json,
     session_json,
+    steady_clock,
 )
 
 
@@ -128,6 +137,127 @@ def test_open_on_restricted_agent_raises_programming_error():
     assert transport._client.is_closed
 
 
+# -- Elastic cold start ------------------------------------------------------
+
+
+@respx.mock
+def test_warm_open_does_not_poll():
+    """The common case must stay one request. A 201 is already open."""
+    poll = respx.get(SESSION_URL).mock(return_value=httpx.Response(200, json=session_json()))
+    open_conn()
+    assert poll.call_count == 0
+
+
+@respx.mock
+def test_cold_open_polls_until_the_session_opens():
+    poll = mock_cold_open(pending_json(), pending_json(status="opening"), session_json())
+    config = make_config()
+    conn = Connection.open(config, transport=make_transport(config))
+    assert poll.call_count == 3
+    # Read off the *polled* payload, not the 202 body: a pending session names no agent
+    # until one claims it, so trusting the first response would strand agent_id at None.
+    assert conn.agent_id == AGENT_ID
+    assert conn.staging_uri.endswith("/_staging/abc")
+
+
+@respx.mock
+def test_cold_open_raises_with_the_servers_reason_when_compute_never_arrives():
+    """A terminal status stops the wait early — the reason beats a timeout."""
+    mock_cold_open(pending_json(status="failed", error="provisioning_timeout"))
+    config = make_config()
+    with pytest.raises(OperationalError) as exc:
+        Connection.open(config, transport=make_transport(config))
+    assert exc.value.code == "provisioning_timeout"
+    assert "provisioning_timeout" in str(exc.value)
+
+
+@respx.mock
+def test_cold_open_gives_up_at_the_compute_wait_budget():
+    mock_cold_open(*[pending_json()] * 5)
+    config = make_config(compute_wait=30.0)
+    # A clock that jumps 10s per call blows the 30s budget within a few polls.
+    transport = make_transport(config, monotonic=steady_clock(10.0))
+    with pytest.raises(MaxRetryDurationError) as exc:
+        Connection.open(config, transport=transport)
+    assert "30.0s" in str(exc.value)
+    assert transport._client.is_closed
+
+
+@respx.mock
+def test_open_retries_a_compute_starting_503_and_honours_retry_after():
+    """The fallback for a server that answered 503 despite being asked to continue.
+
+    Reachable only if the wait fields did not take effect (an API gateway dropping an
+    unknown field, say) — a current server hands back a 202 instead. Retrying is safe
+    because the server abandons the session row but *not* the compute it started, so
+    the retry lands on the agent already coming up.
+    """
+    slept: list[float] = []
+    open_route = respx.post(SESSIONS_URL).mock(
+        side_effect=[
+            httpx.Response(
+                503,
+                json={"detail": {"error": "compute_starting", "detail": "starting"}},
+                headers={"Retry-After": "7"},
+            ),
+            httpx.Response(201, json=session_json()),
+        ]
+    )
+    config = make_config()
+    transport = Transport(config, sleep=slept.append)
+    conn = Connection.open(config, transport=transport)
+    assert open_route.call_count == 2
+    assert slept == [7.0]
+    assert conn.agent_id == AGENT_ID
+
+
+@respx.mock
+def test_open_does_not_retry_a_503_without_the_compute_starting_code():
+    """A server with no elastic compute answers a plain 503 for a cold pool.
+
+    Retrying that would never produce an agent, so it must fail on the first response —
+    the distinction is the error code, not the status.
+    """
+    open_route = respx.post(SESSIONS_URL).mock(
+        return_value=httpx.Response(503, json={"detail": "No connected agent available"})
+    )
+    config = make_config()
+    with pytest.raises(OperationalError) as exc:
+        Connection.open(config, transport=make_transport(config))
+    assert open_route.call_count == 1
+    assert exc.value.code is None
+
+
+@respx.mock
+def test_disabled_wait_fails_fast_on_compute_starting():
+    open_route = respx.post(SESSIONS_URL).mock(
+        return_value=httpx.Response(
+            503,
+            json={"detail": {"error": "compute_starting", "detail": "starting"}},
+            headers={"Retry-After": "5"},
+        )
+    )
+    config = make_config(compute_wait=0)
+    with pytest.raises(OperationalError):
+        Connection.open(config, transport=make_transport(config))
+    assert open_route.call_count == 1
+
+
+@respx.mock
+def test_a_success_that_is_not_open_is_never_treated_as_usable():
+    """Guards the trap that made this work necessary.
+
+    open() used to read the body without checking the session status, so a 202 yielded a
+    Connection over an unusable session whose first statement 409'd. Anything not `open`
+    is now either waited out or raised.
+    """
+    mock_cold_open(pending_json(status="closed"))
+    config = make_config()
+    with pytest.raises(OperationalError) as exc:
+        Connection.open(config, transport=make_transport(config))
+    assert "closed" in str(exc.value)
+
+
 @respx.mock
 def test_schema_default_issues_quoted_use():
     mock_open_session(active_catalog="sales")
@@ -162,7 +292,30 @@ def test_open_sends_agent_and_catalog_in_body():
     config = make_config(agent=AGENT_ID, catalog="raw")
     Connection.open(config, transport=make_transport(config))
     body = json.loads(open_route.calls.last.request.content)
-    assert body == {"agent_id": AGENT_ID, "catalog": "raw"}
+    assert body == {
+        "agent_id": AGENT_ID,
+        "catalog": "raw",
+        # Asks the server to hand back a session it could not open in time rather than
+        # a 503, so a cold elastic pool can be waited out instead of failing.
+        "wait_timeout_s": 10.0,
+        "on_wait_timeout": "continue",
+    }
+
+
+@respx.mock
+def test_open_omits_the_wait_fields_when_the_wait_is_disabled():
+    """compute_wait=0 restores the pre-cold-start request exactly.
+
+    Not merely a shorter budget: without the fields the server keeps its own default of
+    `cancel`, so it answers 503 rather than handing back a pending session nobody is
+    going to poll.
+    """
+    open_route = respx.post(SESSIONS_URL).mock(
+        return_value=httpx.Response(201, json=session_json())
+    )
+    config = make_config(catalog="raw", compute_wait=0)
+    Connection.open(config, transport=make_transport(config))
+    assert json.loads(open_route.calls.last.request.content) == {"catalog": "raw"}
 
 
 @respx.mock

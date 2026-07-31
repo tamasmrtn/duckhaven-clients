@@ -6,6 +6,13 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A pipeline run against a DuckHaven deployment whose elastic compute has scaled to zero now
+  waits for an agent to start rather than failing `open_connection`. This comes from
+  `duckhaven-sql-connector` and needs no config change; the wait is bounded (five minutes by
+  default).
+
 ### Documentation
 
 - The `agent` config option now documents what a per-agent access denial looks like from a

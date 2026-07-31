@@ -40,6 +40,7 @@ class Error(Exception):
         code: str | None = None,
         status_code: int | None = None,
         detail: str | None = None,
+        retry_after: float | None = None,
     ) -> None:
         super().__init__(message)
         # The server's ``error`` slug (e.g. "statement_not_allowed"), when present.
@@ -48,6 +49,10 @@ class Error(Exception):
         self.status_code = status_code
         # The server's human-readable ``detail``, when present.
         self.detail = detail
+        # Seconds from the response's ``Retry-After``, when it sent one. The server
+        # uses it to say how long to wait before trying again — notably on the 503 it
+        # returns while elastic compute is still starting.
+        self.retry_after = retry_after
 
 
 class InterfaceError(Error):

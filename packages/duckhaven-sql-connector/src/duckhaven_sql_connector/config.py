@@ -48,6 +48,13 @@ class ClientConfig:
     # cursor's arraysize, which governs how many buffered rows fetchmany() returns.
     fetch_size: int = 1000
     retry: RetryPolicy = field(default_factory=RetryPolicy)
+    # Total wall-clock budget for waiting out an elastic cold start during connect().
+    # DuckHaven can be configured to scale compute to zero, in which case opening a
+    # session starts an agent first; the connector waits rather than failing. 300s
+    # matches the server's own ELASTIC_PROVISIONING_DEADLINE_S, past which it fails the
+    # pending session itself — so waiting longer could not succeed. 0 disables the wait,
+    # restoring the fail-fast behaviour of connectors before this was supported.
+    compute_wait: float = 300.0
     # Optional client identifier appended to the User-Agent, so the server can attribute
     # traffic to the calling application (e.g. "dbt-duckhaven/1.2.3"). Free text.
     application: str | None = None
@@ -65,6 +72,8 @@ class ClientConfig:
             raise InterfaceError("timeout and http_timeout must be positive")
         if self.fetch_size <= 0:
             raise InterfaceError("fetch_size must be positive")
+        if self.compute_wait < 0:
+            raise InterfaceError("compute_wait must not be negative")
         # The session endpoint selects compute by agent_id (a UUID). A friendly
         # agent name would need a lookup the API does not yet expose.
         if self.agent is not None:

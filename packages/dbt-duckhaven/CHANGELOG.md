@@ -6,6 +6,13 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A `dbt run` against a DuckHaven deployment whose elastic compute has scaled to zero now waits
+  for an agent to start rather than failing on the first model with `Failed to connect`. This
+  comes from `duckhaven-sql-connector` and needs no profile change; the wait is bounded (five
+  minutes by default) and paid once per run, since later threads reuse the warm agent.
+
 ### Documentation
 
 - The `agent:` profile option now documents what a per-agent access denial looks like from
