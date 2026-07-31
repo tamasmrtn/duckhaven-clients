@@ -66,6 +66,24 @@ def mock_open_session(**over: Any) -> None:
     respx.post(SESSIONS_URL).mock(return_value=httpx.Response(201, json=session_json(**over)))
 
 
+def pending_json(**over: Any) -> dict[str, Any]:
+    """A session the server accepted but could not open yet: no agent holds it."""
+    fields: dict[str, Any] = {"status": "pending", "agent_id": None, "staging_uri": None}
+    fields.update(over)
+    return session_json(**fields)
+
+
+def mock_cold_open(*polls: dict[str, Any]) -> respx.Route:
+    """A 202 pending open followed by ``polls`` on GET /sql/sessions/{id}.
+
+    The 202 is what DuckHaven returns once the connector asks for
+    ``on_wait_timeout="continue"`` and compute has to start first. Returns the poll
+    route so a test can assert how many polls it took.
+    """
+    respx.post(SESSIONS_URL).mock(return_value=httpx.Response(202, json=pending_json()))
+    return respx.get(SESSION_URL).mock(side_effect=[httpx.Response(200, json=p) for p in polls])
+
+
 def open_conn(
     config: ClientConfig | None = None, *, monotonic: Callable[[], float] | None = None
 ) -> Connection:
