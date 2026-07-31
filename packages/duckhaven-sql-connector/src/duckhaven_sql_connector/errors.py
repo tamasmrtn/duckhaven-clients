@@ -21,7 +21,13 @@ from .dbapi import (
 
 # Slugs the connector maps explicitly regardless of the (usually matching) status code.
 _PROGRAMMING_CODES = frozenset(
-    {"statement_not_allowed", "sql_not_allowed", "grant_denied", "agent_incompatible"}
+    {
+        "statement_not_allowed",
+        "sql_not_allowed",
+        "grant_denied",
+        "agent_incompatible",
+        "agent_forbidden",
+    }
 )
 _OPERATIONAL_CODES = frozenset({"session_not_open", "catalog_read_only", "session_open_failed"})
 

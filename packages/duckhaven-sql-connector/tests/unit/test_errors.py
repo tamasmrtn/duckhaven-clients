@@ -33,6 +33,7 @@ def test_exception_hierarchy_matches_pep249():
         (422, "statement_not_allowed", dbapi.ProgrammingError),
         (422, "sql_not_allowed", dbapi.ProgrammingError),
         (403, "grant_denied", dbapi.ProgrammingError),
+        (403, "agent_forbidden", dbapi.ProgrammingError),
         (422, "agent_incompatible", dbapi.ProgrammingError),
         (409, "session_not_open", dbapi.OperationalError),
         (409, "catalog_read_only", dbapi.OperationalError),
@@ -67,6 +68,18 @@ def test_maps_plain_string_detail_by_status(status, expected):
     assert isinstance(exc, expected)
     assert exc.code is None
     assert exc.detail == "something happened"
+
+
+def test_agent_forbidden_slug_wins_over_the_status_default():
+    """The slug classifies, not the status.
+
+    403 already defaults to ProgrammingError, so listing `agent_forbidden` in
+    _PROGRAMMING_CODES only bites if the server ever sends it on a status that maps
+    elsewhere (409 defaults to OperationalError, i.e. retry-and-reconnect — the wrong
+    advice for an access denial).
+    """
+    exc = map_http_error(_resp(409, json={"detail": {"error": "agent_forbidden", "detail": "no"}}))
+    assert isinstance(exc, dbapi.ProgrammingError)
 
 
 def test_404_disabled_is_operational_but_missing_is_programming():

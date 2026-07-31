@@ -85,6 +85,50 @@ def test_open_failure_closes_transport():
 
 
 @respx.mock
+def test_open_on_forbidden_agent_raises_programming_error():
+    """403 agent_forbidden: the agent is visible but the caller's tier is too low."""
+    respx.post(SESSIONS_URL).mock(
+        return_value=httpx.Response(
+            403,
+            json={
+                "detail": {
+                    "error": "agent_forbidden",
+                    "detail": "This action on agent 'warehouse-a' requires the 'use' tier.",
+                }
+            },
+        )
+    )
+    config = make_config(agent=AGENT_ID)
+    transport = make_transport(config)
+    with pytest.raises(ProgrammingError) as exc:
+        Connection.open(config, transport=transport)
+    assert exc.value.code == "agent_forbidden"
+    assert exc.value.status_code == 403
+    assert transport._client.is_closed
+
+
+@respx.mock
+def test_open_on_restricted_agent_raises_programming_error():
+    """404 on a restricted agent the caller holds no grant on.
+
+    The server hides such an agent rather than forbidding it, so the denial is
+    indistinguishable from a deleted agent — no error code, and the same
+    ProgrammingError a genuinely missing id would raise. Pinned because the natural
+    reading of "not found" is a client-side typo, and it is not retryable either way.
+    """
+    respx.post(SESSIONS_URL).mock(
+        return_value=httpx.Response(404, json={"detail": "Agent not found"})
+    )
+    config = make_config(agent=AGENT_ID)
+    transport = make_transport(config)
+    with pytest.raises(ProgrammingError) as exc:
+        Connection.open(config, transport=transport)
+    assert exc.value.code is None
+    assert exc.value.status_code == 404
+    assert transport._client.is_closed
+
+
+@respx.mock
 def test_schema_default_issues_quoted_use():
     mock_open_session(active_catalog="sales")
     statements = respx.post(STATEMENTS_URL).mock(
