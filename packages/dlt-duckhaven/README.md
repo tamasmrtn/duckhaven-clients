@@ -67,6 +67,14 @@ audited at the API, so a dlt load is fully governed.
 | `catalog` | recommended | DuckHaven (Polaris) catalog that qualifies loaded tables. |
 | `agent` | no | Explicit compute (an agent UUID); omit to let the API auto-pick. |
 
+A DuckHaven server can restrict which agents a pipeline may target. A denial fails
+`open_connection`, so the load stops before any job runs. *"Agent not found"* on an `agent`
+you know exists means it is restricted and you hold no grant — such an agent is hidden
+rather than reported as forbidden, so it reads exactly like a deleted one. *"requires the
+'use' tier"* means it is visible to you but your grant is too low. Omitting `agent` narrows
+auto-pick to agents you may use, so it can report no agent available rather than falling
+back to one you cannot run on.
+
 ## Write dispositions
 
 - **`append`** — stages Parquet and loads it into the table.

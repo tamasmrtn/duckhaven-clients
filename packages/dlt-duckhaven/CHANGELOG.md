@@ -6,6 +6,16 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Documentation
+
+- The `agent` config option now documents what a per-agent access denial looks like from a
+  pipeline. Both shapes fail `open_connection`, so the load stops before any job runs:
+  *"Agent not found"* on an agent you know exists means it is restricted and you hold no
+  grant (such an agent is hidden, not reported as forbidden, so it reads identically to a
+  deleted one), while *"requires the 'use' tier"* means it is visible to you but your grant
+  is too low. Omitting `agent` narrows auto-pick to agents you may use rather than falling
+  back to one you cannot run on.
+
 ## [0.2.0] - 2026-07-23
 
 ### Changed

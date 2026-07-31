@@ -39,6 +39,15 @@ my_project:
 `host`, `workspace`, `token`, and `catalog` are required; `agent` is optional (omit to let
 the API pick a compatible connected agent). `dbt init` scaffolds these prompts for you.
 
+A DuckHaven server can restrict which agents a profile may target, and a denial fails the
+run at connection time with `Failed to connect`. If you named an `agent` and see *"Agent
+not found"*, the id may be right but restricted to people who have been granted it —
+a restricted agent you hold no grant on is hidden rather than reported as forbidden, so it
+reads identically to a deleted one. *"requires the 'use' tier"* means the opposite: the
+agent is visible to you but your grant is too low. Omitting `agent` narrows auto-pick to
+agents you may use, so it can report no agent available rather than falling back to one
+you cannot run on.
+
 ## What works
 
 Materializations: **table, seed, incremental, ephemeral**, and **snapshots** (both the

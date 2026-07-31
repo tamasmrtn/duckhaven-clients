@@ -56,6 +56,23 @@ carrying the server's `code`/`status_code`/`detail`:
   (a subtype) is raised when retries exhaust the configured time budget.
 - `InterfaceError` — bad connection configuration or a malformed response.
 
+### Agent access denials
+
+A DuckHaven server can restrict which agents a caller may target. Two shapes surface when
+`agent` is set, both as `ProgrammingError`:
+
+- **403 `agent_forbidden`** — you can see the agent but hold too low a tier to run on it.
+  The raised error carries `code="agent_forbidden"`.
+- **404 `Agent not found`** — an agent the server keeps *restricted* and you hold no grant
+  on is invisible rather than forbidden, so it answers exactly as a deleted agent would.
+  The error carries no `code`. A mistyped `agent` UUID and a denied one are deliberately
+  indistinguishable, so check whether you have been granted the agent before concluding
+  the id is wrong.
+
+Omitting `agent` auto-picks, and the server only considers agents you may use. On a server
+with restricted agents that means auto-pick can raise `OperationalError` ("no connected
+agent available") where the same call against an unrestricted deployment would connect.
+
 Idempotent requests (poll/fetch/cancel) are retried on transient failures with capped
 exponential backoff; a server `Retry-After` header is honored, and retries are bounded by
 both a max-attempt count and a total-time budget (`RetryPolicy.max_elapsed`). Statement
