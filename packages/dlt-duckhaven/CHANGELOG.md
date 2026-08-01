@@ -6,8 +6,13 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-01
+
 ### Changed
 
+- Require `duckhaven-sql-connector>=0.4.0`: the cold-start behaviour below is entirely that
+  version's doing. Against an older connector a pipeline still fails `open_connection` on an
+  idle elastic deployment, so the floor is what makes the claim true rather than aspirational.
 - A pipeline run against a DuckHaven deployment whose elastic compute has scaled to zero now
   waits for an agent to start rather than failing `open_connection`. This comes from
   `duckhaven-sql-connector` and needs no config change; the wait is bounded (five minutes by
