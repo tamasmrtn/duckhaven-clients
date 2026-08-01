@@ -6,6 +6,8 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-01
+
 ### Added
 
 - `connect(compute_wait=…)` — `connect()` now waits out an **elastic cold start** instead of
