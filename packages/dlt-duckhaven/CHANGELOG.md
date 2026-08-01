@@ -6,6 +6,8 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-01
+
 ### Fixed
 
 - `has_dataset()` no longer queries `INFORMATION_SCHEMA.SCHEMATA` to check whether the
