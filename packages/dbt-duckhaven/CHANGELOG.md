@@ -6,8 +6,13 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-01
+
 ### Changed
 
+- Require `duckhaven-sql-connector>=0.4.0`: the cold-start behaviour below is entirely that
+  version's doing. Against an older connector a `dbt run` still fails outright on an idle
+  elastic deployment, so the floor is what makes the claim true rather than aspirational.
 - A `dbt run` against a DuckHaven deployment whose elastic compute has scaled to zero now waits
   for an agent to start rather than failing on the first model with `Failed to connect`. This
   comes from `duckhaven-sql-connector` and needs no profile change; the wait is bounded (five
