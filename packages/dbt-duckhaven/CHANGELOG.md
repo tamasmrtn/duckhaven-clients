@@ -6,6 +6,8 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-01
+
 ### Fixed
 
 - `create schema`, `list schemas`/`check_schema_exists`, and the adapter's relation cache
@@ -18,6 +20,12 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
   `DuckHavenAdapter.list_schema_names`, alongside the existing `list_relation_names`), the
   same approach `duckhaven__get_columns_in_relation` and `duckhaven__drop_schema` already
   used for column and relation introspection.
+- `dbt docs generate` no longer fails on a workspace with a scoped catalog attached. It
+  joined `duckdb_tables()`/`duckdb_views()`/`duckdb_columns()`, the same class of
+  engine-side enumeration as above. The catalog listing now comes from
+  `DuckHavenAdapter.get_catalog_rows`, which composes `list_relation_names` with one
+  `DESCRIBE` per relation; DuckHaven reports no comments or owner, so those fields are
+  `NULL` in the generated `catalog.json`.
 
 ## [0.3.0] - 2026-08-01
 
