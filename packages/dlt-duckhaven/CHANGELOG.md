@@ -6,6 +6,15 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `has_dataset()` no longer queries `INFORMATION_SCHEMA.SCHEMATA` to check whether the
+  destination schema exists. That query is engine-side enumeration, which DuckHaven rejects
+  (403) once *any* catalog in the workspace is attached scoped — the denial applies to every
+  session in that workspace, so a load into an unrelated open catalog could fail too. It now
+  reads the workspace catalog API via the connector's `schemas()` cursor method instead, the
+  same approach `get_storage_tables` already used for column introspection.
+
 ## [0.3.0] - 2026-08-01
 
 ### Changed

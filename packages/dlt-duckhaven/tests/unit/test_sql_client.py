@@ -104,6 +104,34 @@ def test_exception_mapping(exc, expected):
     assert isinstance(DuckHavenSqlClient._make_database_exception(exc), expected)
 
 
+def test_has_dataset_true_when_schema_listed(monkeypatch):
+    cursor = _fake_cursor(rows=[("raw", "analytics")])
+    _patch_connect(monkeypatch, cursor)
+    client = _client(catalog="raw", dataset="analytics")
+    client.open_connection()
+    assert client.has_dataset() is True
+    cursor.schemas.assert_called_once_with(catalog="raw", schema_name="analytics")
+
+
+def test_has_dataset_false_when_schema_missing(monkeypatch):
+    cursor = _fake_cursor(rows=[])
+    _patch_connect(monkeypatch, cursor)
+    client = _client(catalog="raw", dataset="analytics")
+    client.open_connection()
+    assert client.has_dataset() is False
+
+
+def test_has_dataset_does_not_query_information_schema(monkeypatch):
+    """A scoped catalog anywhere in the workspace 403s INFORMATION_SCHEMA for every
+    session in it, so has_dataset must not fall back to the base class's SQL query."""
+    cursor = _fake_cursor(rows=[])
+    _patch_connect(monkeypatch, cursor)
+    client = _client()
+    client.open_connection()
+    client.has_dataset()
+    cursor.execute.assert_not_called()
+
+
 def test_execute_query_closes_cursor(monkeypatch):
     cursor = _fake_cursor(description=[("n", None, None, None, None, None, None)], rows=[(1,)])
     _patch_connect(monkeypatch, cursor)
