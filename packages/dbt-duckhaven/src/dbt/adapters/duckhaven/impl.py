@@ -86,6 +86,84 @@ class DuckHavenAdapter(DuckDBAdapter):
         finally:
             cursor.close()
 
+    @available.parse_list
+    def list_schema_names(self, database: str) -> list[str]:
+        """Schema names in a catalog, via DuckHaven's REST browse endpoint.
+
+        Same reasoning as ``list_relation_names``: ``information_schema.schemata`` is
+        engine-side enumeration, rejected outright on a workspace with any scoped catalog
+        attached. Backs ``duckhaven__list_schemas`` and ``duckhaven__check_schema_exists``.
+        """
+        connection = self.connections.get_thread_connection()
+        cursor = connection.handle.cursor()
+        try:
+            cursor.schemas(catalog=database)
+            return [row[1] for row in cursor.fetchall()]
+        finally:
+            cursor.close()
+
+    @available
+    def get_catalog_rows(self, database: str, schemas):
+        """``dbt docs generate``'s catalog listing, via the workspace catalog API + DESCRIBE.
+
+        dbt-duckdb's duckdb__get_catalog joins duckdb_tables()/duckdb_views()/duckdb_columns(),
+        all engine-side enumeration and all rejected outright on a workspace with any scoped
+        catalog attached. There is no single REST listing that returns columns, so this
+        composes the two paths DuckHaven does grant-filter: list_relation_names for the
+        table/view listing, and one DESCRIBE per relation for its columns. dbt-core requires
+        the result as a real ``agate.Table`` (``_catalog_filter_table`` reads
+        ``table.column_names``), which is why this is a Python method rather than a macro
+        assembling plain rows. DuckHaven's DESCRIBE reports no comments or owner, so
+        table_comment/column_comment/table_owner are NULL.
+        """
+        from dbt_common.clients.agate_helper import table_from_rows
+
+        relations = [
+            (schema, relation["table_name"], relation["table_type"])
+            for schema in schemas
+            for relation in self.list_relation_names(database, schema)
+        ]
+
+        connection = self.connections.get_thread_connection()
+        cursor = connection.handle.cursor()
+        try:
+            rows: list[tuple] = []
+            for schema, table_name, raw_type in relations:
+                table_type = "VIEW" if raw_type == "VIEW" else "BASE TABLE"
+                qualified = f"{self.quote(database)}.{self.quote(schema)}.{self.quote(table_name)}"
+                cursor.execute(f"select column_name, column_type from (describe {qualified})")
+                for index, (column_name, column_type) in enumerate(cursor.fetchall(), start=1):
+                    rows.append(
+                        (
+                            database,
+                            schema,
+                            table_name,
+                            table_type,
+                            None,
+                            column_name,
+                            index,
+                            column_type,
+                            None,
+                            None,
+                        )
+                    )
+        finally:
+            cursor.close()
+
+        column_names = (
+            "table_database",
+            "table_schema",
+            "table_name",
+            "table_type",
+            "table_comment",
+            "column_name",
+            "column_index",
+            "column_type",
+            "column_comment",
+            "table_owner",
+        )
+        return table_from_rows(rows, column_names)
+
     @available.parse(lambda *a, **k: [])
     def get_column_schema_from_query(self, sql: str) -> list[DuckDBColumn]:
         """Describe a query's result columns, wrapping DESCRIBE in a SELECT.

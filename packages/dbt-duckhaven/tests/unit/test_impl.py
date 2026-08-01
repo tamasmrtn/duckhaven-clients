@@ -87,6 +87,105 @@ def test_list_relation_names_uses_the_connector_browse_listing():
     assert _Cursor.closed
 
 
+def test_list_schema_names_uses_the_connector_browse_listing():
+    """information_schema.schemata is rejected on a workspace with any scoped catalog
+    attached, so the listing has to come from the connector's schemas(), which reads the
+    grant-filtered REST endpoint."""
+    captured = {}
+
+    class _Cursor:
+        closed = False
+
+        def schemas(self, catalog=None, schema_name=None):
+            captured["filters"] = (catalog, schema_name)
+
+        def fetchall(self):
+            return [("sales", "analytics"), ("sales", "raw")]
+
+        def close(self):
+            type(self).closed = True
+
+    cursor = _Cursor()
+    connection = SimpleNamespace(handle=SimpleNamespace(cursor=lambda: cursor))
+    adapter = SimpleNamespace(connections=SimpleNamespace(get_thread_connection=lambda: connection))
+
+    names = DuckHavenAdapter.list_schema_names(adapter, "sales")
+
+    assert captured["filters"] == ("sales", None)
+    assert names == ["analytics", "raw"]
+    assert _Cursor.closed
+
+
+def test_get_catalog_rows_uses_list_relation_names_and_describe():
+    """duckdb_tables()/duckdb_views()/duckdb_columns() are all rejected on a workspace with
+    any scoped catalog attached, so this must go through list_relation_names (REST) and
+    DESCRIBE (grant-checked per relation) instead, and return a real agate.Table."""
+    executed = []
+
+    class _Cursor:
+        closed = False
+
+        def execute(self, sql):
+            executed.append(sql)
+
+        def fetchall(self):
+            # One call per relation; alternate between the two relations' columns.
+            if "orders" in executed[-1]:
+                return [("id", "BIGINT"), ("total", "DECIMAL(10,2)")]
+            return [("id", "BIGINT")]
+
+        def close(self):
+            type(self).closed = True
+
+    relation_lookups = {
+        "analytics": [{"table_name": "orders", "table_type": "MANAGED"}],
+        "raw": [{"table_name": "events_view", "table_type": "VIEW"}],
+    }
+
+    cursor = _Cursor()
+    connection = SimpleNamespace(handle=SimpleNamespace(cursor=lambda: cursor))
+    adapter = SimpleNamespace(
+        connections=SimpleNamespace(get_thread_connection=lambda: connection),
+        list_relation_names=lambda database, schema: relation_lookups[schema],
+        quote=lambda value: f'"{value}"',
+    )
+
+    table = DuckHavenAdapter.get_catalog_rows(adapter, "sales", ["analytics", "raw"])
+
+    assert table.column_names == (
+        "table_database",
+        "table_schema",
+        "table_name",
+        "table_type",
+        "table_comment",
+        "column_name",
+        "column_index",
+        "column_type",
+        "column_comment",
+        "table_owner",
+    )
+    rows = [tuple(row) for row in table.rows]
+    assert rows == [
+        ("sales", "analytics", "orders", "BASE TABLE", None, "id", 1, "BIGINT", None, None),
+        (
+            "sales",
+            "analytics",
+            "orders",
+            "BASE TABLE",
+            None,
+            "total",
+            2,
+            "DECIMAL(10,2)",
+            None,
+            None,
+        ),
+        ("sales", "raw", "events_view", "VIEW", None, "id", 1, "BIGINT", None, None),
+    ]
+    assert all("describe" in sql.lower() for sql in executed)
+    assert all("information_schema" not in sql.lower() for sql in executed)
+    assert _Cursor.closed
+
+
 def test_get_column_schema_from_query_wraps_describe_in_a_select():
     # dbt-duckdb emits a bare `DESCRIBE (<sql>)`. Selecting from it is the spelling that
     # works everywhere: an older agent materialized results via `COPY (<sql>) TO ...`, and

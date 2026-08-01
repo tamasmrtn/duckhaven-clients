@@ -6,6 +6,19 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `create schema`, `list schemas`/`check_schema_exists`, and the adapter's relation cache
+  (`list_relations_without_caching`) no longer query DuckDB's engine-side enumeration
+  (`duckdb_databases()`, `information_schema.schemata`, `information_schema.tables`).
+  DuckHaven rejects all of those (403) once *any* catalog in the workspace is attached
+  scoped — the denial applies to every session in that workspace, so a `dbt run` against an
+  unrelated open catalog could fail too. They now read the workspace catalog API through
+  the connector's `schemas()`/`tables()` cursor methods instead (new
+  `DuckHavenAdapter.list_schema_names`, alongside the existing `list_relation_names`), the
+  same approach `duckhaven__get_columns_in_relation` and `duckhaven__drop_schema` already
+  used for column and relation introspection.
+
 ## [0.3.0] - 2026-08-01
 
 ### Changed

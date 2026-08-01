@@ -177,6 +177,25 @@ class DuckHavenSqlClient(SqlClientBase["Connection"]):
     def rollback_transaction(self) -> None:
         raise NotImplementedError("DuckHaven sessions are autocommit; cannot roll back.")
 
+    @raise_database_error
+    def has_dataset(self) -> bool:
+        """Check schema existence via the workspace catalog API, not INFORMATION_SCHEMA.
+
+        INFORMATION_SCHEMA.SCHEMATA is engine-side enumeration, and DuckHaven rejects it
+        (403) once *any* catalog in the workspace is attached scoped -- the denial applies
+        to every session in that workspace, so it could break a load into an unrelated open
+        catalog too. The connector's ``schemas()`` cursor method reads the REST browse
+        endpoint instead, which filters by grant and works under any attachment mode -- the
+        same reasoning as ``get_storage_tables`` using ``DESCRIBE`` for columns.
+        """
+        schema_name = self.make_qualified_table_name_path(None, quote=False)[-1]
+        cursor = self._conn.cursor()
+        try:
+            cursor.schemas(catalog=self.config.catalog, schema_name=schema_name)
+            return len(cursor.fetchall()) > 0
+        finally:
+            cursor.close()
+
     def execute_sql(self, sql: AnyStr, *args: Any, **kwargs: Any) -> Sequence[Sequence[Any]] | None:
         with self.execute_query(sql, *args, **kwargs) as cursor:
             if cursor.description is None:

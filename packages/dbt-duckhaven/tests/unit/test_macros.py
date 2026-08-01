@@ -51,9 +51,15 @@ class _Relation:
 
 
 class _Adapter:
-    def __init__(self, recorder: _Recorder, relations: list[dict] | None = None) -> None:
+    def __init__(
+        self,
+        recorder: _Recorder,
+        relations: list[dict] | None = None,
+        schemas: list[str] | None = None,
+    ) -> None:
         self._recorder = recorder
         self._relations = relations or []
+        self._schemas = schemas or []
 
     @staticmethod
     def quote(value: str) -> str:
@@ -65,6 +71,14 @@ class _Adapter:
     def list_relation_names(self, database, schema):
         self._recorder.listed.append((database, schema))
         return self._relations
+
+    def list_schema_names(self, database):
+        self._recorder.schema_listed.append(database)
+        return self._schemas
+
+    def get_catalog_rows(self, database, schemas):
+        self._recorder.catalog_requested.append((database, list(schemas)))
+        return "CATALOG_TABLE"
 
 
 class _CompilerError(Exception):
@@ -88,6 +102,10 @@ class _Recorder:
         self.calls: list[tuple] = []
         # (database, schema) pairs adapter.list_relation_names was asked for.
         self.listed: list[tuple[str, str]] = []
+        # database values adapter.list_schema_names was asked for.
+        self.schema_listed: list[str] = []
+        # (database, schemas) pairs adapter.get_catalog_rows was asked for.
+        self.catalog_requested: list[tuple[str, list[str]]] = []
         self.returned = None
 
     @property
@@ -100,7 +118,9 @@ class _Recorder:
         return f"<{name}>"
 
 
-def _render(macro: str, *args, run_query_rows=None, config=None, relations=None) -> _Recorder:
+def _render(
+    macro: str, *args, run_query_rows=None, config=None, relations=None, schemas=None
+) -> _Recorder:
     """Render one macro and return the recorder holding the SQL it emitted."""
     recorder = _Recorder()
     env = jinja2.Environment(extensions=["jinja2.ext.do"])
@@ -116,7 +136,7 @@ def _render(macro: str, *args, run_query_rows=None, config=None, relations=None)
             "load_result": lambda name: type("R", (), {"table": "COLUMNS_TABLE"}),
             "sql_convert_columns_in_relation": lambda table: table,
             "return": lambda value: setattr(recorder, "returned", value) or "",
-            "adapter": _Adapter(recorder, relations),
+            "adapter": _Adapter(recorder, relations, schemas),
             "this": _Relation(),
             "config": _Config(config),
             "exceptions": type(
@@ -192,6 +212,67 @@ def test_drop_schema_lists_relations_via_the_adapter_not_information_schema():
 def test_drop_schema_of_an_empty_schema_only_drops_the_schema():
     rec = _render("duckhaven__drop_schema", _Relation(), relations=[])
     assert [name for name, _ in rec.statements] == ["drop_schema"]
+
+
+def test_get_catalog_delegates_to_the_adapter_method():
+    """duckdb__get_catalog joins duckdb_tables()/duckdb_views()/duckdb_columns(), all
+    rejected outright on a workspace with any scoped catalog attached, and dbt-core needs a
+    real agate.Table back — beyond what a macro built from plain adapter calls can return —
+    so this must delegate to a Python adapter method rather than emit SQL itself."""
+    rec = _render("duckhaven__get_catalog", _Relation(), ["analytics", "raw"])
+    assert rec.catalog_requested == [("sales", ["analytics", "raw"])]
+    assert rec.returned == "CATALOG_TABLE"
+
+
+def test_create_schema_skips_the_sqlite_probe():
+    """dbt-duckdb's duckdb__create_schema probes duckdb_databases() to detect a
+    sqlite-attached database, which is engine-side enumeration and 403s the same as
+    information_schema. DuckHaven never attaches sqlite, so the probe is skipped."""
+    rec = _render("duckhaven__create_schema", _Relation())
+    sql = rec.statement_sql.lower()
+    assert "create schema if not exists" in sql
+    assert "duckdb_databases" not in sql
+
+
+def test_list_schemas_uses_the_connector_browse_listing():
+    rec = _render("duckhaven__list_schemas", "sales", schemas=["analytics", "raw"])
+    assert rec.schema_listed == ["sales"]
+    assert rec.returned == [["analytics"], ["raw"]]
+
+
+def test_list_schemas_strips_dbt_applied_quoting():
+    """dbt-core's own required-schema check (dbt/task/runnable.py) calls list_schemas with
+    `database` already rendered through the relation's quote policy — str(relation), not the
+    raw .database attribute — so a catalog like `sales` arrives as `"sales"`. The workspace
+    catalog API wants the bare slug."""
+    rec = _render("duckhaven__list_schemas", '"sales"', schemas=[])
+    assert rec.schema_listed == ["sales"]
+
+
+def test_check_schema_exists_true_when_schema_listed():
+    rec = _render("duckhaven__check_schema_exists", _Relation(), "analytics", schemas=["analytics"])
+    assert rec.schema_listed == ["sales"]
+    assert rec.returned == [[1]]
+
+
+def test_check_schema_exists_false_when_schema_missing():
+    rec = _render("duckhaven__check_schema_exists", _Relation(), "analytics", schemas=["raw"])
+    assert rec.returned == [[0]]
+
+
+def test_list_relations_without_caching_uses_the_connector_browse_listing():
+    """information_schema.tables is rejected outright on a workspace with any scoped
+    catalog attached — the same denial duckhaven__drop_schema already works around."""
+    relations = [
+        {"table_name": "orders", "table_type": "MANAGED"},
+        {"table_name": "orders_view", "table_type": "VIEW"},
+    ]
+    rec = _render("duckhaven__list_relations_without_caching", _Relation(), relations=relations)
+    assert rec.listed == [("sales", "analytics")]
+    assert rec.returned == [
+        ["sales", "orders", "analytics", "table"],
+        ["sales", "orders_view", "analytics", "view"],
+    ]
 
 
 def test_drop_relation_has_no_cascade():

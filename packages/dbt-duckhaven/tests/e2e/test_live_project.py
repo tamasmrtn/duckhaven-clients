@@ -6,7 +6,7 @@ rather than duplicates.
 """
 
 import pytest
-from dbt.tests.util import run_dbt
+from dbt.tests.util import get_connection, run_dbt
 
 _SEED = """id,name
 1,alice
@@ -116,13 +116,19 @@ class TestDuckHavenEndToEnd:
 
         # No stale backup/temp relations left behind. This also catches the snapshot staging
         # table regressing from a session-local temp table to a real Iceberg one.
-        leftovers = project.run_sql(
-            "select count(*) from information_schema.tables "
-            "where table_schema = '{schema}' "
-            "and (table_name like '%__dbt_backup' or table_name like '%__dbt_tmp%')",
-            fetch="one",
-        )
-        assert leftovers[0] == 0
+        #
+        # information_schema.tables is 403'd outright on a workspace with any scoped
+        # catalog attached, same as the engine-side enumeration the adapter itself avoids
+        # (see DuckHavenAdapter.list_relation_names) -- so this reads the same grant-filtered
+        # REST listing the adapter uses, rather than querying the engine directly.
+        with get_connection(project.adapter):
+            relations = project.adapter.list_relation_names(project.database, project.test_schema)
+        leftovers = [
+            r["table_name"]
+            for r in relations
+            if r["table_name"].endswith("__dbt_backup") or "__dbt_tmp" in r["table_name"]
+        ]
+        assert leftovers == []
 
     def test_incremental_full_refresh_rebuilds(self, project):
         """`dbt run --full-refresh` over an *existing* incremental model.
