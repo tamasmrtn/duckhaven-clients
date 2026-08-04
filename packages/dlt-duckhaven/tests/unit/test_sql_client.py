@@ -91,6 +91,17 @@ def test_qualified_table_name():
     assert client.make_qualified_table_name("orders") == '"raw"."analytics"."orders"'
 
 
+# Verbatim from a live DuckHaven: six writers committing to one Iceberg table at once.
+# Polaris words the rejection three different ways, hence all three here.
+def _conflict(detail):
+    return dbapi.ProgrammingError(
+        "TransactionContext Error: Failed to commit: Failed to commit Iceberg transaction:"
+        " Request to 'http://polaris:8181/api/catalog/v1/dev_raw/transactions/commit'"
+        f" returned a non-200 status code (Conflict_409). \n message: {detail}\n"
+        " type: CommitFailedException\n reason: Conflict"
+    )
+
+
 @pytest.mark.parametrize(
     "exc,expected",
     [
@@ -98,6 +109,33 @@ def test_qualified_table_name():
         (dbapi.ProgrammingError("Catalog Error: missing"), DatabaseUndefinedRelation),
         (dbapi.ProgrammingError("statement_not_allowed"), DatabaseTerminalException),
         (dbapi.OperationalError("session reaped"), DatabaseTransientException),
+        # A lost Iceberg commit race is retryable, not terminal: nothing was published, so
+        # re-running the statement against the refreshed metadata is safe.
+        (
+            _conflict(
+                "Cannot commit to table openf1_staging.intervals metadata location from"
+                " s3://b/00000.metadata.json to s3://b/00001.metadata.json because it has"
+                " been concurrently modified to s3://b/00001.metadata.json"
+            ),
+            DatabaseTransientException,
+        ),
+        (
+            _conflict(
+                "Transaction commit failed with status:"
+                " TARGET_ENTITY_CONCURRENTLY_MODIFIED, extraInfo: Entity 'intervals' id"
+                " '3486352862133011631' concurrently modified; expected version 1"
+            ),
+            DatabaseTransientException,
+        ),
+        (
+            _conflict("Requirement failed: branch main was created concurrently"),
+            DatabaseTransientException,
+        ),
+        # Wins over the undefined-relation match, which "not found" would otherwise trip.
+        (
+            _conflict("Table openf1_staging.laps not found at the expected metadata location"),
+            DatabaseTransientException,
+        ),
     ],
 )
 def test_exception_mapping(exc, expected):

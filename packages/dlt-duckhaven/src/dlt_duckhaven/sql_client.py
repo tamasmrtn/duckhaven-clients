@@ -57,6 +57,26 @@ _ISO_DATETIME_RE = re.compile(
 _TEMPORAL_PREFIXES = ("DATE", "TIME")
 
 
+# Markers of a Polaris optimistic-concurrency rejection, i.e. two writers committing to the
+# same Iceberg table at once and the loser being told to start over from the refreshed
+# metadata. Polaris words it several ways ("has been concurrently modified",
+# "TARGET_ENTITY_CONCURRENTLY_MODIFIED", "branch main was created concurrently"), but every
+# shape carries both of these, so they are what to match on rather than any one wording. The
+# 409 is between the agent and Polaris, so it never reaches us as an HTTP status — it arrives
+# as the failed statement's error text.
+_COMMIT_CONFLICT_MARKERS = ("commitfailedexception", "conflict_409")
+
+
+def is_commit_conflict(exc: BaseException) -> bool:
+    """Whether ``exc`` is a losing Iceberg commit that is worth retrying.
+
+    A rejected commit publishes no metadata, so none of its rows become visible and
+    re-running the statement cannot duplicate them.
+    """
+    message = str(exc).lower()
+    return any(marker in message for marker in _COMMIT_CONFLICT_MARKERS)
+
+
 def _is_temporal(type_code: Any) -> bool:
     return isinstance(type_code, str) and type_code.upper().startswith(_TEMPORAL_PREFIXES)
 
@@ -224,6 +244,11 @@ class DuckHavenSqlClient(SqlClientBase["Connection"]):
     @staticmethod
     def _make_database_exception(ex: Exception) -> Exception:
         if isinstance(ex, dbapi.ProgrammingError):
+            # Checked before the undefined-relation match: a conflict message names the
+            # table it could not commit to, so a future Polaris wording could plausibly
+            # contain "not found" and be misread as a missing table.
+            if is_commit_conflict(ex):
+                return DatabaseTransientException(ex)
             message = str(ex).lower()
             if any(s in message for s in ("does not exist", "not found", "catalog error")):
                 return DatabaseUndefinedRelation(ex)
