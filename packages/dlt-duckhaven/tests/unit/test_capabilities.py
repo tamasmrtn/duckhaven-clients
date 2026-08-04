@@ -30,6 +30,9 @@ def test_capabilities_profile():
     assert caps.supports_multiple_statements is False
     assert caps.supports_truncate_command is False
 
+    # DuckDB takes only one ALTER action per statement.
+    assert caps.alter_add_multi_column is False
+
     # Load strategies (merge is delete-insert on Iceberg).
     assert caps.supported_merge_strategies == ["delete-insert"]
     assert caps.supported_replace_strategies == ["insert-from-staging", "truncate-and-insert"]

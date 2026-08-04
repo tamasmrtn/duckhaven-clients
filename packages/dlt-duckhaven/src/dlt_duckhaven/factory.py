@@ -133,6 +133,13 @@ def _set_duckhaven_capabilities(
     # are connector-side no-ops, so DDL transactions are unavailable.
     caps.supports_ddl_transactions = False
     caps.supports_multiple_statements = False
+    # DuckDB's grammar allows only one ALTER action per statement, so schema evolution
+    # emits one `ALTER TABLE … ADD COLUMN` per new column (as dlt's own duckdb destination
+    # does). Left at the default True, dlt-core comma-joins the clauses into a single
+    # statement and DuckDB rejects the whole thing with "Only one ALTER command per
+    # statement is supported" — so adding two columns at once to an existing table fails
+    # even though each one alone is a perfectly ordinary schema change.
+    caps.alter_add_multi_column = False
     # Replace truncation is done via `DELETE FROM` (as the Athena destination does).
     # DuckHaven's statement policy does now admit `TRUNCATE TABLE`, but there is nothing
     # to gain by switching: DuckDB's grammar turns TRUNCATE into the very same
