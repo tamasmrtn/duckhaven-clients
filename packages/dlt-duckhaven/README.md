@@ -93,7 +93,20 @@ back to one you cannot run on.
 Tables are stored as **Iceberg** (via the attached Polaris catalog); the type mapper
 constrains dlt types to Iceberg-safe DuckDB types (JSON → `VARCHAR`, microsecond
 timestamps, no 128-bit integers). Schema evolution (new columns on a later run) is applied
-with `ALTER TABLE … ADD COLUMN`.
+with `ALTER TABLE … ADD COLUMN`, one statement per new column — DuckDB accepts only one
+`ALTER` action per statement, so several columns arriving in the same run are added one
+after another rather than in a single combined statement.
+
+### Concurrent loads
+
+dlt loads in parallel by default, so several jobs can write to the same table at once —
+one resource whose data spans more than one Parquet file is enough. Iceberg settles those
+races with optimistic concurrency: one writer commits and the others are told to start
+again from the refreshed table metadata. The destination retries a losing commit for you,
+with jittered backoff, so this is invisible in normal operation and there is no need to
+serialize the load step with `LOAD__WORKERS=1`. A retry is safe because a rejected commit
+publishes nothing — none of its rows are visible, so re-running cannot duplicate them.
+Under sustained contention the retries are bounded and dlt's own job retry takes over.
 
 ### Reading values back
 

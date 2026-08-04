@@ -12,6 +12,8 @@ load cannot complete.
 """
 
 import os
+import threading
+import uuid
 
 import dlt
 import pytest
@@ -81,3 +83,81 @@ def test_merge_is_idempotent(pipeline):
     table = pipeline.sql_client().make_qualified_table_name("accounts")
     assert _scalar(pipeline, f"SELECT count(*) FROM {table}") == 1
     assert _scalar(pipeline, f"SELECT name FROM {table} WHERE id = 1") == "alice-updated"
+
+
+def test_schema_evolution_adds_several_columns_at_once(pipeline):
+    """Two or more new columns on an existing table must not be batched into one ALTER.
+
+    DuckDB takes a single ALTER action per statement, so the comma-joined form dlt emits by
+    default is rejected outright ("Only one ALTER command per statement is supported").
+    Only a live agent can prove the split form is what actually reaches DuckDB.
+    """
+
+    @dlt.resource(name="laps", write_disposition="append", primary_key="id")
+    def laps_v1():
+        yield [{"id": 1, "lap_number": 1}]
+
+    pipeline.run(laps_v1())
+
+    @dlt.resource(name="laps", write_disposition="append", primary_key="id")
+    def laps_v2():
+        yield [
+            {
+                "id": 2,
+                "lap_number": 2,
+                "segments_sector_1": "a",
+                "segments_sector_2": "b",
+                "segments_sector_3": "c",
+            }
+        ]
+
+    pipeline.run(laps_v2())
+
+    laps = pipeline.sql_client().make_qualified_table_name("laps")
+    assert _scalar(pipeline, f"SELECT count(*) FROM {laps}") == 2
+    assert _scalar(pipeline, f"SELECT segments_sector_3 FROM {laps} WHERE id = 2") == "c"
+
+
+def test_concurrent_loads_into_one_table_all_land():
+    """Parallel writers race on the same Iceberg table; Polaris rejects the losers with a
+    409 and the retry must recover every one of them, exactly once."""
+    workers = 4
+    rows_each = 2
+    dataset = f"dlt_duckhaven_concurrent_{uuid.uuid4().hex[:8]}"
+    destination = _destination()
+    barrier = threading.Barrier(workers)
+    failures: list[BaseException] = []
+
+    def load(worker: int) -> None:
+        pipe = dlt.pipeline(
+            pipeline_name=f"dlt_duckhaven_concurrent_{worker}",
+            destination=destination,
+            dataset_name=dataset,
+        )
+
+        @dlt.resource(name="events", write_disposition="append")
+        def events():
+            yield [{"worker": worker, "n": n} for n in range(rows_each)]
+
+        try:
+            barrier.wait()  # line the commits up so they actually collide
+            pipe.run(events())
+        except BaseException as exc:  # noqa: BLE001 - reported after the join
+            failures.append(exc)
+
+    threads = [threading.Thread(target=load, args=(w,)) for w in range(workers)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert not failures, f"concurrent loads failed: {failures}"
+
+    reader = dlt.pipeline(
+        pipeline_name="dlt_duckhaven_concurrent_0", destination=destination, dataset_name=dataset
+    )
+    events = reader.sql_client().make_qualified_table_name("events")
+    # Every row present once: a rejected commit publishes nothing, so the retry cannot
+    # duplicate what it re-runs.
+    assert _scalar(reader, f"SELECT count(*) FROM {events}") == workers * rows_each
+    assert _scalar(reader, f"SELECT count(DISTINCT worker) FROM {events}") == workers

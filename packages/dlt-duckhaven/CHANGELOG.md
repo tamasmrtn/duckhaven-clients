@@ -6,6 +6,30 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Schema evolution that adds two or more columns to an existing table no longer fails.
+  The destination was emitting dlt's default combined `ALTER TABLE … ADD COLUMN a, ADD
+  COLUMN b`, which DuckDB rejects outright — *"Parser Error: Only one ALTER command per
+  statement is supported"* — even though each column on its own is an ordinary schema
+  change. A table could therefore run for months needing only single-column adds and then
+  break the first time two arrived in the same load, which made it a real hazard for
+  sources with data-dependent schema drift (a field that is null-only in one load and
+  typed in the next). Columns are now added one statement at a time. If you worked around
+  this by pre-declaring the columns as explicit `columns` hints on the resource, those
+  hints are still perfectly valid and can stay; they are simply no longer required.
+- A load no longer aborts when two of its jobs commit to the same Iceberg table at once.
+  dlt runs load jobs in parallel (20 workers by default), and one resource whose data
+  spans several Parquet files is enough to produce two jobs for the same table; Iceberg
+  settles that race with optimistic concurrency and Polaris rejects the loser with a 409.
+  The destination classified that rejection as a terminal error, so instead of being
+  retried the job failed and took the whole load package with it. A lost commit race is
+  now treated as what it is — transient — and the load statement is retried with jittered
+  backoff against the refreshed table metadata. This is safe because a rejected commit
+  publishes no metadata: none of its rows are visible, so re-running cannot duplicate
+  them. The `LOAD__WORKERS=1` workaround, which serialized *every* table's jobs to avoid a
+  race between two of them, is no longer needed.
+
 ## [0.4.0] - 2026-08-01
 
 ### Fixed
