@@ -125,6 +125,27 @@ def test_get_storage_tables_missing_table_yields_no_columns():
     assert dict(client.get_storage_tables(["ghost"]))["ghost"] == {}
 
 
+def test_schema_evolution_emits_one_alter_statement_per_column():
+    # DuckDB takes only one ALTER action per statement, so adding several columns to an
+    # existing table must produce several statements. Comma-joining them into one (dlt's
+    # default) is rejected outright with "Only one ALTER command per statement is
+    # supported", failing the whole load.
+    new_columns = [
+        {"name": f"segments_sector_{i}", "data_type": "text", "nullable": True} for i in (1, 2, 3)
+    ]
+    client = _job_client(
+        new_table("laps", write_disposition="append", columns=new_columns),
+    )
+
+    statements = client._get_table_update_sql("laps", new_columns, generate_alter=True)
+
+    assert len(statements) == 3
+    for statement, column in zip(statements, new_columns, strict=True):
+        assert statement.count("ADD COLUMN") == 1
+        assert statement.startswith('ALTER TABLE "raw"."analytics"."laps"')
+        assert f'ADD COLUMN "{column["name"]}"' in statement
+
+
 @pytest.mark.parametrize(
     "type_text,expected",
     [

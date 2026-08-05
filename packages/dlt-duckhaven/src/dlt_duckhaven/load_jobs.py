@@ -62,6 +62,8 @@ class DuckHavenCopyJob(RunnableLoadJob, HasFollowupJobs):
 
             source_format, options = _reader_for(remote_uri)
             # BY NAME/union_by_name tolerates column evolution across files.
+            # Parallel jobs commonly race to commit to the same Iceberg table; the SQL
+            # client retries a losing commit, so nothing extra is needed here.
             self._sql_client.execute_sql(
                 f"INSERT INTO {qualified_table_name} BY NAME"
                 f" SELECT * FROM {source_format}('{remote_uri}'{options})"

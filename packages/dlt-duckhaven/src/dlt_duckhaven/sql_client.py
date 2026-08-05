@@ -9,7 +9,9 @@ schema being set (the dataset schema may not exist yet on first load).
 
 from __future__ import annotations
 
+import random
 import re
+import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from datetime import datetime
@@ -55,6 +57,48 @@ _ISO_DATETIME_RE = re.compile(
 # TIMESTAMP, TIMESTAMP WITH TIME ZONE, TIMESTAMP_MS/_NS/_S. Matching on the prefix covers
 # the parameterized and aliased forms without enumerating them.
 _TEMPORAL_PREFIXES = ("DATE", "TIME")
+
+
+# Marker of a Polaris optimistic-concurrency rejection, i.e. two writers committing to the
+# same Iceberg table at once and the loser being told to start over from the refreshed
+# metadata. Polaris words the detail several ways ("has been concurrently modified",
+# "TARGET_ENTITY_CONCURRENTLY_MODIFIED", "branch main was created concurrently"), but every
+# shape names this exception type, so it is what to match on rather than any one wording.
+#
+# Deliberately narrower than "any Polaris 409": a concurrent CREATE TABLE loses with
+# AlreadyExistsException, also a 409, and retrying that can never succeed — the table it
+# collided with is still there. The 409 is between the agent and Polaris either way, so it
+# never reaches us as an HTTP status; it arrives as the failed statement's error text.
+_COMMIT_CONFLICT_MARKER = "commitfailedexception"
+
+
+def is_commit_conflict(exc: BaseException) -> bool:
+    """Whether ``exc`` is a losing Iceberg commit that is worth retrying.
+
+    A rejected commit publishes no metadata, so none of its rows become visible and
+    re-running the statement cannot duplicate them.
+    """
+    return _COMMIT_CONFLICT_MARKER in str(exc).lower()
+
+
+# dlt runs load jobs in parallel (20 workers by default), so one resource whose data spans
+# several Parquet files is enough for two statements to commit to the same table at once.
+# Retrying the statement rather than letting dlt retry the whole job keeps the staged
+# Parquet upload out of the loop (dlt re-runs the job from the top, re-uploading it), and
+# reaches the commits dlt would not retry at all: `complete_load`'s writes to _dlt_loads and
+# _dlt_version happen outside any job, so a conflict there fails the whole run.
+_COMMIT_CONFLICT_ATTEMPTS = 5
+_BACKOFF_BASE = 0.2
+_BACKOFF_MAX = 5.0
+
+
+def _backoff_delay(attempt: int) -> float:
+    """Capped exponential backoff with full jitter for retry ``attempt`` (0-based).
+
+    Jitter matters more than the curve here: the racing statements were started together,
+    so a fixed delay would just line them up to collide again.
+    """
+    return random.uniform(0, min(_BACKOFF_MAX, _BACKOFF_BASE * (2**attempt)))
 
 
 def _is_temporal(type_code: Any) -> bool:
@@ -197,10 +241,25 @@ class DuckHavenSqlClient(SqlClientBase["Connection"]):
             cursor.close()
 
     def execute_sql(self, sql: AnyStr, *args: Any, **kwargs: Any) -> Sequence[Sequence[Any]] | None:
-        with self.execute_query(sql, *args, **kwargs) as cursor:
-            if cursor.description is None:
-                return None
-            return cursor.fetchall()
+        """Run ``sql``, retrying a lost Iceberg commit race.
+
+        Only commit conflicts are retried: they are resolved by re-reading the table's
+        refreshed metadata, which is exactly what re-running the statement does. Every other
+        transient failure (a reaped session, an agent that went away) leaves this connection
+        unusable, so it propagates — dlt retries the job against a fresh one.
+        """
+        for attempt in range(_COMMIT_CONFLICT_ATTEMPTS):
+            try:
+                with self.execute_query(sql, *args, **kwargs) as cursor:
+                    if cursor.description is None:
+                        return None
+                    return cursor.fetchall()
+            except DatabaseTransientException as ex:
+                if not is_commit_conflict(ex) or attempt == _COMMIT_CONFLICT_ATTEMPTS - 1:
+                    # Still transient, so dlt's own bounded retry stays the outer net.
+                    raise
+                time.sleep(_backoff_delay(attempt))
+        raise AssertionError("unreachable: the loop either returns or raises")
 
     @contextmanager
     @raise_database_error
@@ -224,6 +283,11 @@ class DuckHavenSqlClient(SqlClientBase["Connection"]):
     @staticmethod
     def _make_database_exception(ex: Exception) -> Exception:
         if isinstance(ex, dbapi.ProgrammingError):
+            # Checked before the undefined-relation match: a conflict message names the
+            # table it could not commit to, so a future Polaris wording could plausibly
+            # contain "not found" and be misread as a missing table.
+            if is_commit_conflict(ex):
+                return DatabaseTransientException(ex)
             message = str(ex).lower()
             if any(s in message for s in ("does not exist", "not found", "catalog error")):
                 return DatabaseUndefinedRelation(ex)

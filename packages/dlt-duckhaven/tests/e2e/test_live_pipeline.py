@@ -12,6 +12,7 @@ load cannot complete.
 """
 
 import os
+import uuid
 
 import dlt
 import pytest
@@ -81,3 +82,67 @@ def test_merge_is_idempotent(pipeline):
     table = pipeline.sql_client().make_qualified_table_name("accounts")
     assert _scalar(pipeline, f"SELECT count(*) FROM {table}") == 1
     assert _scalar(pipeline, f"SELECT name FROM {table} WHERE id = 1") == "alice-updated"
+
+
+def test_schema_evolution_adds_several_columns_at_once(pipeline):
+    """Two or more new columns on an existing table must not be batched into one ALTER.
+
+    DuckDB takes a single ALTER action per statement, so the comma-joined form dlt emits by
+    default is rejected outright ("Only one ALTER command per statement is supported").
+    Only a live agent can prove the split form is what actually reaches DuckDB.
+    """
+
+    @dlt.resource(name="laps", write_disposition="append", primary_key="id")
+    def laps_v1():
+        yield [{"id": 1, "lap_number": 1}]
+
+    pipeline.run(laps_v1())
+
+    @dlt.resource(name="laps", write_disposition="append", primary_key="id")
+    def laps_v2():
+        yield [
+            {
+                "id": 2,
+                "lap_number": 2,
+                "segments_sector_1": "a",
+                "segments_sector_2": "b",
+                "segments_sector_3": "c",
+            }
+        ]
+
+    pipeline.run(laps_v2())
+
+    laps = pipeline.sql_client().make_qualified_table_name("laps")
+    assert _scalar(pipeline, f"SELECT count(*) FROM {laps}") == 2
+    assert _scalar(pipeline, f"SELECT segments_sector_3 FROM {laps} WHERE id = 2") == "c"
+
+
+def test_parallel_load_jobs_for_one_table_all_land(monkeypatch):
+    """One resource whose data spans several Parquet files, loaded with dlt's default
+    parallel load step: the jobs commit to the same Iceberg table at once, Polaris rejects
+    the losers, and the retry must recover every one of them exactly once.
+
+    This is the shape that made the bug reachable in normal use — nothing exotic, just a
+    resource big enough to be split by the buffer. Capping the file size is what makes the
+    split (and therefore the race) deterministic rather than data-size dependent.
+    """
+    rows = 200
+    monkeypatch.setenv("DATA_WRITER__FILE_MAX_ITEMS", "20")  # -> 10 Parquet files, 10 jobs
+
+    pipeline = dlt.pipeline(
+        pipeline_name=f"dlt_duckhaven_parallel_{uuid.uuid4().hex[:8]}",
+        destination=_destination(),
+        dataset_name=f"dlt_duckhaven_parallel_{uuid.uuid4().hex[:8]}",
+    )
+
+    @dlt.resource(name="intervals", write_disposition="append")
+    def intervals():
+        yield [{"id": n, "gap": n * 0.5} for n in range(rows)]
+
+    pipeline.run(intervals())
+
+    table = pipeline.sql_client().make_qualified_table_name("intervals")
+    # Every row present exactly once: a rejected commit publishes nothing, so a retry
+    # cannot duplicate what it re-runs, and none may be lost either.
+    assert _scalar(pipeline, f"SELECT count(*) FROM {table}") == rows
+    assert _scalar(pipeline, f"SELECT count(DISTINCT id) FROM {table}") == rows
