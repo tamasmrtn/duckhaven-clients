@@ -6,6 +6,8 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-08-05
+
 ### Fixed
 
 - Schema evolution that adds two or more columns to an existing table no longer fails.
