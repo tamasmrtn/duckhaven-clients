@@ -24,11 +24,16 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
   settles that race with optimistic concurrency and Polaris rejects the loser with a 409.
   The destination classified that rejection as a terminal error, so instead of being
   retried the job failed and took the whole load package with it. A lost commit race is
-  now treated as what it is — transient — and the load statement is retried with jittered
-  backoff against the refreshed table metadata. This is safe because a rejected commit
-  publishes no metadata: none of its rows are visible, so re-running cannot duplicate
-  them. The `LOAD__WORKERS=1` workaround, which serialized *every* table's jobs to avoid a
-  race between two of them, is no longer needed.
+  now treated as what it is — transient — and the statement is retried with jittered
+  backoff against the refreshed table metadata. The retry sits at the SQL client, so it
+  covers every commit a load makes, not just the data ones: `replace`'s `DELETE FROM`, the
+  merge SQL, and the end-of-load bookkeeping writes to `_dlt_loads`/`_dlt_version`, which
+  happen outside any load job and so would otherwise fail the run outright with no retry
+  at all. It is safe because a rejected commit publishes no metadata: none of its rows are
+  visible, so re-running cannot duplicate them. The `LOAD__WORKERS=1` workaround, which
+  serialized *every* table's jobs to avoid a race between two of them, is no longer
+  needed. A concurrent `CREATE TABLE` that loses is deliberately *not* retried — it fails
+  with `AlreadyExistsException`, which retrying can never resolve.
 
 ## [0.4.0] - 2026-08-01
 

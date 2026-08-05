@@ -12,7 +12,6 @@ load cannot complete.
 """
 
 import os
-import threading
 import uuid
 
 import dlt
@@ -118,46 +117,32 @@ def test_schema_evolution_adds_several_columns_at_once(pipeline):
     assert _scalar(pipeline, f"SELECT segments_sector_3 FROM {laps} WHERE id = 2") == "c"
 
 
-def test_concurrent_loads_into_one_table_all_land():
-    """Parallel writers race on the same Iceberg table; Polaris rejects the losers with a
-    409 and the retry must recover every one of them, exactly once."""
-    workers = 4
-    rows_each = 2
-    dataset = f"dlt_duckhaven_concurrent_{uuid.uuid4().hex[:8]}"
-    destination = _destination()
-    barrier = threading.Barrier(workers)
-    failures: list[BaseException] = []
+def test_parallel_load_jobs_for_one_table_all_land(monkeypatch):
+    """One resource whose data spans several Parquet files, loaded with dlt's default
+    parallel load step: the jobs commit to the same Iceberg table at once, Polaris rejects
+    the losers, and the retry must recover every one of them exactly once.
 
-    def load(worker: int) -> None:
-        pipe = dlt.pipeline(
-            pipeline_name=f"dlt_duckhaven_concurrent_{worker}",
-            destination=destination,
-            dataset_name=dataset,
-        )
+    This is the shape that made the bug reachable in normal use — nothing exotic, just a
+    resource big enough to be split by the buffer. Capping the file size is what makes the
+    split (and therefore the race) deterministic rather than data-size dependent.
+    """
+    rows = 200
+    monkeypatch.setenv("DATA_WRITER__FILE_MAX_ITEMS", "20")  # -> 10 Parquet files, 10 jobs
 
-        @dlt.resource(name="events", write_disposition="append")
-        def events():
-            yield [{"worker": worker, "n": n} for n in range(rows_each)]
-
-        try:
-            barrier.wait()  # line the commits up so they actually collide
-            pipe.run(events())
-        except BaseException as exc:  # noqa: BLE001 - reported after the join
-            failures.append(exc)
-
-    threads = [threading.Thread(target=load, args=(w,)) for w in range(workers)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-
-    assert not failures, f"concurrent loads failed: {failures}"
-
-    reader = dlt.pipeline(
-        pipeline_name="dlt_duckhaven_concurrent_0", destination=destination, dataset_name=dataset
+    pipeline = dlt.pipeline(
+        pipeline_name=f"dlt_duckhaven_parallel_{uuid.uuid4().hex[:8]}",
+        destination=_destination(),
+        dataset_name=f"dlt_duckhaven_parallel_{uuid.uuid4().hex[:8]}",
     )
-    events = reader.sql_client().make_qualified_table_name("events")
-    # Every row present once: a rejected commit publishes nothing, so the retry cannot
-    # duplicate what it re-runs.
-    assert _scalar(reader, f"SELECT count(*) FROM {events}") == workers * rows_each
-    assert _scalar(reader, f"SELECT count(DISTINCT worker) FROM {events}") == workers
+
+    @dlt.resource(name="intervals", write_disposition="append")
+    def intervals():
+        yield [{"id": n, "gap": n * 0.5} for n in range(rows)]
+
+    pipeline.run(intervals())
+
+    table = pipeline.sql_client().make_qualified_table_name("intervals")
+    # Every row present exactly once: a rejected commit publishes nothing, so a retry
+    # cannot duplicate what it re-runs, and none may be lost either.
+    assert _scalar(pipeline, f"SELECT count(*) FROM {table}") == rows
+    assert _scalar(pipeline, f"SELECT count(DISTINCT id) FROM {table}") == rows

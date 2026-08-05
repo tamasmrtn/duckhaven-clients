@@ -136,6 +136,19 @@ def _conflict(detail):
             _conflict("Table openf1_staging.laps not found at the expected metadata location"),
             DatabaseTransientException,
         ),
+        # A concurrent CREATE TABLE also loses with a Polaris 409, but retrying it can never
+        # succeed — so "any 409" must not be mistaken for a retryable commit conflict.
+        (
+            dbapi.ProgrammingError(
+                "TransactionContext Error: Failed to commit: Failed to commit Iceberg"
+                " transaction: Request to 'http://polaris:8181/api/catalog/v1/landing/"
+                "namespaces/ds/tables/_dlt_version' returned a non-200 status code"
+                ' (Conflict_409), with reason: Conflict, body: {"error":{"message":"Table'
+                ' already exists: ds._dlt_version","type":"AlreadyExistsException",'
+                '"code":409}}'
+            ),
+            DatabaseTerminalException,
+        ),
     ],
 )
 def test_exception_mapping(exc, expected):
@@ -288,3 +301,62 @@ def test_every_fetch_method_is_type_directed(monkeypatch, method):
     row = _fetch_one_row(monkeypatch, cursor, method)
     assert isinstance(row[0], datetime)
     assert isinstance(row[1], str)
+
+
+# -- Iceberg commit-conflict retry ------------------------------------------------------
+
+
+def _retrying_client(monkeypatch, side_effect):
+    """A client whose cursor.execute raises `side_effect`, with instant backoff."""
+    monkeypatch.setattr(sql_client_mod.time, "sleep", MagicMock())
+    cursor = _fake_cursor(description=None)
+    cursor.execute.side_effect = side_effect
+    _patch_connect(monkeypatch, cursor)
+    client = _client()
+    client.open_connection()
+    return client, cursor
+
+
+def test_commit_conflict_is_retried_until_it_succeeds(monkeypatch):
+    conflict = _conflict("Requirement failed: branch main has changed")
+    client, cursor = _retrying_client(monkeypatch, [conflict, conflict, None])
+
+    client.execute_sql("INSERT INTO t SELECT 1")
+
+    assert cursor.execute.call_count == 3
+
+
+def test_commit_conflict_retries_are_bounded(monkeypatch):
+    conflict = _conflict("Requirement failed: branch main has changed")
+    client, cursor = _retrying_client(monkeypatch, conflict)
+
+    with pytest.raises(DatabaseTransientException):
+        client.execute_sql("INSERT INTO t SELECT 1")
+
+    # Still transient on the way out, so dlt's own retry remains the outer bound.
+    assert cursor.execute.call_count == sql_client_mod._COMMIT_CONFLICT_ATTEMPTS
+
+
+def test_non_conflict_transient_is_not_retried(monkeypatch):
+    # A reaped session leaves this connection unusable; only dlt can rebuild it.
+    client, cursor = _retrying_client(monkeypatch, dbapi.OperationalError("session reaped"))
+
+    with pytest.raises(DatabaseTransientException):
+        client.execute_sql("INSERT INTO t SELECT 1")
+
+    assert cursor.execute.call_count == 1
+
+
+def test_terminal_error_is_not_retried(monkeypatch):
+    client, cursor = _retrying_client(monkeypatch, dbapi.ProgrammingError("syntax error"))
+
+    with pytest.raises(DatabaseTerminalException):
+        client.execute_sql("INSERT INTO t SELECT 1")
+
+    assert cursor.execute.call_count == 1
+
+
+def test_backoff_is_jittered_and_capped(monkeypatch):
+    monkeypatch.setattr(sql_client_mod.random, "uniform", lambda a, b: b)  # take the ceiling
+    delays = [sql_client_mod._backoff_delay(i) for i in range(6)]
+    assert delays == [0.2, 0.4, 0.8, 1.6, 3.2, 5.0]  # doubles, then capped at _BACKOFF_MAX
