@@ -6,6 +6,8 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-08-06
+
 ### Fixed
 
 - The post-run summary (`str(load_info)`) now shows the destination's `host/workspace`
