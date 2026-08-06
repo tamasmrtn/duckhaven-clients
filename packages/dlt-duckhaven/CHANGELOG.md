@@ -6,6 +6,16 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The post-run summary (`str(load_info)`) now shows the destination's `host/workspace`
+  instead of a masked token (e.g. `The duckhaven destination used dh_pat_*** location to
+  store data`). `DuckHavenClientConfiguration` previously inherited dlt-core's default
+  `__str__`, which displays `str(credentials)` — informative for connection-string-based
+  destinations, but for DuckHaven's bearer-token credentials that's just a masked
+  placeholder. `__str__` now returns `physical_location()` (`host/workspace`), falling
+  back to the masked credentials form when `host`/`workspace` aren't set.
+
 ## [0.5.0] - 2026-08-05
 
 ### Fixed
