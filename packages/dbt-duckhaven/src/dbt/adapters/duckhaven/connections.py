@@ -45,3 +45,21 @@ class DuckHavenConnectionManager(DuckDBConnectionManager):
                 connection.state = ConnectionState.FAIL
                 raise FailedToConnectError(str(e))
             return connection
+
+    def commit_if_has_connection(self) -> None:
+        """Commit only if a transaction is actually open.
+
+        ``BaseConnectionManager.commit_if_has_connection`` calls ``commit()``
+        unconditionally whenever a connection exists, but ``SQLConnectionManager.commit``
+        raises ``DbtInternalError`` if ``transaction_open`` is False. Under dbt's threaded
+        execution this fires on effectively every model — DuckDB has already closed the
+        transaction by the time this cleanup pass runs — and dbt-duckdb's
+        ``DuckDBAdapter.commit_if_has_connection`` only downgrades it to a warning log
+        rather than avoiding it. Checking the same flag ``commit()`` checks means the
+        benign case never raises in the first place, while a commit that fails for a real
+        reason (``transaction_open`` still True) is untouched and still surfaces through
+        that upstream warning path.
+        """
+        connection = self.get_if_exists()
+        if connection and connection.transaction_open:
+            self.commit()

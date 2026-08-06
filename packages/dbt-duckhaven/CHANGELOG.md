@@ -6,6 +6,20 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `dbt run`/`dbt build` no longer log a spurious `DbtInternalError` ("Tried to commit
+  transaction on connection ..., but it does not have one open!") after most models.
+  `BaseConnectionManager.commit_if_has_connection` calls `commit()` unconditionally
+  whenever a connection exists, but `SQLConnectionManager.commit` raises whenever
+  `transaction_open` is False — which DuckDB routinely already is by the time this
+  cleanup pass runs, under dbt's threaded execution. dbt-duckdb's own
+  `DuckDBAdapter.commit_if_has_connection` only downgrades this to a warning log rather
+  than avoiding it. `DuckHavenConnectionManager.commit_if_has_connection` now checks
+  `transaction_open` itself before calling `commit()`, the same flag `commit()` checks,
+  so the benign case is silent and a commit that fails for a genuinely different reason
+  still surfaces through the existing warning path unchanged.
+
 ## [0.4.0] - 2026-08-01
 
 ### Fixed
