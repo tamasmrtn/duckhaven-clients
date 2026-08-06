@@ -48,6 +48,20 @@ def test_credentials_str_masks_token():
     assert str(DuckHavenCredentials()) == "[no token]"
 
 
+def test_str_uses_physical_location():
+    c = DuckHavenClientConfiguration(
+        host="https://duckhaven.internal",
+        workspace="analytics",
+        credentials=DuckHavenCredentials(token="dh_pat_x"),
+    )
+    assert str(c) == "https://duckhaven.internal/analytics"
+
+
+def test_str_falls_back_to_credentials_when_incomplete():
+    c = DuckHavenClientConfiguration(credentials=DuckHavenCredentials(token="dh_pat_x"))
+    assert str(c) == "dh_pat_***"
+
+
 def test_fingerprint_stable_across_instances():
     a = DuckHavenClientConfiguration(host="https://h", workspace="ws")
     b = DuckHavenClientConfiguration(host="https://h", workspace="ws")

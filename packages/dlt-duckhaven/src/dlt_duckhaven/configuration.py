@@ -72,6 +72,10 @@ class DuckHavenClientConfiguration(DestinationClientDwhWithStagingConfiguration)
             return f"{self.host.rstrip('/')}/{self.workspace}"
         return ""
 
+    def __str__(self) -> str:
+        """Return displayable destination location, e.g. in the pipeline run summary."""
+        return self.physical_location() or str(self.credentials)
+
     def fingerprint(self) -> str:
         location = self.physical_location()
         return digest128(location) if location else ""
