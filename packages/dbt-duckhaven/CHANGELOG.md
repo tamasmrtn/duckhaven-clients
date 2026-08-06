@@ -6,6 +6,8 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-06
+
 ### Fixed
 
 - `dbt run`/`dbt build` no longer log a spurious `DbtInternalError` ("Tried to commit
