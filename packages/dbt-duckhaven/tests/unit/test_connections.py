@@ -1,5 +1,6 @@
 """open() builds a DuckHaven environment (not dbt-duckdb's factory) and pins one
-session per connection."""
+session per connection, and commit_if_has_connection() skips commit() when no
+transaction is open."""
 
 from types import SimpleNamespace
 
@@ -71,3 +72,41 @@ def test_open_failure_becomes_failed_to_connect(monkeypatch):
     with pytest.raises(FailedToConnectError):
         DuckHavenConnectionManager.open(conn)
     assert conn.state == ConnectionState.FAIL
+
+
+def _manager_with(monkeypatch, connection):
+    manager = DuckHavenConnectionManager.__new__(DuckHavenConnectionManager)
+    calls = []
+    monkeypatch.setattr(manager, "get_if_exists", lambda: connection)
+    monkeypatch.setattr(manager, "commit", lambda: calls.append("commit"))
+    return manager, calls
+
+
+def test_commit_if_has_connection_skips_commit_without_open_transaction(monkeypatch):
+    # The benign case this fix targets: DuckDB already closed the transaction by the
+    # time this cleanup pass runs. Must not raise and must not call commit().
+    connection = SimpleNamespace(name="test", transaction_open=False)
+    manager, calls = _manager_with(monkeypatch, connection)
+
+    manager.commit_if_has_connection()
+
+    assert calls == []
+
+
+def test_commit_if_has_connection_commits_when_transaction_open(monkeypatch):
+    connection = SimpleNamespace(name="test", transaction_open=True)
+    manager, calls = _manager_with(monkeypatch, connection)
+
+    manager.commit_if_has_connection()
+
+    assert calls == ["commit"]
+
+
+def test_commit_if_has_connection_noop_without_a_connection(monkeypatch):
+    # Regression coverage for the existing base-class behaviour: no connection at all
+    # (get_if_exists() returns None) must also skip commit(), unchanged by this fix.
+    manager, calls = _manager_with(monkeypatch, None)
+
+    manager.commit_if_has_connection()
+
+    assert calls == []
