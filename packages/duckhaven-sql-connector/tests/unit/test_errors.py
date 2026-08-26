@@ -52,6 +52,31 @@ def test_maps_structured_error_codes(status, code, expected):
 
 
 @pytest.mark.parametrize(
+    ("status", "code", "expected"),
+    [
+        (422, "statement_not_allowed", dbapi.ProgrammingError),
+        (422, "sql_not_allowed", dbapi.ProgrammingError),
+        (403, "grant_denied", dbapi.ProgrammingError),
+        (403, "agent_forbidden", dbapi.ProgrammingError),
+        (422, "agent_incompatible", dbapi.ProgrammingError),
+        (503, "compute_starting", dbapi.OperationalError),
+        (503, "compute_unavailable", dbapi.OperationalError),
+        (409, "session_not_open", dbapi.OperationalError),
+        (409, "catalog_read_only", dbapi.OperationalError),
+        (503, "session_open_failed", dbapi.OperationalError),
+    ],
+)
+def test_maps_structured_error_codes_v2_envelope(status, code, expected):
+    """The api_version 2 envelope is flat: {"error": ..., "message": ..., "details": ...}."""
+    resp = _resp(status, json={"error": code, "message": "boom", "details": None})
+    exc = map_http_error(resp)
+    assert isinstance(exc, expected)
+    assert exc.code == code
+    assert exc.detail == "boom"
+    assert exc.status_code == status
+
+
+@pytest.mark.parametrize(
     ("status", "expected"),
     [
         (401, dbapi.InterfaceError),
@@ -69,6 +94,29 @@ def test_maps_plain_string_detail_by_status(status, expected):
     exc = map_http_error(resp)
     assert isinstance(exc, expected)
     assert exc.code is None
+    assert exc.detail == "something happened"
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (401, dbapi.InterfaceError),
+        (403, dbapi.ProgrammingError),
+        (409, dbapi.OperationalError),
+        (410, dbapi.OperationalError),
+        (500, dbapi.InternalError),
+        (503, dbapi.OperationalError),
+        (504, dbapi.OperationalError),
+        (418, dbapi.DatabaseError),
+    ],
+)
+def test_maps_v2_envelope_by_status_when_code_is_generic(status, expected):
+    """A status-derived v2 code (e.g. "conflict", "unauthorized") isn't in either slug set,
+    so classification still falls back to the status, exactly as with a v1 plain string."""
+    resp = _resp(status, json={"error": "some_derived_code", "message": "something happened"})
+    exc = map_http_error(resp)
+    assert isinstance(exc, expected)
+    assert exc.code == "some_derived_code"
     assert exc.detail == "something happened"
 
 
@@ -140,6 +188,27 @@ def test_404_disabled_is_operational_but_missing_is_programming():
     missing = map_http_error(_resp(404, json={"detail": "Session not found"}))
     assert isinstance(disabled, dbapi.OperationalError)
     assert isinstance(missing, dbapi.ProgrammingError)
+
+
+def test_404_disabled_vs_missing_still_works_on_v2_envelope():
+    """api_version 2 derives the same generic "not_found" slug for both cases (verified
+    against the server: both raise a plain-string HTTPException), so there is no machine
+    code to distinguish them on — this only keeps working because the server's message
+    ("SQL sessions are not enabled" vs "Session not found") makes it through the v2
+    envelope unchanged. A regression that drops `message` back to the reason phrase would
+    misclassify a disabled-sessions deployment as a caller error again.
+    """
+    disabled = map_http_error(
+        _resp(404, json={"error": "not_found", "message": "SQL sessions are not enabled"})
+    )
+    missing = map_http_error(
+        _resp(404, json={"error": "not_found", "message": "Session not found"})
+    )
+    assert isinstance(disabled, dbapi.OperationalError)
+    assert disabled.code == "not_found"
+    assert disabled.detail == "SQL sessions are not enabled"
+    assert isinstance(missing, dbapi.ProgrammingError)
+    assert missing.detail == "Session not found"
 
 
 def test_non_json_body_falls_back_to_text():
