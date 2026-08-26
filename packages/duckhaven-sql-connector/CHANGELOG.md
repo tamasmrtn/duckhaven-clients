@@ -6,6 +6,25 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Fixed
+
+- Error parsing now understands DuckHaven's `api_version` 2 error envelope
+  (`{"error", "message", "details"}`), alongside the `api_version` 1 shape it already read
+  (`{"detail": ...}`). Against a v2 server the connector previously discarded every error's
+  machine-readable `code` and human-readable message, since it only looked for a top-level
+  `detail` key. Three concrete breakages this fixes:
+  - The elastic cold-start retry (`connect(compute_wait=...)`) never retried against a v2
+    server — `exc.code` was always `None`, so a `compute_starting` 503 raised immediately
+    instead of being waited out.
+  - Every server error message degraded to a generic HTTP reason phrase (e.g.
+    `"Disallowed statement type(s): SET..."` became `"Unprocessable Entity"`), losing the
+    server's actual diagnostic.
+  - A disabled SQL session surface (`SQL_SESSIONS_ENABLED=false`) was misclassified as
+    `ProgrammingError` instead of `OperationalError`, because the message that
+    distinguishes it from a missing session was gone. DuckHaven derives the same generic
+    `not_found` code for both cases under `api_version` 2, so this is still message-driven —
+    restoring the message is what fixes the misclassification.
+
 ## [0.4.0] - 2026-08-01
 
 ### Added

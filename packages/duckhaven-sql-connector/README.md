@@ -47,7 +47,10 @@ A runnable version is in [`examples/quickstart.py`](examples/quickstart.py).
 ## Errors
 
 Failures raise the standard [PEP 249 exceptions](https://peps.python.org/pep-0249/#exceptions),
-carrying the server's `code`/`status_code`/`detail`:
+carrying the server's `code`/`status_code`/`detail`. Both of DuckHaven's error envelopes
+(`api_version` 1's `{"detail": ...}` and `api_version` 2's `{"error", "message", "details"}`) are
+accepted transparently — the connector works against either server generation without
+configuration.
 
 - `ProgrammingError` — a rejected statement (`statement_not_allowed`), a denied grant, or a
   missing object.
@@ -65,9 +68,10 @@ A DuckHaven server can restrict which agents a caller may target. Two shapes sur
   The raised error carries `code="agent_forbidden"`.
 - **404 `Agent not found`** — an agent the server keeps *restricted* and you hold no grant
   on is invisible rather than forbidden, so it answers exactly as a deleted agent would.
-  The error carries no `code`. A mistyped `agent` UUID and a denied one are deliberately
-  indistinguishable, so check whether you have been granted the agent before concluding
-  the id is wrong.
+  The error carries no `code` (`api_version` 1) or the generic `code="not_found"`
+  (`api_version` 2, which derives it from the status rather than naming this case
+  specifically). A mistyped `agent` UUID and a denied one are deliberately indistinguishable,
+  so check whether you have been granted the agent before concluding the id is wrong.
 
 Omitting `agent` auto-picks, and the server only considers agents you may use. On a server
 with restricted agents that means auto-pick can raise `OperationalError` ("no connected
