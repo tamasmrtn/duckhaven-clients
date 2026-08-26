@@ -31,7 +31,7 @@ def _props(spec, schema):
 
 
 def test_session_and_statement_paths_exist_with_expected_status(spec):
-    assert "201" in _op(spec, "/workspaces/{ws}/sql/sessions", "post")["responses"]
+    assert "201" in _op(spec, "/workspaces/{workspace}/sql/sessions", "post")["responses"]
     assert "200" in _op(spec, "/sql/sessions/{session_id}", "get")["responses"]
     assert "204" in _op(spec, "/sql/sessions/{session_id}", "delete")["responses"]
     assert "202" in _op(spec, "/sql/sessions/{session_id}/statements", "post")["responses"]
@@ -55,7 +55,7 @@ def test_request_bodies_match_what_the_connector_sends(spec):
 
 
 def test_staging_files_endpoint(spec):
-    assert "200" in _op(spec, "/sql/sessions/{session_id}/staging-files", "post")["responses"]
+    assert "201" in _op(spec, "/sql/sessions/{session_id}/staging-files", "post")["responses"]
     assert {"name", "key", "put_url", "get_url"} <= _props(spec, "StagedFileOut")
     assert {"files", "expires_at"} <= _props(spec, "StagingFilesOut")
 
