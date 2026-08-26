@@ -129,7 +129,7 @@ def ensure_service_account() -> str:
     if status == 409:
         status, accounts = call("GET", "/api/admin/service-accounts")
         must(status == 200, f"list service accounts -> {status} {accounts}")
-        for account in accounts:
+        for account in accounts["items"]:
             if account["name"] == SA_NAME:
                 return account["id"]
     must(False, f"create service account -> {status} {data}")
@@ -137,7 +137,7 @@ def ensure_service_account() -> str:
 
 
 def mint_pat(sa_id: str) -> str:
-    status, data = call("POST", f"/api/admin/service-accounts/{sa_id}/pat", {})
+    status, data = call("POST", f"/api/admin/service-accounts/{sa_id}/pats", {})
     must(status == 201, f"create PAT -> {status} {data}")
     return data["token"]
 
