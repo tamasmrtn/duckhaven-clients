@@ -212,6 +212,33 @@ def test_open_retries_a_compute_starting_503_and_honours_retry_after():
 
 
 @respx.mock
+def test_open_retries_a_compute_starting_503_on_the_v2_error_envelope():
+    """Regression: against an api_version 2 server, the compute_starting slug arrives in
+    the flat {"error": ..., "message": ...} envelope rather than nested under "detail". If
+    errors.py stopped understanding that shape, exc.code would go back to None and this
+    retry would never fire — see the v1 case above for the request/response shape it
+    replaces.
+    """
+    slept: list[float] = []
+    open_route = respx.post(SESSIONS_URL).mock(
+        side_effect=[
+            httpx.Response(
+                503,
+                json={"error": "compute_starting", "message": "starting"},
+                headers={"Retry-After": "7"},
+            ),
+            httpx.Response(201, json=session_json()),
+        ]
+    )
+    config = make_config()
+    transport = Transport(config, sleep=slept.append)
+    conn = Connection.open(config, transport=transport)
+    assert open_route.call_count == 2
+    assert slept == [7.0]
+    assert conn.agent_id == AGENT_ID
+
+
+@respx.mock
 def test_open_does_not_retry_a_503_without_the_compute_starting_code():
     """A server with no elastic compute answers a plain 503 for a cold pool.
 
