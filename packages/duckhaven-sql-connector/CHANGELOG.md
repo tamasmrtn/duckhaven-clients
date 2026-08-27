@@ -6,6 +6,8 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-27
+
 ### Fixed
 
 - Error parsing now understands DuckHaven's `api_version` 2 error envelope
