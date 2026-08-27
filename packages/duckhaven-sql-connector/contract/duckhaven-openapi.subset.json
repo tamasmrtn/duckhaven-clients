@@ -995,7 +995,7 @@
           "required": true
         },
         "responses": {
-          "200": {
+          "201": {
             "content": {
               "application/json": {
                 "schema": {
@@ -1107,16 +1107,16 @@
         ]
       }
     },
-    "/workspaces/{ws}/sql/sessions": {
+    "/workspaces/{workspace}/sql/sessions": {
       "post": {
-        "operationId": "open_session_workspaces__ws__sql_sessions_post",
+        "operationId": "open_session_workspaces__workspace__sql_sessions_post",
         "parameters": [
           {
             "in": "path",
-            "name": "ws",
+            "name": "workspace",
             "required": true,
             "schema": {
-              "title": "Ws",
+              "title": "Workspace",
               "type": "string"
             }
           },
@@ -1173,6 +1173,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SqlSessionOut"
+                }
+              }
+            },
+            "description": "Accepted"
           },
           "422": {
             "content": {

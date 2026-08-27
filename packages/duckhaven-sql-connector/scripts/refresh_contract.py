@@ -22,7 +22,7 @@ WANT: dict[str, set[str]] = {
     # GET /version is deliberately NOT pinned: server_version() treats its absence (404 on
     # an older server) as a supported case, so requiring it here would make a contract
     # refresh fail against exactly the servers the feature is built to tolerate.
-    "/workspaces/{ws}/sql/sessions": {"post"},
+    "/workspaces/{workspace}/sql/sessions": {"post"},
     "/sql/sessions/{session_id}": {"get", "delete"},
     "/sql/sessions/{session_id}/statements": {"post"},
     "/sql/sessions/{session_id}/staging-files": {"post"},

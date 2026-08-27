@@ -1,9 +1,11 @@
 """Map DuckHaven HTTP failures onto the PEP 249 exception hierarchy.
 
-DuckHaven's FastAPI errors arrive as ``{"detail": ...}`` where ``detail`` is either a
-plain string or a structured ``{"error": <slug>, "detail": <message>}`` object. Both
-shapes are normalized to a ``(code, message)`` pair and mapped to a DB-API exception,
-preserving the slug and status on the raised error.
+DuckHaven errors arrive in one of two envelopes depending on the server's ``api_version``.
+``api_version`` 1 uses ``{"detail": ...}``, where ``detail`` is either a plain string or a
+structured ``{"error": <slug>, "detail": <message>}`` object. ``api_version`` 2 uses a single
+flat envelope, ``{"error": <slug>, "message": <message>, "details": ...}``. Both are normalized
+to a ``(code, message)`` pair and mapped to a DB-API exception, preserving the slug and status
+on the raised error.
 """
 
 from __future__ import annotations
@@ -73,6 +75,11 @@ def _parse_body(response: httpx.Response) -> tuple[str | None, str]:
         payload = response.json()
     except (ValueError, UnicodeDecodeError):
         return None, response.text.strip() or response.reason_phrase
+    if isinstance(payload, dict) and "detail" not in payload and "error" in payload:
+        # api_version 2 envelope: {"error": <slug>, "message": <message>, "details": ...}
+        code = payload.get("error")
+        message = payload.get("message") or code or ""
+        return (str(code) if code is not None else None), str(message)
     detail = payload.get("detail") if isinstance(payload, dict) else payload
     if isinstance(detail, dict):
         code = detail.get("error")
@@ -102,7 +109,9 @@ def map_http_error(response: httpx.Response) -> Error:
         exc_type = ProgrammingError
     elif status == 404:
         # The session surface being disabled is operational; a missing object is a
-        # caller (programming) error. Distinguish on the server's message.
+        # caller (programming) error. Both derive the same generic "not_found" slug on
+        # api_version 2 (the server raises a plain-string 404 for either), so there is no
+        # machine code to branch on here — distinguish on the server's message instead.
         exc_type = OperationalError if "not enabled" in message.lower() else ProgrammingError
     elif status in (409, 410):
         exc_type = OperationalError
