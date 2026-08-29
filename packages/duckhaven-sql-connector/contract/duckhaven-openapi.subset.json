@@ -177,6 +177,17 @@
             "title": "Started At",
             "type": "string"
           },
+          "statement_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement Type"
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -305,6 +316,27 @@
               }
             ],
             "title": "Catalog"
+          },
+          "on_wait_timeout": {
+            "default": "cancel",
+            "enum": [
+              "cancel",
+              "continue"
+            ],
+            "title": "On Wait Timeout",
+            "type": "string"
+          },
+          "wait_timeout_s": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Timeout S"
           }
         },
         "title": "SqlSessionCreate",
@@ -555,7 +587,8 @@
   "paths": {
     "/queries/{query_id}": {
       "delete": {
-        "operationId": "cancel_query_queries__query_id__delete",
+        "description": "Ask the agent to stop a running query.\n\nBest effort and idempotent: cancelling a query that already finished is a\nno-op, not an error. The query row survives -- cancellation is a terminal\nstatus, not a deletion.",
+        "operationId": "cancel_query",
         "parameters": [
           {
             "in": "path",
@@ -565,38 +598,6 @@
               "format": "uuid",
               "title": "Query Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session"
             }
           }
         ],
@@ -604,24 +605,63 @@
           "204": {
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             },
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Cancel Query",
         "tags": [
           "queries"
         ]
       },
       "get": {
-        "operationId": "get_query_queries__query_id__get",
+        "description": "One query's status, timings and error, by its global id.\n\nAddressed globally rather than under its workspace: the id is unique, and the\nsubmitter already holds it. Any member of the query's workspace may read it,\nwhich is what makes the history an audit trail.",
+        "operationId": "get_query",
         "parameters": [
           {
             "in": "path",
@@ -631,38 +671,6 @@
               "format": "uuid",
               "title": "Query Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session"
             }
           }
         ],
@@ -677,17 +685,55 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             },
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Get Query",
         "tags": [
           "queries"
@@ -696,7 +742,8 @@
     },
     "/queries/{query_id}/rows": {
       "get": {
-        "operationId": "get_query_rows_queries__query_id__rows_get",
+        "description": "A page of a finished query's result rows, with their column types.\n\nA result grid rather than a resource collection, which is why the envelope is\n`rows`/`columns` rather than `items`. Page with the opaque `cursor`.",
+        "operationId": "get_query_rows",
         "parameters": [
           {
             "in": "path",
@@ -714,6 +761,8 @@
             "required": false,
             "schema": {
               "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
               "title": "Limit",
               "type": "integer"
             }
@@ -733,38 +782,6 @@
               ],
               "title": "Cursor"
             }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session"
-            }
           }
         ],
         "responses": {
@@ -778,17 +795,75 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "A dependency the request needs is not available right now."
           }
         },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Get Query Rows",
         "tags": [
           "queries"
@@ -797,7 +872,8 @@
     },
     "/sql/sessions/{session_id}": {
       "delete": {
-        "operationId": "close_session_sql_sessions__session_id__delete",
+        "description": "Close a session and release its connection and any elastic compute.\n\nIdempotent: closing an already-closed, expired or failed session succeeds.\nEverything session-local -- temp tables, `SET`s -- is gone afterwards.",
+        "operationId": "close_session",
         "parameters": [
           {
             "in": "path",
@@ -807,38 +883,6 @@
               "format": "uuid",
               "title": "Session Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session"
             }
           }
         ],
@@ -846,24 +890,63 @@
           "204": {
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             },
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Close Session",
         "tags": [
           "sql-sessions"
         ]
       },
       "get": {
-        "operationId": "get_session_sql_sessions__session_id__get",
+        "description": "One session's status and the agent holding it.\n\nPoll this after opening a session with `on_wait_timeout=continue`: the status\nmoves `pending` -> `opening` -> `open` as compute starts.",
+        "operationId": "get_session",
         "parameters": [
           {
             "in": "path",
@@ -873,38 +956,6 @@
               "format": "uuid",
               "title": "Session Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session"
             }
           }
         ],
@@ -919,17 +970,55 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             },
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Get Session",
         "tags": [
           "sql-sessions"
@@ -939,7 +1028,7 @@
     "/sql/sessions/{session_id}/staging-files": {
       "post": {
         "description": "Presign a PUT (upload) and GET (read) URL per file under the session's\nstage. Backend-specific presigning stays in the API; the client uploads with a\nplain HTTP PUT and the agent reads the GET URL over httpfs (no storage secret).",
-        "operationId": "create_staging_files_sql_sessions__session_id__staging_files_post",
+        "operationId": "create_staging_files",
         "parameters": [
           {
             "in": "path",
@@ -949,38 +1038,6 @@
               "format": "uuid",
               "title": "Session Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session"
             }
           }
         ],
@@ -1005,17 +1062,65 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             },
             "description": "Validation Error"
           }
         },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Create Staging Files",
         "tags": [
           "sql-sessions"
@@ -1024,7 +1129,8 @@
     },
     "/sql/sessions/{session_id}/statements": {
       "post": {
-        "operationId": "run_statement_sql_sessions__session_id__statements_post",
+        "description": "Run a statement on this session's DuckDB connection. 202 with a query id.\n\nUnlike `POST /workspaces/{workspace}/queries`, this reuses one held connection, so\ntemp tables, `SET`s and attached catalogs persist between statements. 409 if\nthe session is not open.",
+        "operationId": "run_statement",
         "parameters": [
           {
             "in": "path",
@@ -1034,38 +1140,6 @@
               "format": "uuid",
               "title": "Session Id",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session"
             }
           }
         ],
@@ -1090,17 +1164,75 @@
             },
             "description": "Successful Response"
           },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
+          },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "A dependency the request needs is not available right now."
           }
         },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Run Statement",
         "tags": [
           "sql-sessions"
@@ -1109,7 +1241,8 @@
     },
     "/workspaces/{workspace}/sql/sessions": {
       "post": {
-        "operationId": "open_session_workspaces__workspace__sql_sessions_post",
+        "description": "Open a session, starting compute first when none is up.\n\nSynchronous by contract \u2014 it returns a session a client can immediately run\nstatements on \u2014 so when compute has to start it holds the request rather than\nparking silently. `wait_timeout_s`/`on_wait_timeout` choose how long and what\nhappens at the end: 503 + Retry-After (the default, for a client that cannot\npoll) or 202 with a pending session (for one that can).",
+        "operationId": "open_session",
         "parameters": [
           {
             "in": "path",
@@ -1118,38 +1251,6 @@
             "schema": {
               "title": "Workspace",
               "type": "string"
-            }
-          },
-          {
-            "in": "header",
-            "name": "authorization",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Authorization"
-            }
-          },
-          {
-            "in": "cookie",
-            "name": "session",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Session"
             }
           }
         ],
@@ -1172,7 +1273,15 @@
                 }
               }
             },
-            "description": "Successful Response"
+            "description": "The session was opened.",
+            "headers": {
+              "Location": {
+                "description": "Where the session is operated: `/api/sql/sessions/{session_id}`.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
           },
           "202": {
             "content": {
@@ -1182,19 +1291,67 @@
                 }
               }
             },
-            "description": "Accepted"
+            "description": "Compute is still starting and `on_wait_timeout=continue` was set. Poll `GET /sql/sessions/{session_id}` until it reports `open`."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
           },
           "422": {
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
+                  "$ref": "#/components/schemas/ErrorOut"
                 }
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "A dependency the request needs is not available right now."
           }
         },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
         "summary": "Open Session",
         "tags": [
           "sql-sessions"
