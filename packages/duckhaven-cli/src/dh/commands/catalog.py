@@ -115,9 +115,10 @@ def update_workspace(
 
 
 @workspace_app.command("delete")
-def delete_workspace(ctx: typer.Context, workspace: str) -> None:
+def delete_workspace(ctx: typer.Context, workspace: str, yes: bool = context.YES) -> None:
     """Delete a workspace."""
     cli = context.of(ctx)
+    cli.confirm("Delete workspace", workspace, yes=yes)
     with cli.client() as client:
         client.delete(f"workspaces/{workspace}")
     cli.note(f"Deleted workspace {workspace!r}.")
@@ -224,9 +225,10 @@ def attach_catalog(
 
 
 @catalog_app.command("detach")
-def detach_catalog(ctx: typer.Context, catalog: str) -> None:
+def detach_catalog(ctx: typer.Context, catalog: str, yes: bool = context.YES) -> None:
     """Detach a catalog from the workspace. The catalog itself survives."""
     cli = context.of(ctx)
+    cli.confirm("Detach catalog", catalog, yes=yes)
     settings = cli.settings()
     with cli.client(settings) as client:
         client.delete(f"workspaces/{settings.require('workspace')}/catalogs/{catalog}")
@@ -234,9 +236,10 @@ def detach_catalog(ctx: typer.Context, catalog: str) -> None:
 
 
 @catalog_app.command("drop")
-def drop_catalog(ctx: typer.Context, catalog_id: str) -> None:
+def drop_catalog(ctx: typer.Context, catalog_id: str, yes: bool = context.YES) -> None:
     """Drop a catalog outright, by id. Destructive."""
     cli = context.of(ctx)
+    cli.confirm("Drop catalog", catalog_id, yes=yes)
     with cli.client() as client:
         client.delete(f"catalogs/{catalog_id}")
     cli.note(f"Dropped catalog {catalog_id}.")
@@ -287,10 +290,14 @@ def create_schema(
 
 @schema_app.command("drop")
 def drop_schema(
-    ctx: typer.Context, name: str, catalog: str = typer.Option(None, "--catalog")
+    ctx: typer.Context,
+    name: str,
+    catalog: str = typer.Option(None, "--catalog"),
+    yes: bool = context.YES,
 ) -> None:
     """Drop a schema."""
     cli = context.of(ctx)
+    cli.confirm("Drop schema", name, yes=yes)
     settings = cli.settings()
     with cli.client(settings) as client:
         client.delete(f"{_schema_base(cli, client, settings, catalog)}/{name}")
@@ -380,10 +387,14 @@ def _column(spec: str) -> dict[str, object]:
 
 @table_app.command("drop")
 def drop_table(
-    ctx: typer.Context, table: str, catalog: str = typer.Option(None, "--catalog")
+    ctx: typer.Context,
+    table: str,
+    catalog: str = typer.Option(None, "--catalog"),
+    yes: bool = context.YES,
 ) -> None:
     """Drop a table."""
     cli = context.of(ctx)
+    cli.confirm("Drop table", table, yes=yes)
     settings = cli.settings()
     with cli.client(settings) as client:
         client.delete(_table_base(cli, client, settings, table, catalog))

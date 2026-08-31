@@ -36,14 +36,14 @@ ROUTES = [
     # workspaces
     (["workspace", "get"], "GET", WS),
     (["workspace", "update", "--name", "New"], "PATCH", WS),
-    (["workspace", "delete", "analytics"], "DELETE", WS),
+    (["workspace", "delete", "analytics", "--yes"], "DELETE", WS),
     (["workspace", "member", "add", ID], "POST", f"{WS}/members"),
     # catalogs
     (["catalog", "create", "new"], "POST", f"{WS}/catalogs"),
-    (["catalog", "drop", ID], "DELETE", f"{API}/catalogs/{ID}"),
+    (["catalog", "drop", ID, "--yes"], "DELETE", f"{API}/catalogs/{ID}"),
     (["catalog", "refresh-stats"], "POST", f"{CAT}/refresh-stats"),
     # schemas
-    (["schema", "drop", "sales"], "DELETE", f"{CAT}/schemas/sales"),
+    (["schema", "drop", "sales", "--yes"], "DELETE", f"{CAT}/schemas/sales"),
     # saved queries and schedules
     (["saved-query", "list"], "GET", f"{WS}/saved-queries"),
     (["schedule", "list"], "GET", f"{WS}/schedules"),

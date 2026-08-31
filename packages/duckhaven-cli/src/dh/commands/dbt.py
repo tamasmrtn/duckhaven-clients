@@ -111,9 +111,14 @@ def import_edges(
 
 
 @lineage_app.command("purge")
-def purge_lineage(ctx: typer.Context, provider: str = typer.Option(..., "--provider")) -> None:
+def purge_lineage(
+    ctx: typer.Context,
+    provider: str = typer.Option(..., "--provider"),
+    yes: bool = context.YES,
+) -> None:
     """Remove every edge a retired producer asserted. Requires workspace owner."""
     cli = context.of(ctx)
+    cli.confirm("Purge all lineage published by", provider, yes=yes)
     settings = cli.settings()
     path = f"workspaces/{settings.require('workspace')}/lineage/imports"
     with cli.client(settings) as client:
@@ -155,9 +160,14 @@ def import_semantics(
 
 
 @semantic_app.command("purge")
-def purge_semantics(ctx: typer.Context, provider: str = typer.Option(..., "--provider")) -> None:
+def purge_semantics(
+    ctx: typer.Context,
+    provider: str = typer.Option(..., "--provider"),
+    yes: bool = context.YES,
+) -> None:
     """Remove everything one provider published. Requires workspace owner."""
     cli = context.of(ctx)
+    cli.confirm("Purge all semantics published by", provider, yes=yes)
     settings = cli.settings()
     path = f"workspaces/{settings.require('workspace')}/semantic/imports"
     with cli.client(settings) as client:

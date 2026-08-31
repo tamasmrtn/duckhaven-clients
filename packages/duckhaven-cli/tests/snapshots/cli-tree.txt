@@ -251,10 +251,12 @@ dh catalog create
 dh catalog detach
     Detach a catalog from the workspace. The catalog itself survives.
     . <catalog>
+    . --yes/-y
 
 dh catalog drop
     Drop a catalog outright, by id. Destructive.
     . <catalog_id>
+    . --yes/-y
 
 dh catalog list
     Catalogs attached to the workspace.
@@ -313,6 +315,7 @@ dh lineage import-edges
 dh lineage purge
     Remove every edge a retired producer asserted. Requires workspace owner.
     . --provider
+    . --yes/-y
 
 dh profile
     Inspect and edit local connection profiles.
@@ -451,6 +454,7 @@ dh schema drop
     Drop a schema.
     . <name>
     . --catalog
+    . --yes/-y
 
 dh schema list
     Schemas in the catalog.
@@ -491,6 +495,7 @@ dh semantic publish
 dh semantic purge
     Remove everything one provider published. Requires workspace owner.
     . --provider
+    . --yes/-y
 
 dh semantic relationship
     Joins between a model's datasets.
@@ -574,6 +579,7 @@ dh table drop
     Drop a table.
     . <table>
     . --catalog
+    . --yes/-y
 
 dh table get
     One table's columns, partitioning and statistics.
@@ -624,6 +630,7 @@ dh workspace create
 dh workspace delete
     Delete a workspace.
     . <workspace>
+    . --yes/-y
 
 dh workspace get
     One workspace, by slug or id. Defaults to the configured one.

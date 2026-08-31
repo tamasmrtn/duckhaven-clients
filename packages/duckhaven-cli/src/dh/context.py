@@ -12,13 +12,31 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+import click
 import typer
 
 from dh import config as config_mod
-from dh.errors import DhError
+from dh.errors import Aborted, DhError
 from dh.output import Format, color_enabled, default_format, render
 from dh.resolve import Settings, resolve
 from dh.rest import RestClient
+
+#: Ways a confirmation prompt can end without an answer. Both classes because
+#: typer vendors its own click and `typer.confirm` raises the vendored `Abort`.
+_DECLINED = (EOFError, click.Abort, typer.Abort)
+
+#: The opt-out on every destructive command. One spelling everywhere, so nobody
+#: has to remember which command wanted `--force` instead.
+YES = typer.Option(False, "--yes", "-y", help="Skip the confirmation prompt.")
+
+
+def _interactive() -> bool:
+    """Whether there is a person here to answer a prompt.
+
+    Its own function because Click's test runner installs a non-tty stdin, so this
+    is the seam a test flips to exercise the branch where someone is asked.
+    """
+    return sys.stdin.isatty()
 
 
 @dataclass
@@ -109,6 +127,36 @@ class CliContext:
         """
         if not self.quiet:
             typer.echo(message, err=True)
+
+    def confirm(self, action: str, target: str, *, yes: bool) -> None:
+        """Stop a destructive command that nobody agreed to.
+
+        Three outcomes, and the middle one is the point. With ``--yes`` it returns.
+        At a terminal it asks. With neither -- a pipeline, a cron job, a CI step --
+        it *refuses*, because the alternatives are both wrong: prompting hangs the
+        job on a question no one will answer, and proceeding anyway makes ``--yes``
+        decorative and lets an unattended `dh table drop` delete data by accident.
+
+        Not silenced by ``-q``. A prompt is not a diagnostic; suppressing it would
+        turn `dh -q workspace delete` into the exact unattended deletion this
+        exists to prevent.
+        """
+        if yes:
+            return
+        if not _interactive():
+            raise Aborted(
+                "confirmation_required",
+                f"{action} {target}: refusing to act without confirmation. "
+                "Pass --yes to confirm, or run this from a terminal.",
+                {"action": action, "target": target},
+            )
+        try:
+            agreed = typer.confirm(f"{action} {target}?", default=False, err=True)
+        except _DECLINED:
+            # Ctrl-C or Ctrl-D at "are you sure?" means no, not "crash".
+            agreed = False
+        if not agreed:
+            raise Aborted("aborted", f"Not confirmed; {target} was left alone.")
 
 
 def of(ctx: typer.Context) -> CliContext:

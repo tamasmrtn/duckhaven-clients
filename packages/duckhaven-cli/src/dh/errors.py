@@ -31,6 +31,8 @@ class ExitCode(IntEnum):
     TIMEOUT = 7
     #: 503, connection refused, DNS failure.
     UNAVAILABLE = 8
+    #: A destructive command was not confirmed, so nothing was done.
+    ABORTED = 9
     #: Conventional for SIGINT. The server-side query is cancelled first.
     INTERRUPTED = 130
 
@@ -92,6 +94,17 @@ class QueryFailed(DhError):
     """The query ran and reached ``failed``. The CLI worked; the SQL did not."""
 
     exit_code = ExitCode.QUERY_FAILED
+
+
+class Aborted(DhError):
+    """A destructive command was declined, or could not ask. Nothing was done.
+
+    Its own status rather than a reuse of ``CONFLICT``: a pipeline needs to tell
+    "the server refused this" from "I never sent it", and the second is not a
+    failure of anything but the invocation.
+    """
+
+    exit_code = ExitCode.ABORTED
 
 
 #: HTTP status to the class that carries the right exit code.

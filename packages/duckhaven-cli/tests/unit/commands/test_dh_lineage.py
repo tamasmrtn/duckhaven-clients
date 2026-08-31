@@ -109,7 +109,7 @@ def test_lineage_purge_sends_the_provider(logged_in):
     route = respx.delete(f"{WS}/lineage/imports").mock(
         return_value=httpx.Response(200, json={"removed": 7})
     )
-    assert runner.invoke(app, ["lineage", "purge", "--provider", "dbt"]).exit_code == 0
+    assert runner.invoke(app, ["lineage", "purge", "--provider", "dbt", "--yes"]).exit_code == 0
     assert route.calls[0].request.url.params["provider"] == "dbt"
 
 
@@ -142,7 +142,7 @@ def test_semantic_import_says_the_models_are_drafts(logged_in, manifest):
 @respx.mock
 def test_semantic_purge_requires_and_sends_a_provider(logged_in):
     route = respx.delete(f"{WS}/semantic/imports").mock(return_value=httpx.Response(204))
-    assert runner.invoke(app, ["semantic", "purge", "--provider", "dbt"]).exit_code == 0
+    assert runner.invoke(app, ["semantic", "purge", "--provider", "dbt", "--yes"]).exit_code == 0
     assert route.calls[0].request.url.params["provider"] == "dbt"
 
 

@@ -203,7 +203,7 @@ def test_catalog_attach_uses_put(with_catalog):
 @respx.mock
 def test_catalog_detach_uses_delete(with_catalog):
     route = respx.delete(f"{WS}/catalogs/shared").mock(return_value=httpx.Response(204))
-    assert runner.invoke(app, ["catalog", "detach", "shared"]).exit_code == 0
+    assert runner.invoke(app, ["catalog", "detach", "shared", "--yes"]).exit_code == 0
     assert route.called
 
 
@@ -289,5 +289,5 @@ def test_table_drop(with_catalog):
     route = respx.delete(f"{WS}/catalogs/main/schemas/sales/tables/orders").mock(
         return_value=httpx.Response(204)
     )
-    assert runner.invoke(app, ["table", "drop", "sales.orders"]).exit_code == 0
+    assert runner.invoke(app, ["table", "drop", "sales.orders", "--yes"]).exit_code == 0
     assert route.called
