@@ -19,6 +19,7 @@ from dh.commands import auth as auth_commands
 from dh.commands import health as health_commands
 from dh.commands import profile as profile_commands
 from dh.commands import query as query_commands
+from dh.commands import saved as saved_commands
 from dh.context import CliContext
 from dh.errors import DhError, ExitCode
 from dh.output import Format, default_format, write_error
@@ -54,11 +55,14 @@ app = typer.Typer(
 )
 app.add_typer(auth_commands.app)
 app.add_typer(profile_commands.app)
-app.add_typer(health_commands.app)
-app.add_typer(health_commands.version_app, name="version", help="Show CLI and server versions.")
+app.command("health")(health_commands.health)
+app.command("version")(health_commands.version)
 app.add_typer(query_commands.app)
 # The one verb-first command in the tree, registered as a leaf beside the groups.
 app.command("sql")(query_commands.sql)
+app.add_typer(saved_commands.saved_app)
+app.add_typer(saved_commands.schedule_app)
+app.command("search")(saved_commands.search)
 
 
 def _version_callback(value: bool) -> None:

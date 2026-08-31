@@ -8,18 +8,13 @@ from dh import __version__, context
 from dh.errors import DhError, NotFoundError
 from dh.rest import RestClient
 
-app = typer.Typer(name="health", help="Deployment and workspace health.")
 
-
-@app.callback(invoke_without_command=True)
 def health(ctx: typer.Context) -> None:
     """Liveness, readiness, and the deployment's own health report.
 
     Each check is reported rather than raised, so one failing dependency still
     shows the state of the others -- which is the whole reason to run this.
     """
-    if ctx.invoked_subcommand is not None:  # pragma: no cover - no subcommands yet
-        return
     cli = context.of(ctx)
     settings = cli.settings()
     with cli.client(settings) as client:
@@ -43,10 +38,6 @@ def _probe(client: RestClient, path: str, name: str) -> dict[str, object]:
     return {"check": name, "ok": True, "detail": detail or "ok"}
 
 
-version_app = typer.Typer(name="version")
-
-
-@version_app.callback(invoke_without_command=True)
 def version(ctx: typer.Context) -> None:
     """The CLI's version, and the server's when one is reachable.
 
@@ -54,8 +45,6 @@ def version(ctx: typer.Context) -> None:
     it. A server old enough to lack `GET /api/version` reports null rather than
     failing, matching how the connector treats the same 404.
     """
-    if ctx.invoked_subcommand is not None:  # pragma: no cover - no subcommands
-        return
     cli = context.of(ctx)
     settings = cli.settings()
     payload: dict[str, object] = {"cli": __version__, "server": None, "api_version": None}

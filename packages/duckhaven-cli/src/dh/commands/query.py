@@ -188,3 +188,56 @@ def cancel_query(ctx: typer.Context, query_id: str) -> None:
     with cli.client() as client:
         client.delete(f"queries/{query_id}")
     cli.note(f"Cancelled {query_id}.")
+
+
+@app.command("list")
+def list_queries(
+    ctx: typer.Context,
+    status: list[str] = typer.Option(
+        None, "--status", help="Repeatable: queued, running, done, failed, cancelled."
+    ),
+    statement_type: list[str] = typer.Option(None, "--statement-type", help="Repeatable."),
+    since: str = typer.Option(None, "--since", help="ISO-8601 lower bound on start time."),
+    until: str = typer.Option(None, "--until", help="ISO-8601 upper bound on start time."),
+    origin: str = typer.Option(None, "--origin", help="interactive, session, schedule, elastic."),
+    session: str = typer.Option(None, "--session", help="Only statements from this session."),
+    agent: str = typer.Option(None, "--agent", help="Only runs on this agent id."),
+    user: str = typer.Option(None, "--user", help="Only this user's runs (admin for others)."),
+    search: str = typer.Option(None, "--search", "-q", help="Free text over the SQL."),
+    slower_than: int = typer.Option(None, "--slower-than", help="Milliseconds."),
+    sort: str = typer.Option(None, "--sort", help="started_at or duration."),
+    direction: str = typer.Option(None, "--dir", help="asc or desc."),
+    all_workspaces: bool = typer.Option(False, "--all-workspaces", help="Admin only."),
+    limit: int = typer.Option(None, "--limit", help="Rows per page."),
+    fetch_all: bool = typer.Option(False, "--all", help="Walk every page."),
+) -> None:
+    """The query log, newest first. Doubles as the audit trail.
+
+    Filtering and sorting happen server-side over the whole history before the
+    page is cut, so narrowing here is not the same as filtering what you were
+    shown. Omitting a filter means "everything": `--status` has no default.
+    """
+    cli = context.of(ctx)
+    settings = cli.settings()
+    params = {
+        "status": status or None,
+        "statement_type": statement_type or None,
+        "since": since,
+        "until": until,
+        "origin": origin,
+        "session_id": session,
+        "agent_id": agent,
+        "user_id": user,
+        "q": search,
+        "slower_than_ms": slower_than,
+        "sort": sort,
+        "dir": direction,
+        "all_workspaces": all_workspaces or None,
+    }
+    path = f"workspaces/{settings.require('workspace')}/queries"
+    with cli.client(settings) as client:
+        if fetch_all:
+            cli.emit(list(client.walk(path, params=params, limit=limit)))
+            return
+        rows, cursor, has_more = client.collect(path, params=params, limit=limit)
+    cli.emit(rows, cursor=cursor, has_more=has_more)
