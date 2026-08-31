@@ -166,6 +166,12 @@ dh admin user workspaces
     Which workspaces a user belongs to, and in what role.
     . <user_id>
 
+dh agent
+    Compute agents you may run queries on.
+
+dh agent list
+    The agents this caller may run queries on, with their capabilities.
+
 dh api
     Call any endpoint directly.
 

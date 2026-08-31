@@ -154,6 +154,22 @@ def add_member(
         )
 
 
+agent_app = typer.Typer(name="agent", help="Compute agents you may run queries on.")
+
+
+@agent_app.command("list")
+def list_agents(ctx: typer.Context) -> None:
+    """The agents this caller may run queries on, with their capabilities.
+
+    Distinct from `dh admin agent list`, which needs `agents:manage` and shows
+    every agent in the deployment. This is the list an analyst can actually use,
+    and it is where `--agent <name>` resolves a name from.
+    """
+    cli = context.of(ctx)
+    with cli.client() as client:
+        cli.emit(client.get("agents"))
+
+
 # --- Catalogs --------------------------------------------------------------
 
 
