@@ -234,6 +234,7 @@ dh catalog
 dh catalog attach
     Attach an existing catalog to the workspace.
     . <catalog>
+    . --default
 
 dh catalog create
     Create a catalog and attach it to the workspace.

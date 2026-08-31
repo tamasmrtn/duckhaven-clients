@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import json
-import os
 
 import httpx
 import pytest
 import respx
+from conftest import write_profile
 from typer.testing import CliRunner
 
 from dh.errors import ExitCode
@@ -30,23 +30,14 @@ PAYLOAD = {
 }
 
 
-@pytest.fixture
-def logged_in(tmp_path, monkeypatch):
-    path = tmp_path / "config.toml"
-    path.write_text(
-        'default_profile = "default"\n\n[profile.default]\n'
-        f'host = "{HOST}"\ntoken = "dh_pat_x"\nworkspace = "analytics"\ncatalog = "main"\n',
-        encoding="utf-8",
-    )
-    os.chmod(path, 0o600)
-    monkeypatch.setenv("DH_CONFIG_FILE", str(path))
-    for var in ("DH_HOST", "DH_TOKEN", "DH_WORKSPACE", "DH_CATALOG", "DH_AGENT", "DH_PROFILE"):
-        monkeypatch.delenv(var, raising=False)
-    return path
-
-
 def _mock_list():
     return respx.get(f"{CATALOG}/grants").mock(return_value=httpx.Response(200, json=PAYLOAD))
+
+
+@pytest.fixture
+def logged_in(tmp_path, monkeypatch):
+    """Grant routes hang off a catalog."""
+    return write_profile(tmp_path, monkeypatch, catalog="main")
 
 
 # --- list ------------------------------------------------------------------

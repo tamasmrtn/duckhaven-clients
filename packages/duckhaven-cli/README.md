@@ -7,10 +7,11 @@ running SQL, browsing the catalog, publishing dbt lineage and semantic models, m
 grants, and operating service accounts, users and agents.
 
 Like every member of this repo it is a **pure HTTP client of DuckHaven's public REST
-API**, authenticating with a Personal Access Token (`dh_pat_…`). The SQL execution path
-(sessions, statements, polling, row pagination) is delegated to
-[`duckhaven-sql-connector`](../duckhaven-sql-connector/README.md) rather than
-reimplemented.
+API**, authenticating with a Personal Access Token (`dh_pat_…`). The interactive REPL
+holds a SQL session through
+[`duckhaven-sql-connector`](../duckhaven-sql-connector/README.md); everything else,
+including one-shot `dh sql`, goes over the REST API directly, because the one-shot query
+route works on deployments where SQL sessions are switched off.
 
 ## Install
 

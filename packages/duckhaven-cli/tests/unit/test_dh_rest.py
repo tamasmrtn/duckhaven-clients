@@ -168,20 +168,6 @@ def test_walk_over_a_bare_array_yields_once(client):
 
 
 @respx.mock
-def test_walk_stops_at_max_rows_without_fetching_more(client):
-    pages = [
-        httpx.Response(
-            200, json={"items": [{"id": 1}, {"id": 2}], "cursor": "c1", "has_more": True}
-        ),
-        httpx.Response(200, json={"items": [{"id": 3}], "cursor": None, "has_more": False}),
-    ]
-    route = respx.get(f"{API}/workspaces/w/queries").mock(side_effect=pages)
-    rows = list(client.walk("workspaces/w/queries", max_rows=2))
-    assert len(rows) == 2
-    assert route.call_count == 1
-
-
-@respx.mock
 def test_walk_stops_when_has_more_is_false_even_with_a_cursor(client):
     """A server that leaves a stale cursor on the last page must not loop us forever."""
     route = respx.get(f"{API}/workspaces/w/queries").mock(
@@ -191,3 +177,14 @@ def test_walk_stops_when_has_more_is_false_even_with_a_cursor(client):
     )
     assert len(list(client.walk("workspaces/w/queries"))) == 1
     assert route.call_count == 1
+
+
+@respx.mock
+def test_a_redirect_is_followed_rather_than_returning_none(client):
+    """An `http://` host behind a TLS-terminating proxy answers 301. Unfollowed
+    that is a <400 response with no body, so callers got None and tripped."""
+    respx.get(f"{API}/me").mock(
+        return_value=httpx.Response(301, headers={"location": f"{API}/me/"})
+    )
+    respx.get(f"{API}/me/").mock(return_value=httpx.Response(200, json={"email": "a@b.c"}))
+    assert client.get("me") == {"email": "a@b.c"}

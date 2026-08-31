@@ -9,7 +9,6 @@ re-encoded.
 from __future__ import annotations
 
 import json
-import os
 
 import httpx
 import pytest
@@ -26,21 +25,6 @@ WS = f"{HOST}/api/workspaces/analytics"
 
 MANIFEST = {"metadata": {"invocation_id": "run-1"}, "nodes": {}}
 CATALOG_JSON = {"nodes": {"model.x": {"columns": {}}}}
-
-
-@pytest.fixture
-def logged_in(tmp_path, monkeypatch):
-    path = tmp_path / "config.toml"
-    path.write_text(
-        'default_profile = "default"\n\n[profile.default]\n'
-        f'host = "{HOST}"\ntoken = "dh_pat_x"\nworkspace = "analytics"\n',
-        encoding="utf-8",
-    )
-    os.chmod(path, 0o600)
-    monkeypatch.setenv("DH_CONFIG_FILE", str(path))
-    for var in ("DH_HOST", "DH_TOKEN", "DH_WORKSPACE", "DH_CATALOG", "DH_AGENT", "DH_PROFILE"):
-        monkeypatch.delenv(var, raising=False)
-    return path
 
 
 @pytest.fixture

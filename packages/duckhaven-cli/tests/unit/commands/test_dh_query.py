@@ -8,11 +8,11 @@ orphan it on an agent.
 from __future__ import annotations
 
 import json
-import os
 
 import httpx
 import pytest
 import respx
+from conftest import write_profile
 from typer.testing import CliRunner
 
 from dh import execute
@@ -26,21 +26,6 @@ HOST = "https://duckhaven.test"
 API = f"{HOST}/api"
 QID = "11111111-2222-3333-4444-555555555555"
 AGENT = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"
-
-
-@pytest.fixture
-def logged_in(tmp_path, monkeypatch):
-    path = tmp_path / "config.toml"
-    path.write_text(
-        'default_profile = "default"\n\n[profile.default]\n'
-        f'host = "{HOST}"\ntoken = "dh_pat_x"\nworkspace = "analytics"\nagent = "{AGENT}"\n',
-        encoding="utf-8",
-    )
-    os.chmod(path, 0o600)
-    monkeypatch.setenv("DH_CONFIG_FILE", str(path))
-    for var in ("DH_HOST", "DH_TOKEN", "DH_WORKSPACE", "DH_CATALOG", "DH_AGENT", "DH_PROFILE"):
-        monkeypatch.delenv(var, raising=False)
-    return path
 
 
 @pytest.fixture
@@ -74,6 +59,12 @@ def _mock_run(statuses=("done",), rows=None, total=None):
     respx.get(f"{API}/queries/{QID}/rows").mock(
         return_value=httpx.Response(200, json=_rows_page(body, None, total or len(body)))
     )
+
+
+@pytest.fixture
+def logged_in(tmp_path, monkeypatch):
+    """This module exercises agent resolution, so the profile names one."""
+    return write_profile(tmp_path, monkeypatch, agent=AGENT)
 
 
 # --- Duration parsing ------------------------------------------------------

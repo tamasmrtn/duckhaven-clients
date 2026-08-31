@@ -170,24 +170,6 @@ def render(
     return render_table(columns, rows, color=color)
 
 
-def write(
-    data: Any,
-    fmt: Format,
-    *,
-    cursor: str | None = None,
-    has_more: bool = False,
-    stream: TextIO | None = None,
-    color: bool | None = None,
-) -> None:
-    """Write a payload to stdout. Nothing else is ever written there."""
-    stream = stream or sys.stdout
-    if color is None:
-        color = color_enabled(stream)
-    body = render(data, fmt, cursor=cursor, has_more=has_more, color=color)
-    if body:
-        stream.write(body + "\n")
-
-
 def write_error(error: DhError, fmt: Format, *, stream: TextIO | None = None) -> None:
     """Write a failure to stderr, in JSON when JSON was asked for.
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 import sys
 from typing import Any
 
+import click
 import typer
 
 from dh import execute
@@ -35,7 +36,11 @@ def read_statements(read_line):
         prompt = "dh> " if not buffer else "..> "
         try:
             line = read_line(prompt)
-        except EOFError:
+        except (EOFError, click.Abort):
+            # `typer.prompt` turns end-of-input into click's Abort, not EOFError,
+            # so catching only the latter meant Ctrl-D -- the exit key the banner
+            # advertises -- escaped as an abort, exited 1, and discarded whatever
+            # was half-typed.
             if buffer:
                 yield "\n".join(buffer)
             return

@@ -283,3 +283,34 @@ def test_set_default_rejects_an_unknown_profile(cfg_path):
     _write(cfg_path, SAMPLE)
     with pytest.raises(ConfigError):
         config_mod.set_default(config_mod.load(), "nope")
+
+
+def test_control_characters_survive_the_round_trip(cfg_path):
+    """TOML forbids raw C0/DEL in a basic string. Writing one produced a file
+    `tomllib` refused, and because save replaces the whole file every later
+    invocation failed until someone hand-edited it."""
+    weird = 'a\x0cb\x7fc"d\\e\nf\tg\x01h'
+    config_mod.save(Config(path=cfg_path, profiles={"p": Profile(name="p", workspace=weird)}))
+    assert config_mod.load().profiles["p"].workspace == weird
+
+
+def test_a_failed_write_leaves_the_previous_config_intact(cfg_path, monkeypatch):
+    """Truncating in place would destroy every profile, and the tokens with
+    them, if anything interrupted the write."""
+    original = Config(
+        path=cfg_path,
+        default_profile="keep",
+        profiles={"keep": Profile(name="keep", host="https://x.invalid", token="dh_pat_keep")},
+    )
+    config_mod.save(original)
+
+    def _boom(*_args, **_kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(config_mod, "dumps", _boom)
+    with pytest.raises(OSError):
+        config_mod.save(Config(path=cfg_path, profiles={"other": Profile(name="other")}))
+
+    assert config_mod.load() == original
+    # And no temporary file was left behind.
+    assert [p.name for p in cfg_path.parent.iterdir()] == [cfg_path.name]

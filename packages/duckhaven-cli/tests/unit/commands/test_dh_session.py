@@ -8,7 +8,6 @@ reader looking for a missing session rather than a missing feature.
 from __future__ import annotations
 
 import json
-import os
 
 import httpx
 import pytest
@@ -30,21 +29,6 @@ SID = "aaaaaaaa-1111-2222-3333-444444444444"
 QID = "bbbbbbbb-1111-2222-3333-444444444444"
 
 DISABLED = {"error": "not_found", "message": "SQL sessions are not enabled"}
-
-
-@pytest.fixture
-def logged_in(tmp_path, monkeypatch):
-    path = tmp_path / "config.toml"
-    path.write_text(
-        'default_profile = "default"\n\n[profile.default]\n'
-        f'host = "{HOST}"\ntoken = "dh_pat_x"\nworkspace = "analytics"\n',
-        encoding="utf-8",
-    )
-    os.chmod(path, 0o600)
-    monkeypatch.setenv("DH_CONFIG_FILE", str(path))
-    for var in ("DH_HOST", "DH_TOKEN", "DH_WORKSPACE", "DH_CATALOG", "DH_AGENT", "DH_PROFILE"):
-        monkeypatch.delenv(var, raising=False)
-    return path
 
 
 # --- Lifecycle -------------------------------------------------------------
@@ -332,3 +316,101 @@ def test_the_fallback_loop_runs_each_statement_on_its_own(monkeypatch, capsys):
     )
     assert _run_loop(monkeypatch, None, ["select 1;"]) == 0
     assert '"rows"' in capsys.readouterr().out
+
+
+# --- Opening without orphaning ---------------------------------------------
+
+
+@respx.mock
+def test_open_asks_the_server_for_a_hold_shorter_than_the_socket_timeout(logged_in, monkeypatch):
+    """A server-side block longer than the client's socket timeout aborts the
+    request while the server goes on to open a session nobody holds."""
+    monkeypatch.setattr("dh.commands.session.time.sleep", lambda _s: None)
+    respx.get(f"{API}/agents").mock(return_value=httpx.Response(200, json=[]))
+    route = respx.post(f"{WS}/sql/sessions").mock(
+        return_value=httpx.Response(201, json={"id": SID, "status": "open"})
+    )
+    runner.invoke(app, ["session", "open", "--wait", "300"])
+    body = json.loads(route.calls[0].request.content)
+    assert body["wait_timeout_s"] <= 10.0
+    # `continue` so a slow open hands back the id rather than failing.
+    assert body["on_wait_timeout"] == "continue"
+
+
+@respx.mock
+def test_open_polls_a_pending_session_to_open(logged_in, monkeypatch):
+    monkeypatch.setattr("dh.commands.session.time.sleep", lambda _s: None)
+    respx.get(f"{API}/agents").mock(return_value=httpx.Response(200, json=[]))
+    respx.post(f"{WS}/sql/sessions").mock(
+        return_value=httpx.Response(202, json={"id": SID, "status": "pending"})
+    )
+    respx.get(f"{API}/sql/sessions/{SID}").mock(
+        side_effect=[
+            httpx.Response(200, json={"id": SID, "status": "opening"}),
+            httpx.Response(200, json={"id": SID, "status": "open"}),
+        ]
+    )
+    result = runner.invoke(app, ["--format", "json", "session", "open"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["data"]["status"] == "open"
+
+
+@respx.mock
+def test_open_no_wait_does_not_hold_the_request_at_all(logged_in):
+    """Its help says it returns a pending session; it used to hold for 300s."""
+    respx.get(f"{API}/agents").mock(return_value=httpx.Response(200, json=[]))
+    route = respx.post(f"{WS}/sql/sessions").mock(
+        return_value=httpx.Response(202, json={"id": SID, "status": "pending"})
+    )
+    polled = respx.get(f"{API}/sql/sessions/{SID}").mock(
+        return_value=httpx.Response(200, json={"id": SID, "status": "open"})
+    )
+    result = runner.invoke(app, ["session", "open", "--no-wait"])
+    assert result.exit_code == 0
+    assert json.loads(route.calls[0].request.content)["wait_timeout_s"] == 0.0
+    assert not polled.called
+
+
+@respx.mock
+def test_open_hands_back_a_still_starting_session_rather_than_orphaning_it(logged_in, monkeypatch):
+    """The id is already in hand, so a timeout leaves something closable."""
+    monkeypatch.setattr("dh.commands.session.time.sleep", lambda _s: None)
+    respx.get(f"{API}/agents").mock(return_value=httpx.Response(200, json=[]))
+    respx.post(f"{WS}/sql/sessions").mock(
+        return_value=httpx.Response(202, json={"id": SID, "status": "pending"})
+    )
+    respx.get(f"{API}/sql/sessions/{SID}").mock(
+        return_value=httpx.Response(200, json={"id": SID, "status": "pending"})
+    )
+    result = runner.invoke(app, ["--format", "json", "session", "open", "--wait", "0"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["data"]["id"] == SID
+    assert "dh session get" in result.output
+
+
+# --- Ctrl-D ----------------------------------------------------------------
+
+
+def test_end_of_input_ends_the_shell_cleanly():
+    """`typer.prompt` raises click's Abort, not EOFError; catching only the
+    latter meant Ctrl-D -- the exit key the banner advertises -- exited 1."""
+    import click
+
+    def _abort(_prompt):
+        raise click.Abort
+
+    assert list(repl.read_statements(_abort)) == []
+
+
+def test_a_buffered_statement_survives_end_of_input():
+    """Ending input mid-statement should run what was typed, not discard it."""
+    import click
+
+    lines = ["select 1,"]
+
+    def _read(_prompt):
+        if lines:
+            return lines.pop(0)
+        raise click.Abort
+
+    assert list(repl.read_statements(_read)) == ["select 1,"]

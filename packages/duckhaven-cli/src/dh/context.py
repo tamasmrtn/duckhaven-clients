@@ -15,6 +15,7 @@ from typing import Any
 import typer
 
 from dh import config as config_mod
+from dh.errors import DhError
 from dh.output import Format, color_enabled, default_format, render
 from dh.resolve import Settings, resolve
 from dh.rest import RestClient
@@ -40,17 +41,18 @@ class CliContext:
     def emit(self, data: Any, *, cursor: str | None = None, has_more: bool = False) -> None:
         """Write a payload to stdout, or to ``--output`` when one was given."""
         fmt = self.format()
+        # A file gets no escape codes regardless of where stdout points; rendering
+        # once with the right colour setting avoids doing the work twice.
+        to_file = self.output is not None
         body = render(
             data,
             fmt,
             cursor=cursor,
             has_more=has_more,
-            color=color_enabled(sys.stdout, no_color=self.no_color),
+            color=False if to_file else color_enabled(sys.stdout, no_color=self.no_color),
         )
-        if self.output is not None:
-            # A file gets no escape codes regardless of where stdout points.
-            plain = render(data, fmt, cursor=cursor, has_more=has_more, color=False)
-            self.output.write_text(plain + "\n", encoding="utf-8")
+        if to_file:
+            self.output.write_text(body + "\n", encoding="utf-8")
             return
         if body:
             sys.stdout.write(body + "\n")
@@ -73,6 +75,31 @@ class CliContext:
         """
         if self.debug_enabled:
             typer.echo(f"[dh] {message}", err=True)
+
+    def page(
+        self,
+        client,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        limit: int | None = None,
+        fetch_all: bool = False,
+        translate=None,
+    ) -> None:
+        """Emit one page of a collection, or every page under ``--all``.
+
+        The same six lines appeared in every list command. ``translate`` lets a
+        caller reshape an error before it surfaces -- the session routes use it to
+        turn the disabled-surface 404 into something actionable.
+        """
+        try:
+            if fetch_all:
+                self.emit(list(client.walk(path, params=params, limit=limit)))
+                return
+            rows, cursor, has_more = client.collect(path, params=params, limit=limit)
+        except DhError as exc:
+            raise (translate(exc) if translate else exc) from exc
+        self.emit(rows, cursor=cursor, has_more=has_more)
 
     def note(self, message: str) -> None:
         """A diagnostic for a person, on stderr. Silenced by ``-q``.

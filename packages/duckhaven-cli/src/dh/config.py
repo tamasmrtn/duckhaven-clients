@@ -160,13 +160,23 @@ def save(config: Config) -> None:
     """
     path = config.path
     path.parent.mkdir(parents=True, exist_ok=True, mode=_DIR_MODE)
-    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, _FILE_MODE)
-    with os.fdopen(fd, "w", encoding="utf-8") as handle:
-        handle.write(dumps(config))
-    # An existing file keeps whatever mode it already had -- O_CREAT only applies
-    # to a file this call creates -- so tighten it explicitly.
-    if os.name != "nt":  # pragma: no branch - POSIX modes do not apply on Windows
-        os.chmod(path, _FILE_MODE)
+    # Write beside the target and rename over it. Truncating in place means a
+    # crash, a full disk or an interrupt between truncate and write destroys
+    # every profile and the tokens with them; `os.replace` is atomic on POSIX and
+    # Windows alike, so the file is either the old one or the new one.
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, _FILE_MODE)
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(dumps(config))
+            handle.flush()
+            os.fsync(handle.fileno())
+        if os.name != "nt":  # pragma: no branch - POSIX modes do not apply on Windows
+            os.chmod(tmp, _FILE_MODE)
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def dumps(config: Config) -> str:
@@ -191,6 +201,15 @@ def dumps(config: Config) -> str:
     return "\n".join(lines).rstrip("\n") + "\n"
 
 
+#: The escapes TOML spells out; everything else in C0/DEL becomes \\uXXXX.
+_SHORT_ESCAPES = {
+    "\\": "\\\\",
+    '"': '\\"',
+    "\n": "\\n",
+    "\r": "\\r",
+    "\t": "\\t",
+}
+
 _BARE_KEY = set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-")
 
 
@@ -199,10 +218,28 @@ def _key(name: str) -> str:
     return name if name and set(name) <= _BARE_KEY else _quote(name)
 
 
+#: The escapes TOML spells out. Everything else in C0/DEL becomes \uXXXX.
+_SHORT_ESCAPES = {"\\": "\\\\", '"': '\\"', "\n": "\\n", "\r": "\\r", "\t": "\\t"}
+
+
 def _quote(value: str) -> str:
-    escaped = value.replace("\\", "\\\\").replace('"', '\\"')
-    escaped = escaped.replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-    return f'"{escaped}"'
+    """A TOML basic string.
+
+    TOML forbids raw U+0000-U+0008, U+000B-U+001F and U+007F in a basic string,
+    so anything in those ranges is escaped rather than written through. Emitting
+    one produced a file `tomllib` then refused to read -- and because `save`
+    replaces the whole file, every later `dh` invocation failed with
+    `config_invalid` until someone hand-edited it.
+    """
+    out = []
+    for char in value:
+        if char in _SHORT_ESCAPES:
+            out.append(_SHORT_ESCAPES[char])
+        elif char < " " or char == "\x7f":
+            out.append(f"\\u{ord(char):04X}")
+        else:
+            out.append(char)
+    return '"' + "".join(out) + '"'
 
 
 def upsert(config: Config, profile: Profile) -> Config:

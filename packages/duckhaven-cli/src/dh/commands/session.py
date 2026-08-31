@@ -18,6 +18,8 @@ to start.
 
 from __future__ import annotations
 
+import time
+
 import typer
 
 from dh import context, execute
@@ -27,6 +29,15 @@ app = typer.Typer(name="session", help="Stateful SQL sessions, for dbt, dlt and 
 
 #: Long enough to cover an elastic cold start, which is what the wait is for.
 _DEFAULT_WAIT = 300.0
+
+#: How long the *server* is asked to hold the request before answering.
+#:
+#: It must stay under the client's socket timeout: a longer server-side block
+#: aborts the request socket-side while the server goes on to open a session
+#: nobody holds. The connector in this workspace documents the same hazard. Any
+#: remaining wait is spent polling instead, which is interruptible and leaves the
+#: session id in hand.
+_SERVER_HOLD_S = 10.0
 
 
 class SessionsDisabled(DhError):
@@ -62,9 +73,11 @@ def open_session(
     """
     cli = context.of(ctx)
     settings = cli.settings()
+    # `--no-wait` must not hold the request at all; otherwise ask the server for a
+    # short hold and poll out the rest ourselves.
     body: dict[str, object] = {
-        "wait_timeout_s": wait,
-        "on_wait_timeout": "continue" if no_wait else "cancel",
+        "wait_timeout_s": 0.0 if no_wait else min(wait, _SERVER_HOLD_S),
+        "on_wait_timeout": "continue",
     }
     if catalog or settings.get("catalog"):
         body["catalog"] = catalog or settings.get("catalog")
@@ -78,8 +91,32 @@ def open_session(
             )
         except DhError as exc:
             raise _translate(exc) from exc
+        if not no_wait:
+            session = _await_open(cli, client, session, deadline=wait)
     cli.note(f"Session {session['id']} is {session.get('status')}.")
     cli.emit(session)
+
+
+def _await_open(cli, client, session: dict, *, deadline: float) -> dict:
+    """Poll a pending session to `open`, or hand back whatever it reached.
+
+    `on_wait_timeout=continue` means the server answers with a session still
+    starting rather than failing, so the id is already in hand -- an interrupt or
+    a timeout here leaves something the caller can close, not an orphan.
+    """
+    started = time.monotonic()
+    delay = 0.5
+    while session.get("status") in ("pending", "opening"):
+        if time.monotonic() - started >= deadline:
+            cli.note(
+                f"Session {session['id']} is still {session.get('status')}; "
+                "poll it with `dh session get`."
+            )
+            return session
+        time.sleep(min(delay, 2.0))
+        delay *= 1.5
+        session = client.get(f"sql/sessions/{session['id']}")
+    return session
 
 
 @app.command("list")
@@ -94,14 +131,7 @@ def list_sessions(
     path = f"workspaces/{settings.require('workspace')}/sql/sessions"
     params = {"status": status or None}
     with cli.client(settings) as client:
-        try:
-            if fetch_all:
-                cli.emit(list(client.walk(path, params=params)))
-                return
-            rows, cursor, has_more = client.collect(path, params=params)
-        except DhError as exc:
-            raise _translate(exc) from exc
-    cli.emit(rows, cursor=cursor, has_more=has_more)
+        cli.page(client, path, params=params, fetch_all=fetch_all, translate=_translate)
 
 
 @app.command("get")
@@ -177,11 +207,4 @@ def list_statements(
     cli = context.of(ctx)
     path = f"sql/sessions/{session_id}/statements"
     with cli.client() as client:
-        try:
-            if fetch_all:
-                cli.emit(list(client.walk(path)))
-                return
-            rows, cursor, has_more = client.collect(path)
-        except DhError as exc:
-            raise _translate(exc) from exc
-    cli.emit(rows, cursor=cursor, has_more=has_more)
+        cli.page(client, path, fetch_all=fetch_all, translate=_translate)

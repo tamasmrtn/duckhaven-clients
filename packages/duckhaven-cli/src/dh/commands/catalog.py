@@ -190,12 +190,21 @@ def create_catalog(
 
 
 @catalog_app.command("attach")
-def attach_catalog(ctx: typer.Context, catalog: str) -> None:
+def attach_catalog(
+    ctx: typer.Context,
+    catalog: str,
+    make_default: bool = typer.Option(
+        False, "--default", help="Also make it the workspace's default catalog."
+    ),
+) -> None:
     """Attach an existing catalog to the workspace."""
     cli = context.of(ctx)
     settings = cli.settings()
+    body = {"make_default": True} if make_default else None
     with cli.client(settings) as client:
-        cli.emit(client.put(f"workspaces/{settings.require('workspace')}/catalogs/{catalog}"))
+        cli.emit(
+            client.put(f"workspaces/{settings.require('workspace')}/catalogs/{catalog}", json=body)
+        )
 
 
 @catalog_app.command("detach")

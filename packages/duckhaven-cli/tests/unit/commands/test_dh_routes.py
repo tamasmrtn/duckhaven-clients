@@ -8,11 +8,10 @@ path fails here; behaviour worth more than a URL check has its own test file.
 
 from __future__ import annotations
 
-import os
-
 import httpx
 import pytest
 import respx
+from conftest import write_profile
 from typer.testing import CliRunner
 
 from dh.main import app
@@ -28,17 +27,8 @@ ID = "44444444-4444-4444-4444-444444444444"
 
 @pytest.fixture
 def logged_in(tmp_path, monkeypatch):
-    path = tmp_path / "config.toml"
-    path.write_text(
-        'default_profile = "default"\n\n[profile.default]\n'
-        f'host = "{HOST}"\ntoken = "dh_pat_x"\nworkspace = "analytics"\ncatalog = "main"\n',
-        encoding="utf-8",
-    )
-    os.chmod(path, 0o600)
-    monkeypatch.setenv("DH_CONFIG_FILE", str(path))
-    for var in ("DH_HOST", "DH_TOKEN", "DH_WORKSPACE", "DH_CATALOG", "DH_AGENT", "DH_PROFILE"):
-        monkeypatch.delenv(var, raising=False)
-    return path
+    """Table and grant routes need a catalog to build a URL from."""
+    return write_profile(tmp_path, monkeypatch, catalog="main")
 
 
 #: (argv, method, url). One row per command whose whole job is one request.

@@ -19,11 +19,7 @@ schedule_app = typer.Typer(name="schedule", help="Cron schedules for saved queri
 def _paged(cli, path: str, *, params=None, limit=None, fetch_all=False) -> None:
     """List through the shared envelope, whichever shape the endpoint returns."""
     with cli.client() as client:
-        if fetch_all:
-            cli.emit(list(client.walk(path, params=params, limit=limit)))
-            return
-        rows, cursor, has_more = client.collect(path, params=params, limit=limit)
-    cli.emit(rows, cursor=cursor, has_more=has_more)
+        cli.page(client, path, params=params, limit=limit, fetch_all=fetch_all)
 
 
 # --- Saved queries ---------------------------------------------------------

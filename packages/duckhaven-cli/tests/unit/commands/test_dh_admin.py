@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import os
 
 import httpx
 import pytest
@@ -20,21 +19,6 @@ API = f"{HOST}/api"
 SA = "11111111-1111-1111-1111-111111111111"
 AGENT = "22222222-2222-2222-2222-222222222222"
 USER = "33333333-3333-3333-3333-333333333333"
-
-
-@pytest.fixture
-def logged_in(tmp_path, monkeypatch):
-    path = tmp_path / "config.toml"
-    path.write_text(
-        'default_profile = "default"\n\n[profile.default]\n'
-        f'host = "{HOST}"\ntoken = "dh_pat_x"\nworkspace = "analytics"\n',
-        encoding="utf-8",
-    )
-    os.chmod(path, 0o600)
-    monkeypatch.setenv("DH_CONFIG_FILE", str(path))
-    for var in ("DH_HOST", "DH_TOKEN", "DH_WORKSPACE", "DH_CATALOG", "DH_AGENT", "DH_PROFILE"):
-        monkeypatch.delenv(var, raising=False)
-    return path
 
 
 def _data(result):
@@ -251,3 +235,20 @@ def test_api_errors_still_use_the_taxonomy(logged_in):
     )
     result = runner.invoke(app, ["api", "get", "nope"])
     assert result.exit_code == ExitCode.NOT_FOUND
+
+
+# --- dh api: bodies that are not JSON --------------------------------------
+
+
+@respx.mock
+def test_api_returns_a_non_json_body_verbatim(logged_in):
+    """`/metrics` is Prometheus text and the assistant route streams SSE. Both
+    are reachable only here, so a raw body is the answer, not a crash."""
+    respx.get(f"{API}/metrics").mock(
+        return_value=httpx.Response(
+            200, text="# HELP up\nup 1\n", headers={"content-type": "text/plain"}
+        )
+    )
+    result = runner.invoke(app, ["--format", "json", "api", "get", "metrics"])
+    assert result.exit_code == 0
+    assert "up 1" in json.loads(result.stdout)["data"]

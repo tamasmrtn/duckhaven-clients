@@ -24,7 +24,6 @@ from dh.output import (
     render,
     render_csv,
     render_table,
-    write,
     write_error,
 )
 
@@ -224,13 +223,6 @@ def test_csv_renders_null_the_same_way_the_table_does():
 
 
 # --- Writing ---------------------------------------------------------------
-
-
-def test_write_appends_exactly_one_newline():
-    stream = FakeStream(tty=False)
-    write([{"a": 1}], Format.TABLE, stream=stream, color=False)
-    assert stream.getvalue().endswith("\n")
-    assert not stream.getvalue().endswith("\n\n")
 
 
 def test_write_error_is_plain_text_for_a_table_run():

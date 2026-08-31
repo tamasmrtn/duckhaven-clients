@@ -72,7 +72,7 @@ def login(
     if token:
         secret, expires_at = token, None
     else:
-        secret, expires_at = _mint_token(cli, base, email, expires_in_days)
+        secret, expires_at = _mint_token(base, email, expires_in_days)
 
     # Verify before writing: a profile holding a token that does not work is worse
     # than no profile, because the next failure looks like a server problem.
@@ -102,7 +102,7 @@ def login(
     )
 
 
-def _mint_token(cli, base: str, email: str | None, expires_in_days: int) -> tuple[str, str | None]:
+def _mint_token(base: str, email: str | None, expires_in_days: int) -> tuple[str, str | None]:
     """Sign in with a password and exchange the session for a PAT.
 
     One client for the whole exchange, because httpx keeps the session cookie on
@@ -241,9 +241,8 @@ def revoke_token(ctx: typer.Context, pat_id: str) -> None:
 def logout(ctx: typer.Context, profile_name: str = typer.Option(None, "--name")) -> None:
     """Forget the stored token, keeping the rest of the profile.
 
-    Local only. The token stays valid server-side until it expires or an
-    administrator revokes it -- `dh` cannot revoke its own credential, because
-    the API has no endpoint for a caller to revoke their own PAT.
+    Local only: the token stays valid server-side until it expires. To retire
+    it as well, run `dh auth revoke <id>` first -- `dh auth tokens` shows the id.
     """
     cli = context.of(ctx)
     cfg = config_mod.load()

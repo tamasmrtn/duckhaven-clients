@@ -13,7 +13,6 @@ from __future__ import annotations
 
 import re
 import time
-from collections.abc import Callable
 from typing import Any
 
 from dh.errors import ConflictError, DhError, QueryFailed
@@ -79,7 +78,6 @@ def wait(
     query_id: str,
     *,
     timeout: float,
-    on_poll: Callable[[dict[str, Any]], None] | None = None,
 ) -> dict[str, Any]:
     """Poll until the query reaches a terminal status, cancelling on Ctrl-C.
 
@@ -94,8 +92,6 @@ def wait(
             query = client.get(f"queries/{query_id}")
             if query.get("status") in TERMINAL:
                 return query
-            if on_poll:
-                on_poll(query)
             if time.monotonic() >= deadline:
                 cancel(client, query_id)
                 raise DhTimeoutError(

@@ -3,10 +3,8 @@
 from __future__ import annotations
 
 import json
-import os
 
 import httpx
-import pytest
 import respx
 from typer.testing import CliRunner
 
@@ -19,21 +17,6 @@ HOST = "https://duckhaven.test"
 API = f"{HOST}/api"
 WS = f"{API}/workspaces/analytics"
 SQ = "99999999-8888-7777-6666-555555555555"
-
-
-@pytest.fixture
-def logged_in(tmp_path, monkeypatch):
-    path = tmp_path / "config.toml"
-    path.write_text(
-        'default_profile = "default"\n\n[profile.default]\n'
-        f'host = "{HOST}"\ntoken = "dh_pat_x"\nworkspace = "analytics"\n',
-        encoding="utf-8",
-    )
-    os.chmod(path, 0o600)
-    monkeypatch.setenv("DH_CONFIG_FILE", str(path))
-    for var in ("DH_HOST", "DH_TOKEN", "DH_WORKSPACE", "DH_CATALOG", "DH_AGENT", "DH_PROFILE"):
-        monkeypatch.delenv(var, raising=False)
-    return path
 
 
 def _data(result):

@@ -46,7 +46,6 @@ WANT: dict[str, set[str]] = {
     "/queries/{query_id}": {"get", "delete"},
     "/queries/{query_id}/rows": {"get"},
     "/queries/{query_id}/profile": {"get"},
-    "/workspaces/{workspace}/sql-metadata": {"get"},
     # Saved queries and schedules
     "/workspaces/{workspace}/saved-queries": {"get", "post"},
     "/workspaces/{workspace}/saved-queries/{saved_query_id}": {"patch", "delete"},

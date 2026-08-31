@@ -34,11 +34,7 @@ def list_service_accounts(ctx: typer.Context, fetch_all: bool = typer.Option(Fal
     """Service accounts and how many live tokens each holds."""
     cli = context.of(ctx)
     with cli.client() as client:
-        if fetch_all:
-            cli.emit(list(client.walk("admin/service-accounts")))
-            return
-        rows, cursor, has_more = client.collect("admin/service-accounts")
-    cli.emit(rows, cursor=cursor, has_more=has_more)
+        cli.page(client, "admin/service-accounts", fetch_all=fetch_all)
 
 
 @sa_app.command("create")
@@ -96,7 +92,7 @@ def issue_pat(
     ctx: typer.Context,
     service_account_id: str,
     expires_in_days: int = typer.Option(
-        90, "--expires-in-days", help="Omit --expires-in-days=0 for a token that never expires."
+        90, "--expires-in-days", help="Pass 0 for a token that never expires."
     ),
 ):
     """Issue a token for a service account. The secret is shown once.
@@ -138,11 +134,7 @@ def list_users(ctx: typer.Context, fetch_all: bool = typer.Option(False, "--all"
     """People known to the deployment."""
     cli = context.of(ctx)
     with cli.client() as client:
-        if fetch_all:
-            cli.emit(list(client.walk("admin/users")))
-            return
-        rows, cursor, has_more = client.collect("admin/users")
-    cli.emit(rows, cursor=cursor, has_more=has_more)
+        cli.page(client, "admin/users", fetch_all=fetch_all)
 
 
 @user_app.command("create")

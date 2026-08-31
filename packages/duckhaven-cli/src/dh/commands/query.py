@@ -239,8 +239,4 @@ def list_queries(
     }
     path = f"workspaces/{settings.require('workspace')}/queries"
     with cli.client(settings) as client:
-        if fetch_all:
-            cli.emit(list(client.walk(path, params=params, limit=limit)))
-            return
-        rows, cursor, has_more = client.collect(path, params=params, limit=limit)
-    cli.emit(rows, cursor=cursor, has_more=has_more)
+        cli.page(client, path, params=params, limit=limit, fetch_all=fetch_all)

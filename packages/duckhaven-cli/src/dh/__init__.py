@@ -1,8 +1,10 @@
 """`dh` — the DuckHaven command-line interface.
 
 A pure HTTP client of DuckHaven's public REST API, authenticating with a Personal
-Access Token. The SQL execution path is delegated to ``duckhaven-sql-connector``;
-everything else is served by this package's own REST layer.
+Access Token. The interactive REPL holds a session through
+``duckhaven-sql-connector``; everything else, one-shot ``dh sql`` included, goes
+over the REST API directly -- the one-shot query route is the one that works when
+SQL sessions are disabled, and the connector does not expose it.
 """
 
 try:  # populated by hatch-vcs at build time

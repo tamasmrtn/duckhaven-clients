@@ -52,7 +52,14 @@ class RestClient:
         if token:
             headers["Authorization"] = f"Bearer {token}"
         self._client = httpx.Client(
-            timeout=timeout, verify=verify, transport=transport, headers=headers
+            timeout=timeout,
+            verify=verify,
+            transport=transport,
+            headers=headers,
+            # A host given as `http://` behind a TLS-terminating proxy answers 301.
+            # Unfollowed that is a <400 response with no body, so the caller got
+            # `None` and tripped over it rather than reaching the API.
+            follow_redirects=True,
         )
 
     def __enter__(self) -> RestClient:
@@ -103,7 +110,13 @@ class RestClient:
             raise from_status(response.status_code, _body(response))
         if response.status_code == 204 or not response.content:
             return None
-        return response.json()
+        try:
+            return response.json()
+        except ValueError:
+            # `/metrics` is Prometheus text and the assistant route streams SSE.
+            # Both are reachable only through `dh api`, so hand the body back
+            # rather than failing outside the error taxonomy it advertises.
+            return response.text
 
     def get(self, path: str, **kwargs: Any) -> Any:
         return self.request("GET", path, **kwargs)
@@ -151,7 +164,6 @@ class RestClient:
         *,
         params: dict[str, Any] | None = None,
         limit: int | None = None,
-        max_rows: int | None = None,
     ) -> Iterator[Any]:
         """Every row of a collection, following ``cursor`` to the end.
 
@@ -160,17 +172,12 @@ class RestClient:
         has no cursor and simply yields once.
         """
         cursor: str | None = None
-        yielded = 0
         while True:
             page_params = dict(params or {})
             if cursor:
                 page_params["cursor"] = cursor
             rows, cursor, has_more = self.collect(path, params=page_params, limit=limit)
-            for row in rows:
-                yield row
-                yielded += 1
-                if max_rows is not None and yielded >= max_rows:
-                    return
+            yield from rows
             if not cursor or not has_more or not rows:
                 return
 
