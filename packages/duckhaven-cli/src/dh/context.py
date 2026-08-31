@@ -27,6 +27,7 @@ class CliContext:
     output: Path | None = None
     quiet: bool = False
     no_color: bool = False
+    debug_enabled: bool = False
 
     def format(self) -> Format:
         """The chosen format, or the TTY-derived default."""
@@ -63,6 +64,15 @@ class CliContext:
         """
         settings = settings or self.settings()
         return RestClient(settings.require("host"), settings.require("token"))
+
+    def debug(self, message: str) -> None:
+        """A trace line, shown only under `--debug`.
+
+        Which catalog was resolved belongs here: a wrong default reads the wrong
+        data silently, and this is how someone finds out which one was used.
+        """
+        if self.debug_enabled:
+            typer.echo(f"[dh] {message}", err=True)
 
     def note(self, message: str) -> None:
         """A diagnostic for a person, on stderr. Silenced by ``-q``.

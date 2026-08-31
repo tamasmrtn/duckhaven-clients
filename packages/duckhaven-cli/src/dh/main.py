@@ -16,6 +16,7 @@ from typer.core import TyperGroup
 
 from dh import __version__
 from dh.commands import auth as auth_commands
+from dh.commands import catalog as catalog_commands
 from dh.commands import health as health_commands
 from dh.commands import profile as profile_commands
 from dh.commands import query as query_commands
@@ -63,6 +64,10 @@ app.command("sql")(query_commands.sql)
 app.add_typer(saved_commands.saved_app)
 app.add_typer(saved_commands.schedule_app)
 app.command("search")(saved_commands.search)
+app.add_typer(catalog_commands.workspace_app)
+app.add_typer(catalog_commands.catalog_app)
+app.add_typer(catalog_commands.schema_app)
+app.add_typer(catalog_commands.table_app)
 
 
 def _version_callback(value: bool) -> None:
@@ -95,6 +100,7 @@ def main(
     ),
     quiet: bool = typer.Option(False, "--quiet", help="Suppress progress and warnings."),
     no_color: bool = typer.Option(False, "--no-color", help="Disable colour. See also NO_COLOR."),
+    debug: bool = typer.Option(False, "--debug", help="Trace resolution and requests on stderr."),
     _version: bool = typer.Option(
         False,
         "--version",
@@ -117,6 +123,7 @@ def main(
         output=output,
         quiet=quiet,
         no_color=no_color,
+        debug_enabled=debug,
     )
 
 
@@ -159,6 +166,7 @@ GLOBAL_OPTIONS = {
     "--output": True,
     "--quiet": False,
     "--no-color": False,
+    "--debug": False,
     "--version": False,
 }
 
