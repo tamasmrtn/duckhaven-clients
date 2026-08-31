@@ -12,7 +12,7 @@ import sys
 
 import typer
 
-from dh import context, execute
+from dh import context, execute, repl
 from dh.errors import ConflictError
 
 app = typer.Typer(name="query", help="Run SQL and inspect past runs.")
@@ -48,6 +48,9 @@ def _run(
     cli = context.of(ctx)
     settings = cli.settings()
     workspace = settings.require("workspace")
+    if not (query or file or stdin) and repl.is_interactive():
+        # No SQL and a terminal: the user wants a shell, not a usage error.
+        raise typer.Exit(repl.run(cli, settings, agent=agent))
     sql = _read_sql(query, file, stdin)
     budget = execute.parse_duration(timeout)
 

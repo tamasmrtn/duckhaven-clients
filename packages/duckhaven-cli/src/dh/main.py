@@ -23,6 +23,7 @@ from dh.commands import health as health_commands
 from dh.commands import profile as profile_commands
 from dh.commands import query as query_commands
 from dh.commands import saved as saved_commands
+from dh.commands import session as session_commands
 from dh.context import CliContext
 from dh.errors import DhError, ExitCode
 from dh.output import Format, default_format, write_error
@@ -73,6 +74,7 @@ app.add_typer(catalog_commands.table_app)
 app.add_typer(grant_commands.app)
 app.add_typer(dbt_commands.lineage_app)
 app.add_typer(dbt_commands.semantic_app)
+app.add_typer(session_commands.app)
 
 
 def _version_callback(value: bool) -> None:
