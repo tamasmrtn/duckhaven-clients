@@ -1,4 +1,4 @@
-.PHONY: sync lint fmt fmt-check test test-cov build check-dist clean
+.PHONY: sync lint fmt fmt-check test test-cov test-cli build check-dist clean
 
 sync:
 	uv sync
@@ -17,6 +17,10 @@ test:
 
 test-cov:
 	uv run pytest --cov=duckhaven_sql_connector --cov-report=term-missing --cov-fail-under=90
+
+test-cli:
+	uv run pytest packages/duckhaven-cli/tests/unit \
+		--cov=dh --cov-report=term-missing --cov-fail-under=90
 
 # Live tests against a real DuckHaven; needs DUCKHAVEN_TEST_HOST/WORKSPACE/PAT.
 test-integration:

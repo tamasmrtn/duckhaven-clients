@@ -1,0 +1,64 @@
+[project]
+name = "duckhaven-cli"
+description = "dh — the command-line interface for DuckHaven"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "DuckHaven" }]
+keywords = ["duckhaven", "cli", "duckdb", "iceberg", "lakehouse"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Database",
+    "Topic :: Utilities",
+    "Typing :: Typed",
+]
+dependencies = [
+    "typer>=0.15",
+    "httpx>=0.28",
+    # The SQL execution path (sessions, statements, polling, row pagination) is the
+    # connector's, not a second implementation of it.
+    "duckhaven-sql-connector>=0.4.1",
+    # tomllib is stdlib only from 3.11; the workspace floor is 3.10.
+    "tomli>=2.0; python_version < '3.11'",
+]
+dynamic = ["version"]
+
+[project.scripts]
+dh = "dh.main:run"
+
+[project.urls]
+Homepage = "https://github.com/tamasmrtn/duckhaven-clients"
+Source = "https://github.com/tamasmrtn/duckhaven-clients"
+
+[tool.uv.sources]
+duckhaven-sql-connector = { workspace = true }
+
+[build-system]
+requires = ["hatchling", "hatch-vcs"]
+build-backend = "hatchling.build"
+
+# Version comes from git tags with a per-package prefix (duckhaven-cli-vX.Y.Z), so every
+# member versions independently from the same workspace repo. See the connector's
+# pyproject for why describe_command is scoped to this prefix.
+[tool.hatch.version]
+source = "vcs"
+raw-options = { root = "../..", tag_regex = "^duckhaven-cli-v(?P<version>.+)$", scm = { git = { describe_command = "git describe --dirty --tags --long --abbrev=40 --match duckhaven-cli-v*" } }, fallback_version = "0.0.0" }
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/dh/_version.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/dh"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src", "README.md", "CHANGELOG.md"]
