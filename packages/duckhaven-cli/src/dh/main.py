@@ -17,6 +17,7 @@ from typer.core import TyperGroup
 from dh import __version__
 from dh.commands import auth as auth_commands
 from dh.commands import catalog as catalog_commands
+from dh.commands import dbt as dbt_commands
 from dh.commands import grant as grant_commands
 from dh.commands import health as health_commands
 from dh.commands import profile as profile_commands
@@ -70,6 +71,8 @@ app.add_typer(catalog_commands.catalog_app)
 app.add_typer(catalog_commands.schema_app)
 app.add_typer(catalog_commands.table_app)
 app.add_typer(grant_commands.app)
+app.add_typer(dbt_commands.lineage_app)
+app.add_typer(dbt_commands.semantic_app)
 
 
 def _version_callback(value: bool) -> None:
