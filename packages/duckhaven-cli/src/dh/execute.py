@@ -36,11 +36,7 @@ _UNITS = {"": 1, "s": 1, "m": 60, "h": 3600}
 
 
 def parse_duration(value: str) -> float:
-    """Seconds from `30`, `30s`, `20m` or `1h`.
-
-    `databricks` takes the same shapes on its `--timeout`, and a bare number
-    meaning seconds is what people type when they have not read the help.
-    """
+    """Seconds from `30`, `30s`, `20m` or `1h`."""
     match = _DURATION.match(value)
     if not match:
         raise ConflictError(

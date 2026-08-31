@@ -9,10 +9,7 @@ A flat TOML document holding one table per profile:
     token     = "dh_pat_..."
     workspace = "analytics"
 
-It holds a live credential, so the permission rules here are not advisory. `snow`
-checks its own config's permissions only when an env feature flag is set, which
-means the safe behaviour is the one nobody turns on; this module refuses outright
-and says how to fix it.
+It holds a live credential, so the permission rules here are not advisory.
 """
 
 from __future__ import annotations

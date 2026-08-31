@@ -1,10 +1,4 @@
-"""Settings resolution: flag, then environment, then profile, then default.
-
-The chain is the one `snow` and `databricks` both converged on, and it is the part
-of a CLI users most often cannot reason about from the outside -- which is why every
-value carries the source it came from. `databricks auth describe` is the best idea in
-either tool for exactly this reason, and :func:`describe` is its counterpart here.
-"""
+"""Settings resolution: flag, then environment, then profile, then default."""
 
 from __future__ import annotations
 

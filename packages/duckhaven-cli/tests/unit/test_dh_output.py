@@ -1,8 +1,7 @@
 """The output contract.
 
 The envelope shape is a promise to CI, so it is asserted literally rather than
-described. The "no glyphs" and "errors are JSON too" cases are the two defects
-observed in `snow` that this layer exists to avoid.
+described.
 """
 
 from __future__ import annotations
@@ -106,7 +105,6 @@ def test_the_no_color_flag_wins_without_the_variable(monkeypatch):
 
 
 def test_a_table_has_no_box_drawing_characters():
-    """`snow` emits them even when redirected to a file."""
     out = render_table(["id", "name"], [[1, "a"], [2, "bb"]])
     assert not set(out) & set("│─╭╮╰╯┌┐└┘├┤┬┴┼")
 
@@ -232,7 +230,6 @@ def test_write_error_is_plain_text_for_a_table_run():
 
 
 def test_write_error_is_json_when_json_was_asked_for():
-    """The `snow` defect: `--format JSON` that fails must still parse."""
     stream = FakeStream(tty=False)
     write_error(
         ConflictError("sql_not_allowed", "DDL is not permitted.", {"line": 1}),

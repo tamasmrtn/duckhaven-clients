@@ -4,11 +4,8 @@ Three rules hold everywhere, and each is a defect observed in a shipping CLI:
 
 * **stdout carries only the payload.** Progress, warnings and errors go to stderr,
   so `dh ... | jq` never chokes on a status line.
-* **`--format json` covers the error path too.** `snow --format JSON` renders a
-  failure as a Rich-boxed panel on stderr and exits 1, so CI gets nothing
-  parseable; here a failure is the same three-key envelope the server uses.
-* **No box-drawing characters, ever.** `snow` emits them even when redirected to a
-  file, because nothing checks for a TTY. The table here is spaces and newlines.
+* **`--format json` covers the error path too.**
+* **No box-drawing characters, ever.**
 """
 
 from __future__ import annotations
@@ -63,8 +60,7 @@ def envelope(data: Any, cursor: str | None = None, has_more: bool = False) -> di
 
     Fixed for the life of the CLI: once CI parses `.data[]` it cannot change. The
     `cursor` and `has_more` keys are present even for endpoints that never
-    paginate, so a consumer never has to know which kind an endpoint is -- the
-    thing `databricks` gets wrong by naming its envelope key per command.
+    paginate, so a consumer never has to know which kind an endpoint is.
     """
     return {"data": data, "cursor": cursor, "has_more": has_more}
 
@@ -171,12 +167,7 @@ def render(
 
 
 def write_error(error: DhError, fmt: Format, *, stream: TextIO | None = None) -> None:
-    """Write a failure to stderr, in JSON when JSON was asked for.
-
-    The `snow` defect this exists to avoid: a `--format json` run that fails must
-    still hand CI something it can parse, and must never mix the failure into the
-    payload stream.
-    """
+    """Write a failure to stderr, in JSON when JSON was asked for."""
     stream = stream or sys.stderr
     if fmt is Format.JSON:
         stream.write(json.dumps(error.envelope(), indent=2, default=str) + "\n")

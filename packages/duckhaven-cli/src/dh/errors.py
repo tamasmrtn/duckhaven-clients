@@ -6,8 +6,7 @@ caller parses one shape whether the failure happened locally or on the server.
 
 Exit codes are differentiated by default rather than hidden behind a flag. The one
 that earns its keep is :attr:`ExitCode.QUERY_FAILED`: it separates "the SQL you sent
-was wrong" from "the CLI or the server broke", which is the branch a pipeline
-actually needs and which neither `snow` nor `databricks` provides.
+was wrong" from "the CLI or the server broke".
 """
 
 from __future__ import annotations

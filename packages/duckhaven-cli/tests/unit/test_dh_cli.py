@@ -57,8 +57,7 @@ def test_bare_invocation_shows_help_rather_than_failing():
 
 # --- Global option hoisting ------------------------------------------------
 #
-# Click requires a group's options before the subcommand; Cobra does not. These
-# cover the shapes a user coming from `databricks -p` will actually type.
+# Click requires a group's options before the subcommand; Cobra does not.
 
 
 @pytest.mark.parametrize(

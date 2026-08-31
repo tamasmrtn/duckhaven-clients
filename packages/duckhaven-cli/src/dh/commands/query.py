@@ -1,9 +1,6 @@
 """`dh sql` and `dh query` — running SQL and working with the runs.
 
-`dh sql` is the one deliberately verb-first command in the tree. It is the thing
-people type most, and `snow sql` shows a one-word name for it is a real pattern
-rather than an inconsistency. `dh query run` is the same command spelled the way
-the rest of the tree is spelled.
+`dh sql` is the one deliberately verb-first command in the tree.
 """
 
 from __future__ import annotations

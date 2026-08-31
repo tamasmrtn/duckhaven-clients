@@ -1,7 +1,7 @@
 """Profile file and resolution chain.
 
 The permission cases are the point of this file: the config holds a live bearer
-token, and `snow` demonstrates what happens when the strict check is opt-in.
+token.
 """
 
 from __future__ import annotations

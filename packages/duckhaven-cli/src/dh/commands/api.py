@@ -2,8 +2,7 @@
 
 The escape hatch that makes the coverage cut honest. Roughly forty operations get
 no hand-written command, and without this that would mean "you cannot do it from
-the CLI" rather than "you type the path yourself". `databricks api` sets the
-precedent.
+the CLI" rather than "you type the path yourself".
 
 It still carries the parts worth having: the `/api` mount, the bearer token, the
 error envelope, and the exit-code contract. Only the path and body are yours.

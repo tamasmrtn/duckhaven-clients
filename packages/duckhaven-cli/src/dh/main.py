@@ -2,8 +2,7 @@
 
 Typer assembles the tree and renders `--help`; nothing else in the CLI uses Rich.
 Data and errors go through plain writers, so piping `dh` into `jq` or a file never
-picks up box-drawing characters or colour -- the defect that makes `snow --format
-JSON` unusable in CI.
+picks up box-drawing characters or colour.
 """
 
 from __future__ import annotations
@@ -103,9 +102,7 @@ def main(
         case_sensitive=False,
     ),
     # Neither of these takes a short flag, and both omissions are deliberate.
-    # `-q` belongs to `dh sql --query`, following `snow sql -q`; `-o` means
-    # *format* in `databricks`, so binding it to a file path here would turn
-    # `dh -o json` into a file called "json".
+    # `-q` belongs to `dh sql --query`.
     output: Path = typer.Option(
         None, "--output", help="Write the payload to a file instead of stdout."
     ),
@@ -160,13 +157,6 @@ def _error_format() -> Format:
 
 
 #: Global options, and whether each consumes a following value.
-#:
-#: Cobra propagates persistent flags to every subcommand, so `databricks auth
-#: profiles -p prod` works. Click does not: an option owned by the group must
-#: precede the subcommand, and `dh auth describe --profile dev` fails with a bare
-#: "No such option". Since these five are documented as global and people arrive
-#: from `databricks -p`, hoist them to the front instead of teaching everyone
-#: Click's argument order.
 GLOBAL_OPTIONS = {
     "--profile": True,
     "--host": True,
@@ -222,9 +212,7 @@ def run() -> None:
     try:
         app(args=hoist_global_options(sys.argv[1:]))
     except DhError as exc:
-        # The format flag governs the error path too, which is exactly what `snow`
-        # gets wrong: a failing `--format json` run must still hand CI something
-        # it can parse.
+        # The format flag governs the error path too
         write_error(exc, _error_format())
         raise SystemExit(exc.exit_code) from exc
     except KeyboardInterrupt:
