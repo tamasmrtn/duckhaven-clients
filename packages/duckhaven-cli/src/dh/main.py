@@ -18,6 +18,7 @@ from dh import __version__
 from dh.commands import auth as auth_commands
 from dh.commands import health as health_commands
 from dh.commands import profile as profile_commands
+from dh.commands import query as query_commands
 from dh.context import CliContext
 from dh.errors import DhError, ExitCode
 from dh.output import Format, default_format, write_error
@@ -55,6 +56,9 @@ app.add_typer(auth_commands.app)
 app.add_typer(profile_commands.app)
 app.add_typer(health_commands.app)
 app.add_typer(health_commands.version_app, name="version", help="Show CLI and server versions.")
+app.add_typer(query_commands.app)
+# The one verb-first command in the tree, registered as a leaf beside the groups.
+app.command("sql")(query_commands.sql)
 
 
 def _version_callback(value: bool) -> None:
