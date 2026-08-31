@@ -179,9 +179,35 @@ def test_a_single_record_renders_as_field_and_value():
 
 
 def test_a_rows_page_keeps_its_server_supplied_columns():
-    """`RowsPageOut` is tabular already and must not be reshaped."""
-    page = {"columns": ["a", "b"], "rows": [[1, 2]], "cursor": None, "total": 1}
-    assert as_grid(page) == (["a", "b"], [[1, 2]])
+    """`RowsPageOut.rows` is a list of dicts keyed by column name, not positional.
+
+    Reading it positionally rendered every data row as the header, in the default
+    format of the most-used command -- and no test caught it, because the fixtures
+    invented the shape the code assumed.
+    """
+    page = {
+        "columns": ["a", "b"],
+        "rows": [{"a": 1, "b": 2}, {"a": 3, "b": 4}],
+        "cursor": None,
+        "total": 2,
+    }
+    assert as_grid(page) == (["a", "b"], [[1, 2], [3, 4]])
+
+
+def test_a_rows_page_follows_the_server_column_order():
+    """Dict iteration order must not decide what lands under which header."""
+    page = {"columns": ["b", "a"], "rows": [{"a": 1, "b": 2}]}
+    assert as_grid(page) == (["b", "a"], [[2, 1]])
+
+
+def test_a_row_missing_a_column_renders_as_empty_rather_than_shifting():
+    page = {"columns": ["a", "b"], "rows": [{"a": 1}]}
+    assert as_grid(page) == (["a", "b"], [[1, None]])
+
+
+def test_positional_rows_are_still_accepted():
+    """The REPL's DB-API path yields sequences, not dicts."""
+    assert as_grid({"columns": ["a"], "rows": [(7,)]}) == (["a"], [[7]])
 
 
 # --- CSV -------------------------------------------------------------------

@@ -103,6 +103,18 @@ def test_the_fields_the_cli_reads_still_exist(contract, schema, fields):
     assert not missing, f"{schema} no longer carries: {sorted(missing)}"
 
 
+def test_rows_are_still_objects_keyed_by_column_name(contract):
+    """The output layer projects each row through `columns`.
+
+    Asserting the field exists was not enough: reading a list of dicts as if it
+    were positional printed the header once per row, and only the item type says
+    which it is.
+    """
+    rows = contract["components"]["schemas"]["RowsPageOut"]["properties"]["rows"]
+    assert rows["type"] == "array"
+    assert rows["items"]["type"] == "object", rows["items"]
+
+
 def test_the_page_envelope_is_still_items_cursor_has_more(contract):
     """`--all` and the output envelope both assume this shape everywhere."""
     pages = [name for name in contract["components"]["schemas"] if name.startswith("Page_")]

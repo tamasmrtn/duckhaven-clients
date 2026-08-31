@@ -54,7 +54,13 @@ def _query(status="done", **extra):
 
 
 def _rows_page(rows, cursor, total):
-    return {"columns": ["n"], "rows": rows, "cursor": cursor, "total": total}
+    """Rows as the server sends them: dicts keyed by column name, not positional."""
+    return {
+        "columns": ["n"],
+        "rows": [{"n": v} for v in rows],
+        "cursor": cursor,
+        "total": total,
+    }
 
 
 def _mock_run(statuses=("done",), rows=None, total=None):
@@ -95,13 +101,13 @@ def test_every_page_of_results_is_fetched(client):
     """The named truncation trap: one fetch returns page one and looks complete."""
     route = respx.get(f"{API}/queries/{QID}/rows").mock(
         side_effect=[
-            httpx.Response(200, json=_rows_page([[1], [2]], "2", 5)),
-            httpx.Response(200, json=_rows_page([[3], [4]], "4", 5)),
-            httpx.Response(200, json=_rows_page([[5]], None, 5)),
+            httpx.Response(200, json=_rows_page([1, 2], "2", 5)),
+            httpx.Response(200, json=_rows_page([3, 4], "4", 5)),
+            httpx.Response(200, json=_rows_page([5], None, 5)),
         ]
     )
     page = execute.fetch_rows(client, QID)
-    assert page["rows"] == [[1], [2], [3], [4], [5]]
+    assert page["rows"] == [{"n": v} for v in (1, 2, 3, 4, 5)]
     assert route.call_count == 3
     assert route.calls[1].request.url.params["cursor"] == "2"
 
@@ -109,7 +115,7 @@ def test_every_page_of_results_is_fetched(client):
 @respx.mock
 def test_limit_stops_fetching_and_reports_truncation(client):
     route = respx.get(f"{API}/queries/{QID}/rows").mock(
-        side_effect=[httpx.Response(200, json=_rows_page([[1], [2]], "2", 9))]
+        side_effect=[httpx.Response(200, json=_rows_page([1, 2], "2", 9))]
     )
     page = execute.fetch_rows(client, QID, limit=2)
     assert len(page["rows"]) == 2
@@ -247,12 +253,12 @@ def test_no_agent_is_chosen_when_several_could_serve(client):
 @respx.mock
 def test_dh_sql_runs_and_prints_rows(logged_in, monkeypatch):
     monkeypatch.setattr(execute.time, "sleep", lambda _s: None)
-    _mock_run(statuses=("done",), rows=[[1]])
+    _mock_run(statuses=("done",), rows=[1])
     result = runner.invoke(app, ["--format", "json", "sql", "-q", "select 1"])
     assert result.exit_code == 0
     data = json.loads(result.stdout)["data"]
     assert data["columns"] == ["n"]
-    assert data["rows"] == [[1]]
+    assert data["rows"] == [{"n": 1}]
 
 
 @respx.mock
@@ -264,7 +270,7 @@ def test_dh_sql_sends_the_timeout_as_the_server_budget_too(logged_in, monkeypatc
     )
     respx.get(f"{API}/queries/{QID}").mock(return_value=httpx.Response(200, json=_query("done")))
     respx.get(f"{API}/queries/{QID}/rows").mock(
-        return_value=httpx.Response(200, json=_rows_page([[1]], None, 1))
+        return_value=httpx.Response(200, json=_rows_page([1], None, 1))
     )
     runner.invoke(app, ["sql", "-q", "select 1", "--timeout", "5m"])
     assert json.loads(submitted.calls[0].request.content)["timeout_s"] == 300
@@ -308,7 +314,7 @@ def test_dh_sql_reads_from_a_file(logged_in, tmp_path, monkeypatch):
     )
     respx.get(f"{API}/queries/{QID}").mock(return_value=httpx.Response(200, json=_query("done")))
     respx.get(f"{API}/queries/{QID}/rows").mock(
-        return_value=httpx.Response(200, json=_rows_page([[1]], None, 1))
+        return_value=httpx.Response(200, json=_rows_page([1], None, 1))
     )
     runner.invoke(app, ["sql", "-f", str(script)])
     assert json.loads(submitted.calls[0].request.content)["sql"] == "select 1\n"
@@ -322,7 +328,7 @@ def test_dh_sql_reads_from_stdin(logged_in, monkeypatch):
     )
     respx.get(f"{API}/queries/{QID}").mock(return_value=httpx.Response(200, json=_query("done")))
     respx.get(f"{API}/queries/{QID}/rows").mock(
-        return_value=httpx.Response(200, json=_rows_page([[1]], None, 1))
+        return_value=httpx.Response(200, json=_rows_page([1], None, 1))
     )
     runner.invoke(app, ["sql", "-i"], input="select 42")
     assert json.loads(submitted.calls[0].request.content)["sql"] == "select 42"
@@ -344,10 +350,10 @@ def test_dh_sql_with_two_sources_is_refused(logged_in, tmp_path):
 @respx.mock
 def test_dh_query_run_is_the_same_command(logged_in, monkeypatch):
     monkeypatch.setattr(execute.time, "sleep", lambda _s: None)
-    _mock_run(statuses=("done",), rows=[[7]])
+    _mock_run(statuses=("done",), rows=[7])
     result = runner.invoke(app, ["--format", "json", "query", "run", "-q", "select 7"])
     assert result.exit_code == 0
-    assert json.loads(result.stdout)["data"]["rows"] == [[7]]
+    assert json.loads(result.stdout)["data"]["rows"] == [{"n": 7}]
 
 
 # --- dh query subcommands --------------------------------------------------

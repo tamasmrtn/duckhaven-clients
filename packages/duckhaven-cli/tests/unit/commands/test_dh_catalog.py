@@ -257,11 +257,11 @@ def test_a_malformed_column_spec_says_what_is_wanted(with_catalog):
 @respx.mock
 def test_table_sample_hits_the_sample_route(with_catalog):
     route = respx.get(f"{WS}/catalogs/main/schemas/sales/tables/orders/sample").mock(
-        return_value=httpx.Response(200, json={"columns": ["id"], "rows": [[1]], "total": 1})
+        return_value=httpx.Response(200, json={"columns": ["id"], "rows": [{"id": 1}], "total": 1})
     )
     result = runner.invoke(app, ["--format", "json", "table", "sample", "sales.orders"])
     assert result.exit_code == 0
-    assert _data(result)["rows"] == [[1]]
+    assert _data(result)["rows"] == [{"id": 1}]
     assert route.called
 
 

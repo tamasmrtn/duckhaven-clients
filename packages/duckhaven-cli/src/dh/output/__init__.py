@@ -94,7 +94,13 @@ def as_grid(data: Any) -> tuple[list[str], list[list[Any]]]:
     """
     if isinstance(data, dict) and isinstance(data.get("rows"), list):
         cols = [str(c) for c in data.get("columns") or []]
-        return cols, [list(r) for r in data["rows"]]
+        # `RowsPageOut.rows` is a list of **dicts keyed by column name**, not a list
+        # of positional lists. Projecting through `columns` keeps the server's
+        # column order and tolerates a row missing a key. A row that really is a
+        # sequence (the REPL's DB-API path) is taken as already positional.
+        return cols, [
+            [r.get(c) for c in cols] if isinstance(r, dict) else list(r) for r in data["rows"]
+        ]
     if isinstance(data, dict):
         return ["field", "value"], [[k, v] for k, v in data.items()]
     if isinstance(data, list) and data and all(isinstance(r, dict) for r in data):

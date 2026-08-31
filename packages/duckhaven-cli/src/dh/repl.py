@@ -112,7 +112,12 @@ def _run_on_session(cli, connection, sql: str) -> None:
     try:
         cursor.execute(sql)
         columns = [d[0] for d in cursor.description or []]
-        rows: list[list[Any]] = [list(row) for row in cursor.fetchall()] if columns else []
+        # Keyed by column name, matching `RowsPageOut`: the envelope is one public
+        # contract, so the session path must not emit a different row shape from
+        # the one-shot path.
+        rows: list[dict[str, Any]] = (
+            [dict(zip(columns, row)) for row in cursor.fetchall()] if columns else []
+        )
         cli.emit({"columns": columns, "rows": rows, "total": len(rows)})
     except Exception as exc:  # noqa: BLE001 - mapped to the CLI taxonomy
         raise from_connector(exc) from exc

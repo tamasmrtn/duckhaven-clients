@@ -104,12 +104,12 @@ def test_session_exec_runs_and_returns_rows(logged_in, monkeypatch):
     )
     respx.get(f"{API}/queries/{QID}/rows").mock(
         return_value=httpx.Response(
-            200, json={"columns": ["n"], "rows": [[1]], "cursor": None, "total": 1}
+            200, json={"columns": ["n"], "rows": [{"n": 1}], "cursor": None, "total": 1}
         )
     )
     result = runner.invoke(app, ["--format", "json", "session", "exec", SID, "-q", "select 1"])
     assert result.exit_code == 0
-    assert json.loads(result.stdout)["data"]["rows"] == [[1]]
+    assert json.loads(result.stdout)["data"]["rows"] == [{"n": 1}]
 
 
 # --- Sessions switched off -------------------------------------------------
@@ -327,7 +327,7 @@ def test_the_fallback_loop_runs_each_statement_on_its_own(monkeypatch, capsys):
     )
     respx.get(f"{API}/queries/{QID}/rows").mock(
         return_value=httpx.Response(
-            200, json={"columns": ["n"], "rows": [[1]], "cursor": None, "total": 1}
+            200, json={"columns": ["n"], "rows": [{"n": 1}], "cursor": None, "total": 1}
         )
     )
     assert _run_loop(monkeypatch, None, ["select 1;"]) == 0
