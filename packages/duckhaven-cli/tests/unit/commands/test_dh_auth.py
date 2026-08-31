@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import os
 import stat
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import httpx
 import pytest
@@ -264,7 +264,7 @@ def test_version_still_reports_the_cli_when_the_server_is_unreachable(logged_in)
 
 
 def _in(days: int) -> str:
-    return (datetime.now(tz=UTC) + timedelta(days=days)).isoformat()
+    return (datetime.now(tz=timezone.utc) + timedelta(days=days)).isoformat()
 
 
 @respx.mock

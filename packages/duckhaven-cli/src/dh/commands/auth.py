@@ -3,7 +3,10 @@
 from __future__ import annotations
 
 import math
-from datetime import UTC, datetime, timedelta
+
+# `datetime.UTC` is 3.11+, and this package supports 3.10. Importing it here
+# broke every test that loads the app, on the one interpreter leg that checks.
+from datetime import datetime, timedelta, timezone
 
 import typer
 
@@ -195,7 +198,7 @@ def _warn_if_expiring(cli, expires_at: str | None) -> None:
         moment = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
     except ValueError:  # pragma: no cover - the server sends ISO-8601
         return
-    left = moment - datetime.now(tz=moment.tzinfo or UTC)
+    left = moment - datetime.now(tz=moment.tzinfo or timezone.utc)
     if left <= timedelta(0):
         cli.note("This token has expired. Run `dh auth login` to get a new one.")
     elif left <= _EXPIRY_WARNING:
