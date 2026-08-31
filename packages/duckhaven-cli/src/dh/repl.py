@@ -21,6 +21,9 @@ import typer
 from dh import execute
 from dh.errors import DhError, from_connector
 
+#: Everything end-of-input can arrive as. See `read_statements`.
+_END_OF_INPUT = (EOFError, click.Abort, typer.Abort)
+
 _BANNER = "dh sql. Statements end with ';'. Ctrl-D or \\q to quit."
 _QUIT = {"\\q", "quit", "exit", "\\quit"}
 
@@ -36,11 +39,12 @@ def read_statements(read_line):
         prompt = "dh> " if not buffer else "..> "
         try:
             line = read_line(prompt)
-        except (EOFError, click.Abort):
-            # `typer.prompt` turns end-of-input into click's Abort, not EOFError,
-            # so catching only the latter meant Ctrl-D -- the exit key the banner
-            # advertises -- escaped as an abort, exited 1, and discarded whatever
-            # was half-typed.
+        except _END_OF_INPUT:
+            # Ctrl-D is the exit key the banner advertises, and it must leave 0
+            # with anything half-typed still run. Three classes because typer
+            # vendors its own click: `typer.prompt` raises
+            # `typer.exceptions.Abort`, which is *not* `click.exceptions.Abort`,
+            # and `read_line` is an arbitrary callable that may raise EOFError.
             if buffer:
                 yield "\n".join(buffer)
             return

@@ -12,6 +12,7 @@ import json
 import httpx
 import pytest
 import respx
+import typer
 from typer.testing import CliRunner
 
 from dh import repl
@@ -391,26 +392,50 @@ def test_open_hands_back_a_still_starting_session_rather_than_orphaning_it(logge
 # --- Ctrl-D ----------------------------------------------------------------
 
 
-def test_end_of_input_ends_the_shell_cleanly():
-    """`typer.prompt` raises click's Abort, not EOFError; catching only the
-    latter meant Ctrl-D -- the exit key the banner advertises -- exited 1."""
+def _end_of_input_classes():
+    """Every class end-of-input can actually arrive as.
+
+    Asserting against a stub that raises the exception the *code* expects proves
+    nothing -- that is how the first attempt at this shipped broken. `typer`
+    vendors its own click, so `typer.prompt` raises `typer.exceptions.Abort`,
+    which is not `click.exceptions.Abort`.
+    """
     import click
 
+    return [EOFError, click.Abort, typer.Abort]
+
+
+@pytest.mark.parametrize("exc", _end_of_input_classes())
+def test_end_of_input_ends_the_shell_cleanly(exc):
+    """Ctrl-D is the exit key the banner advertises; it must not exit 1."""
+
     def _abort(_prompt):
-        raise click.Abort
+        raise exc
 
     assert list(repl.read_statements(_abort)) == []
 
 
-def test_a_buffered_statement_survives_end_of_input():
+@pytest.mark.parametrize("exc", _end_of_input_classes())
+def test_a_buffered_statement_survives_end_of_input(exc):
     """Ending input mid-statement should run what was typed, not discard it."""
-    import click
-
     lines = ["select 1,"]
 
     def _read(_prompt):
         if lines:
             return lines.pop(0)
-        raise click.Abort
+        raise exc
 
     assert list(repl.read_statements(_read)) == ["select 1,"]
+
+
+def test_the_real_prompt_raises_something_we_catch():
+    """Pins the actual behaviour rather than our belief about it."""
+    import io
+    import sys
+
+    original, sys.stdin = sys.stdin, io.StringIO("")
+    try:
+        with pytest.raises(repl._END_OF_INPUT):
+            typer.prompt("x")
+    finally:
+        sys.stdin = original
