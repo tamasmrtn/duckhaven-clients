@@ -27,12 +27,11 @@ dh auth login --host https://duckhaven.example.com
 dh sql -q "select 1"
 ```
 
-## Status
+## Documentation
 
-Under construction. The command tree, output contract, error taxonomy and phased build
-order are specified in the
-[CLI implementation plan](https://github.com/tamasmrtn/duckhaven/blob/main/docs/developer/cli-plan.md),
-which is the design record for this package.
+- [Command-line quickstart](https://tamasmrtn.github.io/duckhaven/getting-started/cli-quickstart/) — install, sign in,
+  run a query
+- [CLI reference](https://tamasmrtn.github.io/duckhaven/reference/cli/) — every command and flag
 
 ## Licence
 
