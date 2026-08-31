@@ -4017,6 +4017,45 @@
         "title": "SelfPatCreateRequest",
         "type": "object"
       },
+      "SelfPatOut": {
+        "description": "The same metadata, plus which token is making this very request.\n\nOnly the hash of a token is stored, so a listing can never identify one by\nvalue the way a name or a visible prefix would. Marking the caller's own\ncredential is what lets a client say \"the token you are using expires on\nFriday\" instead of listing three indistinguishable rows and leaving the\nreader to guess. GitLab solves the same problem with a separate\n`/personal_access_tokens/self` route; a flag answers it in one request.",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "current": {
+            "default": false,
+            "title": "Current",
+            "type": "boolean"
+          },
+          "expires_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Expires At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "created_at",
+          "expires_at"
+        ],
+        "title": "SelfPatOut",
+        "type": "object"
+      },
       "SemanticImportOut": {
         "properties": {
           "created": {
@@ -8685,6 +8724,68 @@
       }
     },
     "/me/pats": {
+      "get": {
+        "description": "Your own tokens: when each was issued, when it expires, and which is in use.\n\n**Never the secret.** Only a SHA-256 hash of a token is stored, so this cannot\nreturn one even in principle -- a token is shown once, at creation, and a\nforgotten one is replaced rather than recovered. That matches GitHub and\nGitLab, whose listings are likewise metadata-only.\n\nBecause a hash identifies nothing a person can read, the token making this\nrequest is marked `current`. Without it a caller holding three tokens sees\nthree indistinguishable rows and cannot tell which expiry is the one about to\nbreak them.",
+        "operationId": "list_own_pats",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/SelfPatOut"
+                  },
+                  "title": "Response List Own Pats",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Own Pats",
+        "tags": [
+          "auth"
+        ]
+      },
       "post": {
         "description": "Issue a personal access token for yourself. The secret is shown once.\n\nThis is how a person gets a credential for the CLI without an admin minting\none for them. The token carries the caller's own identity, so it can do\nexactly what they can and nothing more -- including as their role changes,\nsince permissions are resolved from the user at request time rather than\nfrozen into the token.\n\nReachable **only** with the browser session cookie, never with a bearer\ntoken: a PAT that could mint PATs would outlive its own revocation, because\nrevoking the leaked one leaves every successor it issued working. Unattended\ncallers use a service-account token instead, issued by an admin at\n`POST /admin/service-accounts/{service_account_id}/pats`.",
         "operationId": "issue_own_pat",
@@ -8746,6 +8847,81 @@
           }
         ],
         "summary": "Issue Own Pat",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
+    "/me/pats/{pat_id}": {
+      "delete": {
+        "description": "Revoke one of your own tokens, including the one making this request.\n\nUnlike issuing, this accepts a bearer token as well as a session. Revoking\nonly ever *removes* access, so a leaked token using it cannot escalate -- and\na token being able to retire itself is worth more than the nuisance of one\nbeing used to retire its siblings. GitLab reaches the same conclusion, letting\nany token call its self-revocation route.\n\nScoped to the caller's own credentials: another user's token is a 404 rather\nthan a 403, so this cannot be used to discover that one exists.",
+        "operationId": "revoke_own_pat",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "pat_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Pat Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Revoke Own Pat",
         "tags": [
           "auth"
         ]

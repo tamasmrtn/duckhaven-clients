@@ -218,8 +218,15 @@ dh auth logout
     Forget the stored token, keeping the rest of the profile.
     . --name
 
+dh auth revoke
+    Revoke one of your own tokens, by the id `dh auth tokens` shows.
+    . <pat_id>
+
 dh auth status
-    Who the stored credential authenticates as, and what it is talking to.
+    Who the stored credential authenticates as, and how long it has left.
+
+dh auth tokens
+    Your own tokens: when each was issued, when it expires, which is in use.
 
 dh catalog
     Catalogs attached to a workspace.

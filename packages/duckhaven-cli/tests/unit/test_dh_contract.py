@@ -87,6 +87,9 @@ FIELDS = {
     "ScheduleCreate": {"job_type", "saved_query_id", "cron", "enabled"},
     "SavedQueryCreate": {"name", "sql"},
     "SelfPatCreateRequest": {"expires_in_days"},
+    # Metadata only, by design: the value is shown once at creation and only its
+    # hash is stored, so a listing could not return it even if it wanted to.
+    "SelfPatOut": {"id", "created_at", "expires_at", "current"},
     "RelationshipIn": {"name", "left_dataset", "right_dataset", "join_columns"},
     "JoinColumn": {"left", "right"},
 }
@@ -113,6 +116,12 @@ def test_query_submission_is_still_accepted_asynchronously(contract):
     """The whole polling loop exists because this is a 202, not a 200."""
     responses = contract["paths"]["/workspaces/{workspace}/queries"]["post"]["responses"]
     assert "202" in responses
+
+
+def test_the_token_listing_cannot_return_a_secret(contract):
+    """A token is shown once, at creation. This is the schema-level guarantee."""
+    properties = set(contract["components"]["schemas"]["SelfPatOut"].get("properties") or {})
+    assert not properties & {"token", "token_hash", "secret", "value"}
 
 
 def test_self_service_token_issuance_is_cookie_only(contract):

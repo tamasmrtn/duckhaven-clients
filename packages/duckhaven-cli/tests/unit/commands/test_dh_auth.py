@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import os
 import stat
+from datetime import UTC, datetime, timedelta
 
 import httpx
 import pytest
@@ -160,8 +161,13 @@ def test_login_names_a_non_default_profile(cfg):
 # --- status ----------------------------------------------------------------
 
 
+def _mock_pats(rows=None):
+    return respx.get(f"{API}/me/pats").mock(return_value=httpx.Response(200, json=rows or []))
+
+
 @respx.mock
 def test_status_reports_the_user_and_server_version(logged_in):
+    _mock_pats()
     respx.get(f"{API}/me").mock(return_value=httpx.Response(200, json=ME))
     respx.get(f"{API}/version").mock(
         return_value=httpx.Response(200, json={"version": "1.4.0", "api_version": 2})
@@ -175,6 +181,7 @@ def test_status_reports_the_user_and_server_version(logged_in):
 
 @respx.mock
 def test_status_tolerates_a_server_without_a_version_endpoint(logged_in):
+    _mock_pats()
     respx.get(f"{API}/me").mock(return_value=httpx.Response(200, json=ME))
     respx.get(f"{API}/version").mock(return_value=httpx.Response(404, json={"error": "not_found"}))
     result = runner.invoke(app, ["--format", "json", "auth", "status"])
@@ -251,3 +258,77 @@ def test_version_still_reports_the_cli_when_the_server_is_unreachable(logged_in)
     result = runner.invoke(app, ["--format", "json", "version"])
     assert result.exit_code == 0
     assert json.loads(result.stdout)["data"]["cli"]
+
+
+# --- Token listing, revocation and expiry warnings -------------------------
+
+
+def _in(days: int) -> str:
+    return (datetime.now(tz=UTC) + timedelta(days=days)).isoformat()
+
+
+@respx.mock
+def test_status_warns_before_a_token_expires(logged_in):
+    """The first symptom of an expired token is a 401 nobody was watching for."""
+    respx.get(f"{API}/me").mock(return_value=httpx.Response(200, json=ME))
+    respx.get(f"{API}/version").mock(return_value=httpx.Response(200, json={"version": "1"}))
+    _mock_pats([{"id": "p1", "expires_at": _in(3), "current": True}])
+    result = runner.invoke(app, ["auth", "status"])
+    assert result.exit_code == 0
+    assert "expires in 3 days" in result.output
+    assert "dh auth login" in result.output
+
+
+@respx.mock
+def test_status_is_quiet_when_the_token_has_plenty_of_life(logged_in):
+    respx.get(f"{API}/me").mock(return_value=httpx.Response(200, json=ME))
+    respx.get(f"{API}/version").mock(return_value=httpx.Response(200, json={"version": "1"}))
+    _mock_pats([{"id": "p1", "expires_at": _in(60), "current": True}])
+    assert "expires in" not in runner.invoke(app, ["auth", "status"]).output
+
+
+@respx.mock
+def test_status_says_so_when_the_token_has_already_expired(logged_in):
+    respx.get(f"{API}/me").mock(return_value=httpx.Response(200, json=ME))
+    respx.get(f"{API}/version").mock(return_value=httpx.Response(200, json={"version": "1"}))
+    _mock_pats([{"id": "p1", "expires_at": _in(-1), "current": True}])
+    assert "has expired" in runner.invoke(app, ["auth", "status"]).output
+
+
+@respx.mock
+def test_status_ignores_tokens_that_are_not_the_current_one(logged_in):
+    """Another token expiring tomorrow is not this session's problem."""
+    respx.get(f"{API}/me").mock(return_value=httpx.Response(200, json=ME))
+    respx.get(f"{API}/version").mock(return_value=httpx.Response(200, json={"version": "1"}))
+    _mock_pats([{"id": "other", "expires_at": _in(1), "current": False}])
+    assert "expires in" not in runner.invoke(app, ["auth", "status"]).output
+
+
+@respx.mock
+def test_status_still_works_against_a_server_without_the_listing(logged_in):
+    """A missing warning, not a failure."""
+    respx.get(f"{API}/me").mock(return_value=httpx.Response(200, json=ME))
+    respx.get(f"{API}/version").mock(return_value=httpx.Response(200, json={"version": "1"}))
+    respx.get(f"{API}/me/pats").mock(
+        return_value=httpx.Response(404, json={"error": "not_found", "message": "x"})
+    )
+    result = runner.invoke(app, ["--format", "json", "auth", "status"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["data"]["token_expires_at"] is None
+
+
+@respx.mock
+def test_auth_tokens_lists_metadata_and_never_a_secret(logged_in):
+    _mock_pats([{"id": "p1", "created_at": _in(-30), "expires_at": _in(60), "current": True}])
+    result = runner.invoke(app, ["--format", "json", "auth", "tokens"])
+    assert result.exit_code == 0
+    rows = json.loads(result.stdout)["data"]
+    assert rows[0]["current"] is True
+    assert "token" not in rows[0]
+
+
+@respx.mock
+def test_auth_revoke_deletes_by_id(logged_in):
+    route = respx.delete(f"{API}/me/pats/p1").mock(return_value=httpx.Response(204))
+    assert runner.invoke(app, ["auth", "revoke", "p1"]).exit_code == 0
+    assert route.called

@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import math
+from datetime import UTC, datetime, timedelta
+
 import typer
 
 from dh import config as config_mod
@@ -135,14 +138,22 @@ def _mint_token(cli, base: str, email: str | None, expires_in_days: int) -> tupl
     return issued["token"], issued.get("expires_at")
 
 
+#: Warn this far ahead of expiry. A fortnight is long enough to rotate before a
+#: scheduled job breaks, and short enough that the warning still means something.
+_EXPIRY_WARNING = timedelta(days=14)
+
+
 @app.command("status")
 def status(ctx: typer.Context) -> None:
-    """Who the stored credential authenticates as, and what it is talking to."""
+    """Who the stored credential authenticates as, and how long it has left."""
     cli = context.of(ctx)
     settings = cli.settings()
     with cli.client(settings) as client:
         me = client.get("me")
         version = _optional(client, "version")
+        current = _current_token(client)
+    expires_at = (current or {}).get("expires_at")
+    _warn_if_expiring(cli, expires_at)
     cli.emit(
         {
             "host": settings.get("host"),
@@ -151,10 +162,76 @@ def status(ctx: typer.Context) -> None:
             "name": me.get("name"),
             "role": me.get("role"),
             "workspace": settings.get("workspace"),
+            "token_expires_at": expires_at,
             "server_version": (version or {}).get("version"),
             "api_version": (version or {}).get("api_version"),
         }
     )
+
+
+def _current_token(client: RestClient) -> dict | None:
+    """The token this request is authenticating with, if the server can say.
+
+    Only a hash is stored, so the server marks the caller's own row rather than
+    returning anything identifiable. A server predating the route reports
+    nothing, which is a missing warning rather than a failure.
+    """
+    try:
+        rows = client.get("me/pats") or []
+    except DhError:
+        return None
+    return next((row for row in rows if row.get("current")), None)
+
+
+def _warn_if_expiring(cli, expires_at: str | None) -> None:
+    """Say something before a token expires, not after.
+
+    The first symptom of an expired token is a 401 in a job nobody was watching,
+    which is the failure this whole listing exists to prevent.
+    """
+    if not expires_at:
+        return
+    try:
+        moment = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+    except ValueError:  # pragma: no cover - the server sends ISO-8601
+        return
+    left = moment - datetime.now(tz=moment.tzinfo or UTC)
+    if left <= timedelta(0):
+        cli.note("This token has expired. Run `dh auth login` to get a new one.")
+    elif left <= _EXPIRY_WARNING:
+        # Rounded up, not truncated: `timedelta.days` on 71h59m is 2, so a token
+        # with three days left would be reported as two -- and one with hours left
+        # as zero, which reads like it is already dead.
+        days = math.ceil(left.total_seconds() / 86400)
+        cli.note(
+            f"This token expires in {days} day{'s' if days != 1 else ''}. "
+            "Run `dh auth login` to replace it."
+        )
+
+
+@app.command("tokens")
+def list_tokens(ctx: typer.Context) -> None:
+    """Your own tokens: when each was issued, when it expires, which is in use.
+
+    Never the secret. A token is shown once, when it is issued; only its hash is
+    kept, so a forgotten one is replaced rather than recovered.
+    """
+    cli = context.of(ctx)
+    with cli.client() as client:
+        cli.emit(client.get("me/pats"))
+
+
+@app.command("revoke")
+def revoke_token(ctx: typer.Context, pat_id: str) -> None:
+    """Revoke one of your own tokens, by the id `dh auth tokens` shows.
+
+    Revoking the token you are currently using works and takes effect at once,
+    which is the right move if you think it has leaked.
+    """
+    cli = context.of(ctx)
+    with cli.client() as client:
+        client.delete(f"me/pats/{pat_id}")
+    cli.note(f"Revoked token {pat_id}.")
 
 
 @app.command("logout")
