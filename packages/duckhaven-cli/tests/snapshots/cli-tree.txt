@@ -1,0 +1,636 @@
+dh
+    Command-line interface for DuckHaven.
+    . --profile
+    . --host
+    . --workspace/-w
+    . --catalog
+    . --format
+    . --output
+    . --quiet
+    . --no-color
+    . --debug
+    . --version
+    . --install-completion
+    . --show-completion
+
+dh admin
+    Operator tasks: accounts, users, agents.
+
+dh admin agent
+    Compute agents.
+
+dh admin agent access
+    Who may use this agent, and how that was decided.
+    . <agent_id>
+
+dh admin agent bootstrap
+    Mint a single-use token for an agent to register itself.
+
+dh admin agent compute-options
+    The CPU and memory shapes this deployment will provision.
+
+dh admin agent delete
+    Delete an agent registration.
+    . <agent_id>
+
+dh admin agent disconnect
+    Force an agent's control channel closed. It may reconnect.
+    . <agent_id>
+
+dh admin agent elastic-create
+    Provision an elastic agent. Accepted asynchronously; poll `admin agent get`.
+    . --cpu
+    . --memory-gb
+    . --idle-timeout-minutes
+
+dh admin agent get
+    One agent's registration, capabilities and lifecycle state.
+    . <agent_id>
+
+dh admin agent list
+    Every agent, including ones this caller could not run queries on.
+
+dh admin agent metrics
+    Current load and capacity for every agent.
+
+dh admin agent monitoring
+    One agent's monitoring detail.
+    . <agent_id>
+
+dh admin agent restart
+    Restart an elastic agent.
+    . <agent_id>
+
+dh admin agent revoke-credential
+    Revoke an agent's credential, so it cannot reconnect.
+    . <agent_id>
+
+dh admin agent terminate
+    Terminate an elastic agent.
+    . <agent_id>
+
+dh admin maintenance
+    Deployment maintenance policy.
+
+dh admin maintenance policy
+    The deployment's maintenance policy.
+
+dh admin maintenance scan
+    Run a maintenance scan now rather than waiting for the schedule.
+
+dh admin pat
+    Tokens issued to a service account.
+
+dh admin pat issue
+    Issue a token for a service account. The secret is shown once.
+    . <service_account_id>
+    . --expires-in-days
+
+dh admin pat list
+    Tokens issued to a service account: creation and expiry, never the secret.
+    . <service_account_id>
+
+dh admin pat revoke
+    Revoke one token. It stops authenticating immediately.
+    . <service_account_id>
+    . <pat_id>
+
+dh admin service-account
+    Machine identities for unattended callers.
+
+dh admin service-account create
+    Create a service account.
+    . <name>
+    . --role
+
+dh admin service-account delete
+    Delete a service account.
+    . <service_account_id>
+
+dh admin service-account list
+    Service accounts and how many live tokens each holds.
+    . --all
+
+dh admin service-account update
+    Change a service account's role, or disable it.
+    . <service_account_id>
+    . --role
+    . --active
+
+dh admin storage
+    Storage backends.
+
+dh admin storage health
+    Check a backend end to end, by vending credentials against a probe table.
+    . <storage_backend_id>
+
+dh admin storage list
+    Configured storage backends.
+
+dh admin user
+    People and their workspace roles.
+
+dh admin user create
+    Create a local user. The password is prompted for rather than passed as a flag.
+    . <email>
+    . --name
+    . --password
+    . --role
+
+dh admin user list
+    People known to the deployment.
+    . --all
+
+dh admin user remove-from-workspace
+    Remove a user from a workspace.
+    . <user_id>
+    . <workspace>
+
+dh admin user revoke-sessions
+    Sign a user out everywhere. Their tokens are unaffected.
+    . <user_id>
+
+dh admin user set-workspace-role
+    Add a user to a workspace, or change the role they hold there.
+    . <user_id>
+    . <workspace>
+    . <role>
+
+dh admin user update
+    Change a user's global role, or deactivate them.
+    . <user_id>
+    . --role
+    . --active
+
+dh admin user workspaces
+    Which workspaces a user belongs to, and in what role.
+    . <user_id>
+
+dh api
+    Call any endpoint directly.
+
+dh api delete
+    Send a DELETE request.
+    . <path>
+    . --data/-d
+    . --param/-p
+
+dh api get
+    Send a GET request.
+    . <path>
+    . --data/-d
+    . --param/-p
+
+dh api patch
+    Send a PATCH request.
+    . <path>
+    . --data/-d
+    . --param/-p
+
+dh api post
+    Send a POST request.
+    . <path>
+    . --data/-d
+    . --param/-p
+
+dh api put
+    Send a PUT request.
+    . <path>
+    . --data/-d
+    . --param/-p
+
+dh auth
+    Sign in, and inspect the credential in use.
+
+dh auth describe
+    Show which credential is in use and where each setting came from.
+
+dh auth login
+    Sign in and store a personal access token.
+    . --host
+    . --name
+    . --email
+    . --token
+    . --workspace
+    . --expires-in-days
+
+dh auth logout
+    Forget the stored token, keeping the rest of the profile.
+    . --name
+
+dh auth status
+    Who the stored credential authenticates as, and what it is talking to.
+
+dh catalog
+    Catalogs attached to a workspace.
+
+dh catalog attach
+    Attach an existing catalog to the workspace.
+    . <catalog>
+
+dh catalog create
+    Create a catalog and attach it to the workspace.
+    . <name>
+    . --storage-backend
+    . --access-mode
+
+dh catalog detach
+    Detach a catalog from the workspace. The catalog itself survives.
+    . <catalog>
+
+dh catalog drop
+    Drop a catalog outright, by id. Destructive.
+    . <catalog_id>
+
+dh catalog list
+    Catalogs attached to the workspace.
+    . --all
+
+dh catalog refresh-stats
+    Recompute table statistics across the catalog.
+    . --catalog
+
+dh grant
+    Catalog access control.
+
+dh grant access-mode
+    Switch the catalog between open and scoped access.
+    . <mode>
+    . --catalog
+
+dh grant list
+    Who has what on the catalog, and in which access mode.
+    . --catalog
+    . --principals
+
+dh grant remove
+    Revoke one grant by its id, as shown by `dh grant list`.
+    . <grant_id>
+    . --catalog
+
+dh grant set
+    Grant a principal access to the catalog, a schema, or one table.
+    . --user
+    . --tier
+    . --schema
+    . --table
+    . --catalog
+
+dh health
+    Liveness, readiness, and the deployment's own health report.
+
+dh lineage
+    Publish and retire lineage from other producers.
+
+dh lineage import
+    Publish a producer's own artifact, translated by that producer's adapter.
+    . <provider>
+    . <artifact>
+    . --catalog-json
+    . --reconcile
+
+dh lineage import-edges
+    Publish already-canonical edges from a producer with no adapter.
+    . <file>
+    . --provider
+    . --run-id
+    . --reconcile
+
+dh lineage purge
+    Remove every edge a retired producer asserted. Requires workspace owner.
+    . --provider
+
+dh profile
+    Inspect and edit local connection profiles.
+
+dh profile list
+    List the configured profiles and which one is the default.
+
+dh profile remove
+    Delete a profile and the token stored with it.
+    . <name>
+
+dh profile show
+    Show one profile. The token is reported as present, never printed.
+    . <name>
+
+dh profile use
+    Make a profile the default for subsequent commands.
+    . <name>
+
+dh query
+    Run SQL and inspect past runs.
+
+dh query cancel
+    Ask the agent to stop a running query.
+    . <query_id>
+
+dh query get
+    One run's status, timings and error.
+    . <query_id>
+
+dh query list
+    The query log, newest first. Doubles as the audit trail.
+    . --status
+    . --statement-type
+    . --since
+    . --until
+    . --origin
+    . --session
+    . --agent
+    . --user
+    . --search/-q
+    . --slower-than
+    . --sort
+    . --dir
+    . --all-workspaces
+    . --limit
+    . --all
+
+dh query profile
+    The execution profile captured for a finished run, if there was one.
+    . <query_id>
+
+dh query rows
+    The results of a finished run, following the cursor to the end.
+    . <query_id>
+    . --limit
+    . --all
+
+dh query run
+    Run SQL and print the results. The noun-first spelling of `dh sql`.
+    . --query/-q
+    . --file/-f
+    . --stdin/-i
+    . --no-wait
+    . --timeout
+    . --limit
+    . --all
+    . --agent
+
+dh saved-query
+    Named SQL saved in the workspace.
+
+dh saved-query create
+    Save SQL under a name, replacing any query already using that name.
+    . <name>
+    . --query/-q
+    . --file/-f
+    . --agent
+
+dh saved-query delete
+    Delete a saved query.
+    . <saved_query_id>
+
+dh saved-query list
+    The workspace's saved queries, newest first.
+    . --limit
+    . --all
+
+dh saved-query update
+    Change a saved query's name, SQL or default agent. Omitted fields are left alone.
+    . <saved_query_id>
+    . --name
+    . --query/-q
+    . --file/-f
+    . --agent
+
+dh schedule
+    Cron schedules for saved queries.
+
+dh schedule create
+    Schedule a saved query to run on a cron expression.
+    . <saved_query_id>
+    . --cron
+    . --agent
+    . --disabled
+
+dh schedule delete
+    Delete a schedule. The saved query it ran is left alone.
+    . <schedule_id>
+
+dh schedule list
+    The workspace's schedules.
+
+dh schedule runs
+    Runs produced by a schedule, or by all of them.
+    . <schedule_id>
+    . --limit
+    . --all
+
+dh schedule update
+    Change a schedule's cron, agent, or whether it runs at all.
+    . <schedule_id>
+    . --cron
+    . --agent
+    . --enabled
+
+dh schema
+    Schemas within a catalog.
+
+dh schema create
+    Create a schema.
+    . <name>
+    . --catalog
+
+dh schema drop
+    Drop a schema.
+    . <name>
+    . --catalog
+
+dh schema list
+    Schemas in the catalog.
+    . --catalog
+
+dh search
+    Find catalogs, schemas, tables and saved queries by name.
+    . <query>
+    . --limit
+
+dh semantic
+    Publish and manage semantic models.
+
+dh semantic deprecate
+    Retire a published model without deleting it.
+    . <model>
+
+dh semantic import
+    Publish semantic definitions from an external producer.
+    . <provider>
+    . <artifact>
+    . --reconcile
+
+dh semantic model
+    Semantic models.
+
+dh semantic model get
+    One model in full: datasets, dimensions, metrics and relationships.
+    . <model>
+
+dh semantic model list
+    The workspace's semantic models, published and draft.
+
+dh semantic publish
+    Make a model authoritative to the assistant. Validates first.
+    . <model>
+
+dh semantic purge
+    Remove everything one provider published. Requires workspace owner.
+    . --provider
+
+dh semantic relationship
+    Joins between a model's datasets.
+
+dh semantic relationship add
+    Declare a join between two of a model's datasets.
+    . <model>
+    . --name
+    . --left
+    . --right
+    . --join
+    . --cardinality
+
+dh semantic relationship remove
+    Remove a relationship from a model.
+    . <model>
+    . <name>
+
+dh semantic validate
+    Check a model without publishing it. Safe to run in CI.
+    . <model>
+
+dh session
+    Stateful SQL sessions, for dbt, dlt and the REPL.
+
+dh session close
+    Close a session and release its connection.
+    . <session_id>
+
+dh session exec
+    Run one statement on an existing session's connection.
+    . <session_id>
+    . --query/-q
+    . --file/-f
+    . --timeout
+    . --limit
+    . --all
+
+dh session get
+    One session's status and the agent holding it.
+    . <session_id>
+
+dh session list
+    The workspace's sessions, newest first. The audit list.
+    . --status
+    . --all
+
+dh session open
+    Open a session and print its id.
+    . --agent
+    . --catalog
+    . --wait
+    . --no-wait
+
+dh session statements
+    A session's statements in execution order.
+    . <session_id>
+    . --all
+
+dh sql
+    Run SQL and print the results.
+    . --query/-q
+    . --file/-f
+    . --stdin/-i
+    . --no-wait
+    . --timeout
+    . --limit
+    . --all
+    . --agent
+
+dh table
+    Tables, their metadata and a sample of rows.
+
+dh table create
+    Create an Iceberg table.
+    . <table>
+    . --column/-c
+    . --catalog
+
+dh table drop
+    Drop a table.
+    . <table>
+    . --catalog
+
+dh table get
+    One table's columns, partitioning and statistics.
+    . <table>
+    . --catalog
+
+dh table health
+    Maintenance findings for this table.
+    . <table>
+    . --catalog
+
+dh table lineage
+    What this table was built from.
+    . <table>
+    . --catalog
+
+dh table list
+    Tables in a schema.
+    . <schema>
+    . --catalog
+
+dh table recount
+    Recount the table's rows and refresh its stats.
+    . <table>
+    . --catalog
+
+dh table sample
+    A page of rows, for previewing without SQL.
+    . <table>
+    . --catalog
+
+dh table snapshots
+    The table's Iceberg snapshots.
+    . <table>
+    . --catalog
+
+dh version
+    The CLI's version, and the server's when one is reachable.
+
+dh workspace
+    Workspaces and their members.
+
+dh workspace create
+    Create a workspace.
+    . <slug>
+    . --name
+
+dh workspace delete
+    Delete a workspace.
+    . <workspace>
+
+dh workspace get
+    One workspace, by slug or id. Defaults to the configured one.
+    . <workspace>
+
+dh workspace list
+    Workspaces you can see.
+
+dh workspace member
+    Workspace membership.
+
+dh workspace member add
+    Add a member to the workspace.
+    . <user_id>
+    . --role
+
+dh workspace member list
+    Who belongs to the workspace, and in what role.
+
+dh workspace update
+    Rename or re-describe a workspace.
+    . <workspace>
+    . --name
+    . --description
