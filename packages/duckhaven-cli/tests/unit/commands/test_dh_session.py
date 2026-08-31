@@ -236,3 +236,99 @@ def _settings():
         ),
         {},
     )
+
+
+# --- REPL loop -------------------------------------------------------------
+
+
+class _Cursor:
+    def __init__(self, conn):
+        self._conn = conn
+
+    def execute(self, sql):
+        self._conn.executed.append(sql)
+        if sql in self._conn.failing:
+            raise self._conn.failing[sql]
+
+    @property
+    def description(self):
+        return [("n",)]
+
+    def fetchall(self):
+        return [(1,)]
+
+    def close(self):
+        self._conn.cursors_closed += 1
+
+
+class _Connection:
+    def __init__(self, failing=None):
+        self.executed = []
+        self.failing = failing or {}
+        self.cursors_closed = 0
+        self.closed = False
+
+    def cursor(self):
+        return _Cursor(self)
+
+    def close(self):
+        self.closed = True
+
+
+def _run_loop(monkeypatch, connection, lines):
+    monkeypatch.setattr(repl, "_open_session", lambda *a, **k: connection)
+    monkeypatch.setattr(repl.typer, "prompt", lambda prompt, **_k: _next(lines, prompt))
+    return repl.run(CliContext(fmt=Format.JSON), _settings())
+
+
+def _next(queue, _prompt):
+    if not queue:
+        raise EOFError
+    return queue.pop(0)
+
+
+def test_the_repl_runs_statements_on_the_held_session(monkeypatch, capsys):
+    connection = _Connection()
+    assert _run_loop(monkeypatch, connection, ["select 1;", "select 2;"]) == 0
+    assert connection.executed == ["select 1", "select 2"]
+    assert connection.closed is True
+    assert connection.cursors_closed == 2
+    assert '"rows"' in capsys.readouterr().out
+
+
+def test_a_failed_statement_keeps_the_session_open(monkeypatch, capsys):
+    """Exiting would throw away the temp tables that are the point of a session."""
+    from duckhaven_sql_connector import ProgrammingError
+
+    boom = ProgrammingError("[422] Binder Error", code="sql_error", status_code=422)
+    connection = _Connection(failing={"select nope": boom})
+    assert _run_loop(monkeypatch, connection, ["select nope;", "select 1;"]) == 0
+    # The second statement still ran on the same connection.
+    assert connection.executed == ["select nope", "select 1"]
+    assert "Binder Error" in capsys.readouterr().err
+
+
+def test_interrupting_a_statement_returns_to_the_prompt(monkeypatch, capsys):
+    connection = _Connection(failing={"select slow": KeyboardInterrupt()})
+    assert _run_loop(monkeypatch, connection, ["select slow;", "select 1;"]) == 0
+    assert connection.executed == ["select slow", "select 1"]
+    assert "Cancelled" in capsys.readouterr().err
+
+
+@respx.mock
+def test_the_fallback_loop_runs_each_statement_on_its_own(monkeypatch, capsys):
+    monkeypatch.setattr("dh.execute.time.sleep", lambda _s: None)
+    respx.get(f"{API}/agents").mock(return_value=httpx.Response(200, json=[]))
+    respx.post(f"{WS}/queries").mock(
+        return_value=httpx.Response(202, json={"id": QID, "status": "queued"})
+    )
+    respx.get(f"{API}/queries/{QID}").mock(
+        return_value=httpx.Response(200, json={"id": QID, "status": "done", "row_count": 1})
+    )
+    respx.get(f"{API}/queries/{QID}/rows").mock(
+        return_value=httpx.Response(
+            200, json={"columns": ["n"], "rows": [[1]], "cursor": None, "total": 1}
+        )
+    )
+    assert _run_loop(monkeypatch, None, ["select 1;"]) == 0
+    assert '"rows"' in capsys.readouterr().out
