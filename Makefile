@@ -1,4 +1,4 @@
-.PHONY: sync lint fmt fmt-check test test-cov build check-dist clean
+.PHONY: sync lint fmt fmt-check test test-cov test-cli build check-dist clean
 
 sync:
 	uv sync
@@ -18,6 +18,10 @@ test:
 test-cov:
 	uv run pytest --cov=duckhaven_sql_connector --cov-report=term-missing --cov-fail-under=90
 
+test-cli:
+	uv run pytest packages/duckhaven-cli/tests/unit \
+		--cov=dh --cov-report=term-missing --cov-fail-under=90
+
 # Live tests against a real DuckHaven; needs DUCKHAVEN_TEST_HOST/WORKSPACE/PAT.
 test-integration:
 	uv run pytest packages/duckhaven-sql-connector/tests/integration -m integration
@@ -33,9 +37,12 @@ test-dbt-integration:
 test-dlt-integration:
 	uv run pytest packages/dlt-duckhaven/tests/e2e -m integration
 
-# Refresh the pinned OpenAPI contract from a running server: make refresh-contract HOST=https://...
+# Refresh the pinned OpenAPI contracts from a running server (or a local
+# openapi.json, which the server repo can generate without booting anything):
+#   make refresh-contract HOST=https://duckhaven.internal
 refresh-contract:
 	uv run python packages/duckhaven-sql-connector/scripts/refresh_contract.py $(HOST)
+	uv run python packages/duckhaven-cli/scripts/refresh_contract.py $(HOST)
 
 # Build a single member: make build PKG=duckhaven-sql-connector
 build:
