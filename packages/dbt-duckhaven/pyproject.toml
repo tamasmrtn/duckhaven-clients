@@ -21,7 +21,7 @@ classifiers = [
 # Reuse dbt-duckdb's DuckDB dialect, macros, and Iceberg-aware materializations;
 # we swap only the connection layer for the DuckHaven session API via the connector.
 dependencies = [
-    "dbt-duckdb>=1.10,<2",
+    "dbt-duckdb>=1.11.0,<2",
     "duckhaven-sql-connector>=0.4.0",
 ]
 dynamic = ["version"]
