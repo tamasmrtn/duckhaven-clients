@@ -6,6 +6,8 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-09-09
+
 ### Changed
 
 - Drop support for Python 3.10; the minimum supported version is now 3.11.
