@@ -9,23 +9,26 @@ own project under **Apache-2.0**.
 
 | Package | PyPI | Purpose |
 |---------|------|---------|
-| [`duckhaven-sql-connector`](packages/duckhaven-sql-connector) | [published](https://pypi.org/project/duckhaven-sql-connector/) | DB-API 2.0 (PEP 249) client for DuckHaven's SQL session/statement API — the shared transport for the two below. |
+| [`duckhaven-sql-connector`](packages/duckhaven-sql-connector) | [published](https://pypi.org/project/duckhaven-sql-connector/) | DB-API 2.0 (PEP 249) client for DuckHaven's SQL session/statement API — the shared transport for the members below. |
 | [`dbt-duckhaven`](packages/dbt-duckhaven) | [published](https://pypi.org/project/dbt-duckhaven/) | dbt-duckdb adapter that routes every statement through the connector. |
 | [`dlt-duckhaven`](packages/dlt-duckhaven) | [published](https://pypi.org/project/dlt-duckhaven/) | dlt destination that stages Parquet and loads through the connector. |
+| [`duckhaven-cli`](packages/duckhaven-cli) | [published](https://pypi.org/project/duckhaven-cli/) | `dh`, the command-line interface — SQL, catalog, dbt lineage, grants and admin over the REST API. |
 
-`dbt-duckhaven` and `dlt-duckhaven` depend on `duckhaven-sql-connector` and pin a minimum
-version of it. During co-development that dependency resolves to the local workspace member
-(`{ workspace = true }`); once installed from PyPI it resolves to the published release.
+`dbt-duckhaven`, `dlt-duckhaven` and `duckhaven-cli` depend on `duckhaven-sql-connector` and
+pin a minimum version of it. During co-development that dependency resolves to the local
+workspace member (`{ workspace = true }`); once installed from PyPI it resolves to the
+published release.
 
 ## Install
 
-Each package installs from PyPI on its own; the two integrations pull a compatible
+Each package installs from PyPI on its own; the integrations and the CLI pull a compatible
 connector in with them:
 
 ```sh
 pip install duckhaven-sql-connector   # DB-API 2.0 client
 pip install dlt-duckhaven             # dlt destination
 pip install dbt-duckhaven             # dbt adapter
+pip install duckhaven-cli             # dh, the command-line interface
 ```
 
 See each package's README for connection and configuration details.
