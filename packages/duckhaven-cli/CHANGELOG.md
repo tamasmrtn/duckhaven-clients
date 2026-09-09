@@ -6,6 +6,8 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-09
+
 ### Fixed
 
 - Declare `click` as a direct dependency. `dh` failed to start with
