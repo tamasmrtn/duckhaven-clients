@@ -30,11 +30,11 @@ with connect(
     host="https://duckhaven.internal",
     workspace="analytics",
     token="dh_pat_…",
-    catalog="sales",          # optional default catalog
+    catalog="sales",  # optional default catalog
     # agent="…-uuid-…",       # optional explicit compute (an agent UUID); omit to auto-pick
 ) as conn:
     with conn.cursor() as cur:
-        cur.execute("SELECT ? AS n", [1])   # qmark params, rendered safely client-side
+        cur.execute("SELECT ? AS n", [1])  # qmark params, rendered safely client-side
         print(cur.description, cur.fetchall())
 ```
 
@@ -91,7 +91,7 @@ the server hands back the session before it is usable and the connector polls it
 `open`, so the wait is invisible apart from a slower first connection.
 
 ```python
-connect(..., compute_wait=300.0)   # the default; 0 fails immediately instead
+connect(..., compute_wait=300.0)  # the default; 0 fails immediately instead
 ```
 
 `compute_wait` is the total wall-clock budget for that wait. The default matches the
