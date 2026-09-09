@@ -6,6 +6,10 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Changed
+
+- Drop support for Python 3.10; the minimum supported version is now 3.11.
+
 ## [0.4.1] - 2026-08-27
 
 ### Fixed

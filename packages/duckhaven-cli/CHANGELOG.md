@@ -6,6 +6,10 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Drop support for Python 3.10; the minimum supported version is now 3.11.
+
 ## [0.1.1] - 2026-09-09
 
 ### Fixed
