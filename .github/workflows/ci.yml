@@ -63,7 +63,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -85,7 +85,7 @@ jobs:
       fail-fast: false
       # dbt does not run on 3.14 yet (mashumaro), so cap this member at 3.13.
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        python-version: ["3.11", "3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -102,9 +102,10 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-      # dlt 1.29 supports 3.10–3.14 (Requires-Python >=3.10,<3.15).
+      # dlt 1.29 supports 3.10-3.14 (Requires-Python >=3.10,<3.15), but this
+      # workspace's floor is 3.11.
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -124,7 +125,7 @@ jobs:
       # The CLI has the widest install surface of any member — people `uv tool install`
       # it onto whatever interpreter they already have — so it holds the full matrix.
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
     steps:
       - uses: actions/checkout@v7
         with:
