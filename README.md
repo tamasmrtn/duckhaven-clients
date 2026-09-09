@@ -41,7 +41,7 @@ make lint test     # ruff check + pytest
 make fmt           # ruff format
 ```
 
-Requires Python ≥ 3.10 (CI matrix: 3.10–3.14). No mypy gate — Ruff only, but every module
+Requires Python ≥ 3.11 (CI matrix: 3.11–3.14). No mypy gate — Ruff only, but every module
 ships complete type hints and a `py.typed` marker.
 
 ## Releasing

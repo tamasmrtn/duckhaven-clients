@@ -10,7 +10,7 @@ on the raised error.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from email.utils import parsedate_to_datetime
 
 import httpx
@@ -61,8 +61,8 @@ def _retry_after_seconds(response: httpx.Response) -> float | None:
     except (TypeError, ValueError):
         return None
     if when.tzinfo is None:
-        when = when.replace(tzinfo=timezone.utc)
-    return max(0.0, (when - datetime.now(tz=timezone.utc)).total_seconds())
+        when = when.replace(tzinfo=UTC)
+    return max(0.0, (when - datetime.now(tz=UTC)).total_seconds())
 
 
 def _parse_body(response: httpx.Response) -> tuple[str | None, str]:

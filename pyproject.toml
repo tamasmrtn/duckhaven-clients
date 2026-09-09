@@ -27,7 +27,7 @@ dev = [
 [tool.ruff]
 line-length = 100
 # The workspace floor; UP rules must not suggest idioms newer than this.
-target-version = "py310"
+target-version = "py311"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]

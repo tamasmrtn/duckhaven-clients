@@ -16,7 +16,7 @@ REST API** (PAT bearer auth) and versions/publishes independently via a tag pref
 `sql-connector-vX.Y.Z`).
 
 Tooling: **uv**, **hatchling + hatch-vcs** (tag-derived version), **Ruff** (lint/format, no
-mypy), pre-commit, GitHub Actions (CI matrix Python 3.10–3.14; tag-triggered Trusted
+mypy), pre-commit, GitHub Actions (CI matrix Python 3.11–3.14; tag-triggered Trusted
 Publishing). Commands: `make sync lint fmt test test-cov build check-dist`, plus
 `make test-integration` and `make refresh-contract`.
 

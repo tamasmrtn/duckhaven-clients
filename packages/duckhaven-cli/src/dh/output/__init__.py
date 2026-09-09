@@ -15,13 +15,13 @@ import io
 import json
 import os
 import sys
-from enum import Enum
+from enum import StrEnum
 from typing import Any, TextIO
 
 from dh.errors import DhError
 
 
-class Format(str, Enum):
+class Format(StrEnum):
     JSON = "json"
     TABLE = "table"
     CSV = "csv"
