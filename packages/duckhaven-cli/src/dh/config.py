@@ -16,16 +16,11 @@ from __future__ import annotations
 
 import os
 import stat
-import sys
+import tomllib
 from dataclasses import dataclass, replace
 from pathlib import Path
 
 from dh.errors import ConfigError
-
-if sys.version_info >= (3, 11):  # pragma: no cover - exercised by the 3.11+ matrix legs
-    import tomllib
-else:  # pragma: no cover - exercised by the 3.10 matrix leg
-    import tomli as tomllib
 
 #: Every profile field, in the order they are written back out.
 FIELDS = ("host", "token", "workspace", "catalog", "agent")
