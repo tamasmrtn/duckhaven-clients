@@ -24,7 +24,7 @@ dependencies = ["httpx>=0.28"]
 dynamic = ["version"]
 
 [project.optional-dependencies]
-arrow = ["pyarrow>=15"]
+arrow = ["pyarrow>=25.0.1"]
 otel = [
     "opentelemetry-api>=1.44.0",
     "opentelemetry-instrumentation-httpx>=0.48b0",

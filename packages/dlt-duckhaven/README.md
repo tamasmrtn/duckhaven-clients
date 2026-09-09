@@ -48,7 +48,7 @@ import dlt
 pipeline = dlt.pipeline(
     pipeline_name="ingest",
     destination="duckhaven",
-    dataset_name="analytics",   # the Iceberg schema/namespace within `catalog`
+    dataset_name="analytics",  # the Iceberg schema/namespace within `catalog`
 )
 pipeline.run(my_resource)
 ```
