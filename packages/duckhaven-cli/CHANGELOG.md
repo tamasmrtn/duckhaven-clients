@@ -6,6 +6,8 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-09
+
 ### Added
 
 - `dh`, the DuckHaven command-line interface.
