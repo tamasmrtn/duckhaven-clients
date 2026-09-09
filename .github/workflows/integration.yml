@@ -101,7 +101,11 @@ jobs:
           exit 1
 
       - name: Capture the first-boot setup token
-        run: echo "DH_SETUP_TOKEN=$(docker compose $CF exec -T api cat /var/duckhaven/setup_token)" >> "$GITHUB_ENV"
+        run: |
+          # api is distroless (no shell to exec into) — read the file out via
+          # the daemon's container-archive API instead of `exec ... cat`.
+          docker compose $CF cp api:/var/duckhaven/setup_token ./setup_token
+          echo "DH_SETUP_TOKEN=$(cat ./setup_token)" >> "$GITHUB_ENV"
 
       - name: Seed a workspace, catalog, and service-account PAT
         run: python3 ci/integration/seed.py
