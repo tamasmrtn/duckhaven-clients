@@ -6,6 +6,14 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Declare `click` as a direct dependency. `dh` failed to start with
+  `ModuleNotFoundError: No module named 'click'` when installed standalone:
+  `context.py`/`repl.py` catch `click.Abort` directly, but `typer>=0.27` no longer
+  depends on `click` itself, and the workspace dev environment masked this because
+  other packages pulled `click` in transitively.
+
 ## [0.1.0] - 2026-09-09
 
 ### Added
