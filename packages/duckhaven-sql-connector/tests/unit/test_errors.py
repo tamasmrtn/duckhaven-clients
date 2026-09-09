@@ -1,3 +1,5 @@
+from datetime import UTC
+
 import httpx
 import pytest
 
@@ -158,12 +160,12 @@ def test_retry_after_is_carried_onto_the_raised_error():
 
 
 def test_retry_after_parses_an_http_date_and_rejects_nonsense():
-    from datetime import datetime, timedelta, timezone
+    from datetime import datetime, timedelta
     from email.utils import format_datetime
 
     from duckhaven_sql_connector.errors import _retry_after_seconds
 
-    future = datetime.now(tz=timezone.utc) + timedelta(seconds=30)
+    future = datetime.now(tz=UTC) + timedelta(seconds=30)
     assert (
         20
         < _retry_after_seconds(
@@ -176,7 +178,7 @@ def test_retry_after_parses_an_http_date_and_rejects_nonsense():
     # backoff, which is always safe.
     assert _retry_after_seconds(httpx.Response(503, headers={"Retry-After": "soon"})) is None
     # A date already in the past clamps to zero, never negative.
-    past = datetime.now(tz=timezone.utc) - timedelta(seconds=30)
+    past = datetime.now(tz=UTC) - timedelta(seconds=30)
     assert (
         _retry_after_seconds(httpx.Response(503, headers={"Retry-After": format_datetime(past)}))
         == 0.0
