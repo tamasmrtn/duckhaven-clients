@@ -121,10 +121,14 @@ class Cursor:
         config = self._connection._config
         session_id = self._connection._session_id
 
+        body: dict[str, Any] = {"sql": sql, "timeout_s": config.timeout}
+        if config.statement_wait is not None:
+            body["wait_timeout_s"] = config.statement_wait
+
         try:
             response = transport.post(
                 f"/sql/sessions/{session_id}/statements",
-                json={"sql": sql, "timeout_s": config.timeout},
+                json=body,
             )
         except OperationalError as exc:
             # A reaped/closed/agent-lost session answers 409; the connection is dead.
@@ -163,8 +167,25 @@ class Cursor:
         return self
 
     def _poll_to_completion(self, query_id: str, status: str) -> dict[str, Any]:
+        """Follow a statement the submit call handed back still running.
+
+        Normally never loops: the server holds the submit response until the
+        statement finishes, so it arrives terminal and this returns straight away.
+        What is left is the tail that outran that budget, and there the status route
+        takes the same wait, so each GET blocks instead of answering "still running".
+
+        That buys request *volume*, not latency — the sleep before each GET still
+        bounds how late completion is noticed, exactly as it did before. It stays
+        because a server too old to know the parameter answers immediately, and
+        without it this would spin. Against such a server the behaviour below is
+        unchanged; the tail is a small share of statements either way.
+        """
         transport = self._connection._transport
-        deadline = transport._monotonic() + self._connection._config.timeout + _POLL_GRACE
+        config = self._connection._config
+        deadline = transport._monotonic() + config.timeout + _POLL_GRACE
+        params = (
+            None if config.statement_wait is None else {"wait_timeout_s": config.statement_wait}
+        )
         interval = _POLL_START
         query: dict[str, Any] = {"id": query_id, "status": status}
         while status in _PENDING:
@@ -173,7 +194,7 @@ class Cursor:
                 raise OperationalError(f"statement {query_id} timed out while polling")
             transport._sleep(interval)
             interval = min(_POLL_MAX, interval * 1.5)
-            query = transport.get(f"/queries/{query_id}").json()
+            query = transport.get(f"/queries/{query_id}", params=params).json()
             status = query.get("status", "running")
         if status != "done":
             raise ProgrammingError(
