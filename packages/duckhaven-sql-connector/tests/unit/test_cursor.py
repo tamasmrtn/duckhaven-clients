@@ -483,15 +483,20 @@ def test_the_first_page_limit_is_sent_and_bounded_by_fetch_size():
 
 
 @respx.mock
-def test_first_page_limit_zero_restores_the_separate_rows_request():
-    """0 opts out -- the pre-inline behaviour, and the control arm for measuring it."""
+def test_first_page_limit_zero_is_sent_so_it_can_mean_no():
+    """0 has to travel. The server returns a page by default, so an omitted field
+    asks for one -- exactly the opposite of what the caller said.
+
+    Regression test: a benchmark A/B showed no difference between the arms because
+    the "off" arm sent nothing and the server inlined anyway. Same shape as the
+    `statement_wait` 0-versus-unset bug."""
     conn = open_conn(make_config(first_page_limit=0))
     submit = _submit(status="done", row_count=0)
     rows_route = _rows_page()
 
     conn.cursor().execute("SELECT 1")
 
-    assert "first_page_limit" not in json.loads(submit.calls[0].request.content)
+    assert json.loads(submit.calls[0].request.content)["first_page_limit"] == 0
     assert rows_route.call_count == 1
 
 

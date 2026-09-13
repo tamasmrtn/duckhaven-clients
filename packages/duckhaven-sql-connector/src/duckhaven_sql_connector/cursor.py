@@ -124,10 +124,10 @@ class Cursor:
         body: dict[str, Any] = {"sql": sql, "timeout_s": config.timeout}
         if config.statement_wait is not None:
             body["wait_timeout_s"] = config.statement_wait
-        # Never ask for more than the caller will buffer anyway.
-        first_page_limit = min(config.first_page_limit, config.fetch_size)
-        if first_page_limit > 0:
-            body["first_page_limit"] = first_page_limit
+        # Always sent, 0 included: the server returns a first page by default, so
+        # omitting the field asks for one. 0 has to travel to mean "don't".
+        # Never more than the caller will buffer anyway.
+        body["first_page_limit"] = min(config.first_page_limit, config.fetch_size)
 
         try:
             response = transport.post(
