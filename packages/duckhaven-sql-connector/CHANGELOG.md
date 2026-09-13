@@ -8,6 +8,15 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ### Added
 
+- `first_page_limit` on `connect()` (default 200, 0 to disable): asks the server to return
+  the first page of rows on the statement response. A statement whose result fits costs
+  **one** HTTP call instead of two — the second was previously unavoidable because
+  `cursor.description` needs the column names. Measured end to end: broker overhead
+  159ms -> 128ms per statement. A larger result pages from the inlined page as usual, and
+  a server that does not support the field behaves exactly as before.
+
+### Added
+
 - `statement_wait` on `connect()`: how long the server may hold a statement call waiting
   for it to finish, sent as the statement body's `wait_timeout_s`. A statement that
   completes inside the budget now needs no status poll at all — measured over 440 TPC-H

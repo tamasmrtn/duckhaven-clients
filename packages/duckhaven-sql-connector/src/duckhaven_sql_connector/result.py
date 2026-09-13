@@ -60,13 +60,28 @@ class ResultSet:
         self.column_schema: list[tuple[str, str]] | None = None
         self.total = 0
 
+    def prime(self, page: dict[str, Any]) -> None:
+        """Seed the first page from a body the caller already has.
+
+        The statement endpoint can return the first page inline (`first_page_limit`),
+        which is the whole saving: without it the cursor must call
+        ``GET /queries/{id}/rows`` before it can even report `.description`. An
+        inlined page is an ordinary page — if it is shorter than the result it
+        carries a `cursor`, and paging continues from there exactly as if this page
+        had been fetched.
+        """
+        self._consume_page(page)
+
     def _load_page(self) -> None:
         params: dict[str, Any] = {"limit": self._fetch_size}
         if self._next_cursor is not None:
             params["cursor"] = self._next_cursor
         response = self._transport.get(f"/queries/{self._query_id}/rows", params=params)
+        self._consume_page(response.json())
+
+    def _consume_page(self, page: Any) -> None:
+        """Fold one page body into the buffer, wherever it came from."""
         try:
-            page = response.json()
             columns = list(page["columns"])
             rows = page["rows"]
             self.total = page.get("total", 0) or 0

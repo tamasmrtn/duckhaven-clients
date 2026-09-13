@@ -140,3 +140,41 @@ def test_statement_wait_removes_the_status_poll_round_trips():
 
     assert with_wait == 0
     assert without_wait >= 1, "wait_timeout_s=0 must restore submit-then-poll"
+
+
+def test_the_first_page_arrives_on_the_submit_response():
+    """One HTTP call per statement, against a real server.
+
+    A unit test can only show the cursor skips its fetch when handed a page; that the
+    server actually puts one there is a property of the pair. Skips against a server
+    that does not support it, which answers without a page and costs two calls.
+    """
+    from duckhaven_sql_connector._telemetry import Hooks
+
+    calls: list[tuple[str, str]] = []
+
+    def on_request(method, path, status, duration):
+        calls.append((method, path.split("?")[0]))
+
+    connection = connect(
+        host=HOST,
+        workspace=WORKSPACE,
+        token=TOKEN,
+        agent=AGENT,
+        catalog=CATALOG,
+        hooks=Hooks(on_request=on_request),
+    )
+    try:
+        cur = connection.cursor()
+        cur.execute("SELECT 1")  # warm the session; ignore its calls
+        calls.clear()
+        cur.execute("SELECT 42 AS answer, 'x' AS s")
+        assert cur.fetchall() == [(42, "x")]
+        assert cur.description[0][0] == "answer"
+        assert cur.rowcount == 1
+        row_fetches = [p for m, p in calls if m == "GET" and p.endswith("/rows")]
+        if row_fetches:
+            pytest.skip("server does not return a first page on the statement response")
+        assert len(calls) == 1, f"expected one HTTP call, got {calls}"
+    finally:
+        connection.close()

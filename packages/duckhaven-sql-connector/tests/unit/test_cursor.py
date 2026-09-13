@@ -416,3 +416,101 @@ def test_row_count_and_errors_still_come_from_the_poll_when_submit_is_pending():
 
     cur = conn.cursor().execute("SELECT 1")
     assert cur.rowcount == 7
+
+
+def _page(rows, columns, cursor=None, total=None, schema=None):
+    body = {
+        "rows": rows,
+        "columns": columns,
+        "cursor": cursor,
+        "total": total if total is not None else len(rows),
+    }
+    if schema is not None:
+        body["column_schema"] = schema
+    return body
+
+
+@respx.mock
+def test_an_inlined_first_page_costs_no_rows_request():
+    """The saving this exists for. Without it every statement -- `SELECT 1` included,
+    and even for a caller that reads nothing -- makes a second HTTP call purely so
+    `.description` has column names."""
+    conn = open_conn()
+    submit = _submit(
+        status="done",
+        row_count=2,
+        first_page=_page([{"n": 1}, {"n": 2}], ["n"], schema=[{"name": "n", "type": "INTEGER"}]),
+    )
+    rows_route = respx.get(ROWS_URL).mock(return_value=httpx.Response(200, json=_page([], [])))
+
+    cur = conn.cursor().execute("SELECT n FROM t")
+
+    assert submit.call_count == 1
+    assert rows_route.call_count == 0, "fetched rows the submit response already carried"
+    assert cur.fetchall() == [(1,), (2,)]
+    assert cur.description[0][0] == "n"
+    assert cur.description[0][1] == "INTEGER"
+    assert cur.rowcount == 2
+
+
+@respx.mock
+def test_an_inlined_page_shorter_than_the_result_still_pages():
+    """An inlined page is an ordinary page: if it carries a cursor there are more
+    rows, and paging continues from it rather than restarting."""
+    conn = open_conn()
+    _submit(status="done", row_count=3, first_page=_page([{"n": 1}], ["n"], cursor="1", total=3))
+    rest = respx.get(ROWS_URL).mock(
+        return_value=httpx.Response(200, json=_page([{"n": 2}, {"n": 3}], ["n"], total=3))
+    )
+
+    cur = conn.cursor().execute("SELECT n FROM t")
+
+    assert cur.fetchall() == [(1,), (2,), (3,)]
+    assert rest.call_count == 1
+    assert rest.calls[0].request.url.params["cursor"] == "1"
+
+
+@respx.mock
+def test_the_first_page_limit_is_sent_and_bounded_by_fetch_size():
+    """Asking for more rows than the caller will buffer is pointless, so the request
+    is the smaller of the two."""
+    conn = open_conn(make_config(first_page_limit=200, fetch_size=25))
+    submit = _submit(status="done", row_count=0, first_page=_page([], []))
+
+    conn.cursor().execute("SELECT 1")
+
+    assert json.loads(submit.calls[0].request.content)["first_page_limit"] == 25
+
+
+@respx.mock
+def test_first_page_limit_zero_is_sent_so_it_can_mean_no():
+    """0 has to travel. The server returns a page by default, so an omitted field
+    asks for one -- exactly the opposite of what the caller said.
+
+    Regression test: a benchmark A/B showed no difference between the arms because
+    the "off" arm sent nothing and the server inlined anyway. Same shape as the
+    `statement_wait` 0-versus-unset bug."""
+    conn = open_conn(make_config(first_page_limit=0))
+    submit = _submit(status="done", row_count=0)
+    rows_route = _rows_page()
+
+    conn.cursor().execute("SELECT 1")
+
+    assert json.loads(submit.calls[0].request.content)["first_page_limit"] == 0
+    assert rows_route.call_count == 1
+
+
+@respx.mock
+def test_a_server_that_ignores_the_field_still_works():
+    """Against a server too old to inline, the response simply has no `first_page`
+    and the cursor fetches rows the way it always did."""
+    conn = open_conn()
+    _submit(status="done", row_count=1)
+    rows_route = respx.get(ROWS_URL).mock(
+        return_value=httpx.Response(200, json=_page([{"n": 7}], ["n"]))
+    )
+
+    cur = conn.cursor().execute("SELECT n FROM t")
+
+    assert rows_route.call_count == 1
+    assert cur.fetchall() == [(7,)]

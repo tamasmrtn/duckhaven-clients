@@ -124,6 +124,10 @@ class Cursor:
         body: dict[str, Any] = {"sql": sql, "timeout_s": config.timeout}
         if config.statement_wait is not None:
             body["wait_timeout_s"] = config.statement_wait
+        # Always sent, 0 included: the server returns a first page by default, so
+        # omitting the field asks for one. 0 has to travel to mean "don't".
+        # Never more than the caller will buffer anyway.
+        body["first_page_limit"] = min(config.first_page_limit, config.fetch_size)
 
         try:
             response = transport.post(
@@ -149,7 +153,15 @@ class Cursor:
         self._result = ResultSet(
             transport, self._query_id, config.fetch_size, hooks=transport._hooks
         )
-        self._result.ensure_started()
+        # The server can return the first page on the submit response. When it does,
+        # this whole statement cost one HTTP call; `ensure_started` would otherwise
+        # make a second one unconditionally -- even for `SELECT 1`, and even for a
+        # caller that never reads a row -- purely so `.description` has column names.
+        first_page = query.get("first_page")
+        if first_page is not None:
+            self._result.prime(first_page)
+        else:
+            self._result.ensure_started()
         cols = self._result.columns
         self._description = _describe(cols, self._result.column_schema) if cols else None
         return self
