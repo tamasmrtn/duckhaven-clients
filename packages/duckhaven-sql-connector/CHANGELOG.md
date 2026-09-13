@@ -6,6 +6,16 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Added
+
+- `statement_wait` on `connect()`: how long the server may hold a statement call waiting
+  for it to finish, sent as the statement body's `wait_timeout_s`. A statement that
+  completes inside the budget now needs no status poll at all — measured over 440 TPC-H
+  statements, waiting to *notice* completion was roughly half of the connector's
+  per-statement overhead. `None` (the default) takes the server's own budget; `0` restores
+  the previous submit-then-poll behaviour. Against a server that does not support the
+  field, behaviour is unchanged.
+
 ## [0.5.0] - 2026-09-09
 
 ### Changed

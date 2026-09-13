@@ -104,6 +104,29 @@ Waiting only happens while the server reports the session as still coming up. If
 `provisioning_timeout`) instead of waiting out the full budget. Against a server without
 elastic compute nothing changes: no compute is ever starting, so nothing is ever waited on.
 
+## Statement completion
+
+Running a statement is asynchronous underneath — the server hands it to a compute agent
+and is told when it finishes. Rather than discover that by polling, `execute()` lets the
+server hold the submit call until the statement is done, so it returns as soon as the
+result exists instead of on the connector's next poll.
+
+```python
+connect(..., statement_wait=None)  # the default: take the server's own budget
+```
+
+`None` sends nothing, so the deployment's `SQL_STATEMENT_WAIT_TIMEOUT_S` (10 seconds by
+default) applies and an operator's tuning is not overridden by a client with no opinion.
+A number overrides it for this connection; `0` asks the server never to hold the call,
+restoring the submit-then-poll behaviour of earlier connectors. It must stay under
+`http_timeout`, which is the socket deadline the held response has to arrive within, and
+the server caps it at `SQL_STATEMENT_MAX_WAIT_TIMEOUT_S`.
+
+A statement that runs longer than the budget is **not** cancelled — the server hands it
+back still running and the connector polls it to completion as before, so the worst case
+is exactly the old behaviour. Against a server too old to know the field, nothing changes:
+it ignores it and the connector polls.
+
 ## Column types
 
 `cursor.description` carries the result's column types in PEP 249's `type_code` field,
