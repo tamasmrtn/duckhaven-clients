@@ -141,7 +141,7 @@ class Cursor:
         # another thread) can reach the statement while it is still running, not only
         # after it finishes.
         self._query_id = query["id"]
-        query = self._poll_to_completion(query["id"], query.get("status", "queued"))
+        query = self._poll_to_completion(query)
 
         row_count = query.get("row_count")
         self._rowcount = row_count if isinstance(row_count, int) else -1
@@ -166,8 +166,8 @@ class Cursor:
         self._rowcount = total if known else -1
         return self
 
-    def _poll_to_completion(self, query_id: str, status: str) -> dict[str, Any]:
-        """Follow a statement the submit call handed back still running.
+    def _poll_to_completion(self, query: dict[str, Any]) -> dict[str, Any]:
+        """Follow a statement to a terminal state, starting from the submit response.
 
         Normally never loops: the server holds the submit response until the
         statement finishes, so it arrives terminal and this returns straight away.
@@ -179,15 +179,23 @@ class Cursor:
         because a server too old to know the parameter answers immediately, and
         without it this would spin. Against such a server the behaviour below is
         unchanged; the tail is a small share of statements either way.
+
+        Takes the whole submit body rather than its id and status: when that body is
+        already terminal it *is* the result, carrying `row_count` and `error`. Keeping
+        only the two fields discarded both — `rowcount` came back -1 for every
+        statement, and a failure raised "statement failed (failed)" instead of what
+        actually went wrong. Neither showed up until the server started answering
+        submit terminally.
         """
         transport = self._connection._transport
         config = self._connection._config
+        query_id = query["id"]
+        status = query.get("status", "queued")
         deadline = transport._monotonic() + config.timeout + _POLL_GRACE
         params = (
             None if config.statement_wait is None else {"wait_timeout_s": config.statement_wait}
         )
         interval = _POLL_START
-        query: dict[str, Any] = {"id": query_id, "status": status}
         while status in _PENDING:
             if transport._monotonic() > deadline:
                 self._try_cancel(query_id)

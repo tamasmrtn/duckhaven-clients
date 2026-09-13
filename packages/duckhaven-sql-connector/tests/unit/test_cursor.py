@@ -324,10 +324,14 @@ def test_a_statement_already_done_on_submit_is_never_polled():
     poll = respx.get(QUERY_URL).mock(return_value=httpx.Response(200, json={"id": QUERY_ID}))
     _rows_page()
 
-    conn.cursor().execute("SELECT 1")
+    cur = conn.cursor().execute("SELECT 1")
 
     assert submit.call_count == 1
     assert poll.call_count == 0, "a finished statement must not be polled"
+    # The submit body IS the result when it comes back terminal. Keeping only its id
+    # and status silently dropped row_count for every statement that finished inside
+    # the wait -- rowcount -1 is a PEP 249 regression dbt and dlt both read.
+    assert cur.rowcount == 0
 
 
 @respx.mock
@@ -385,3 +389,30 @@ def test_statement_wait_beyond_the_socket_timeout_is_rejected():
 def test_negative_statement_wait_is_rejected():
     with pytest.raises(InterfaceError, match="statement_wait must not be negative"):
         make_config(statement_wait=-1.0)
+
+
+@respx.mock
+def test_a_statement_failing_on_submit_reports_the_real_error():
+    """A failure that lands inside the wait must carry its message. The submit body
+    holds it; discarding that left every such failure raising the generic
+    "statement failed (failed)", which tells a user nothing about what went wrong."""
+    conn = open_conn()
+    _submit(status="failed", error="IO Error: Could not connect to server")
+    poll = respx.get(QUERY_URL).mock(return_value=httpx.Response(200, json={"id": QUERY_ID}))
+
+    with pytest.raises(ProgrammingError, match="IO Error: Could not connect to server"):
+        conn.cursor().execute("SELECT 1")
+    assert poll.call_count == 0
+
+
+@respx.mock
+def test_row_count_and_errors_still_come_from_the_poll_when_submit_is_pending():
+    """The other half of the same contract: when submit is still running, the terminal
+    poll response is what carries them, exactly as before."""
+    conn = open_conn()
+    _submit(status="running")
+    _poll({"status": "done", "row_count": 7})
+    _rows_page()
+
+    cur = conn.cursor().execute("SELECT 1")
+    assert cur.rowcount == 7
