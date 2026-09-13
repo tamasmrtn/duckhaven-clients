@@ -305,3 +305,114 @@ def test_query_id_is_tracked_while_the_statement_is_still_running():
     )
     cur.execute("SELECT slow()")
     assert seen["id"] == QUERY_ID
+
+
+def _rows_page(**over):
+    body = {"rows": [], "columns": [], "cursor": None, "total": 0}
+    body.update(over)
+    return respx.get(ROWS_URL).mock(return_value=httpx.Response(200, json=body))
+
+
+@respx.mock
+def test_a_statement_already_done_on_submit_is_never_polled():
+    """The server holds the submit call until the statement finishes, so the usual
+    answer is terminal and the poll route must not be touched at all. This is the
+    whole point of the wait: a statement cost four status round trips and up to a
+    poll interval of lateness purely to notice it had already finished."""
+    conn = open_conn()
+    submit = _submit(status="done", row_count=0)
+    poll = respx.get(QUERY_URL).mock(return_value=httpx.Response(200, json={"id": QUERY_ID}))
+    _rows_page()
+
+    cur = conn.cursor().execute("SELECT 1")
+
+    assert submit.call_count == 1
+    assert poll.call_count == 0, "a finished statement must not be polled"
+    # The submit body IS the result when it comes back terminal. Keeping only its id
+    # and status silently dropped row_count for every statement that finished inside
+    # the wait -- rowcount -1 is a PEP 249 regression dbt and dlt both read.
+    assert cur.rowcount == 0
+
+
+@respx.mock
+def test_statement_wait_is_sent_on_submit_and_on_the_fallback_poll():
+    """Both legs carry the budget: the submit call, and the status route for a
+    statement that outran it."""
+    conn = open_conn(make_config(statement_wait=12.0))
+    submit = _submit(status="running")
+    poll = _poll({"status": "done", "row_count": 0})
+    _rows_page()
+
+    conn.cursor().execute("SELECT 1")
+
+    assert json.loads(submit.calls[0].request.content)["wait_timeout_s"] == 12.0
+    assert poll.calls[0].request.url.params["wait_timeout_s"] == "12.0"
+
+
+@respx.mock
+def test_statement_wait_unset_sends_nothing_so_the_server_default_wins():
+    """None means "no opinion" -- an operator's SQL_STATEMENT_WAIT_TIMEOUT_S is not
+    overridden by a client that never asked for anything."""
+    conn = open_conn()
+    submit = _submit(status="running")
+    poll = _poll({"status": "done", "row_count": 0})
+    _rows_page()
+
+    conn.cursor().execute("SELECT 1")
+
+    assert "wait_timeout_s" not in json.loads(submit.calls[0].request.content)
+    assert "wait_timeout_s" not in poll.calls[0].request.url.params
+
+
+@respx.mock
+def test_statement_wait_zero_is_sent_and_restores_submit_then_poll():
+    """0 is a real value, not "unset": it asks the server never to hold the call.
+    Distinguishing the two is what makes an A/B of the wait possible on one server."""
+    conn = open_conn(make_config(statement_wait=0))
+    submit = _submit(status="running")
+    poll = _poll({"status": "done", "row_count": 0})
+    _rows_page()
+
+    conn.cursor().execute("SELECT 1")
+
+    assert json.loads(submit.calls[0].request.content)["wait_timeout_s"] == 0
+    assert poll.call_count == 1
+
+
+def test_statement_wait_beyond_the_socket_timeout_is_rejected():
+    """The server holds the response for the whole wait, so a socket deadline inside
+    it would abort the un-retried POST the wait exists to serve."""
+    with pytest.raises(InterfaceError, match="statement_wait must be less than http_timeout"):
+        make_config(statement_wait=60.0, http_timeout=60.0)
+
+
+def test_negative_statement_wait_is_rejected():
+    with pytest.raises(InterfaceError, match="statement_wait must not be negative"):
+        make_config(statement_wait=-1.0)
+
+
+@respx.mock
+def test_a_statement_failing_on_submit_reports_the_real_error():
+    """A failure that lands inside the wait must carry its message. The submit body
+    holds it; discarding that left every such failure raising the generic
+    "statement failed (failed)", which tells a user nothing about what went wrong."""
+    conn = open_conn()
+    _submit(status="failed", error="IO Error: Could not connect to server")
+    poll = respx.get(QUERY_URL).mock(return_value=httpx.Response(200, json={"id": QUERY_ID}))
+
+    with pytest.raises(ProgrammingError, match="IO Error: Could not connect to server"):
+        conn.cursor().execute("SELECT 1")
+    assert poll.call_count == 0
+
+
+@respx.mock
+def test_row_count_and_errors_still_come_from_the_poll_when_submit_is_pending():
+    """The other half of the same contract: when submit is still running, the terminal
+    poll response is what carries them, exactly as before."""
+    conn = open_conn()
+    _submit(status="running")
+    _poll({"status": "done", "row_count": 7})
+    _rows_page()
+
+    cur = conn.cursor().execute("SELECT 1")
+    assert cur.rowcount == 7

@@ -55,6 +55,14 @@ class ClientConfig:
     # pending session itself — so waiting longer could not succeed. 0 disables the wait,
     # restoring the fail-fast behaviour of connectors before this was supported.
     compute_wait: float = 300.0
+    # How long the server may hold a statement call waiting for it to finish, sent as
+    # the statement body's `wait_timeout_s`. None (the default) sends nothing and takes
+    # the server's own budget, so an operator's tuning wins unless a caller overrides it;
+    # 0 asks the server never to wait, restoring the submit-then-poll behaviour of
+    # connectors before this existed. Must stay under http_timeout, which is the socket
+    # deadline the held response has to arrive within. Capped server-side by
+    # SQL_STATEMENT_MAX_WAIT_TIMEOUT_S -- asking for more is a 422.
+    statement_wait: float | None = None
     # Optional client identifier appended to the User-Agent, so the server can attribute
     # traffic to the calling application (e.g. "dbt-duckhaven/1.2.3"). Free text.
     application: str | None = None
@@ -74,6 +82,14 @@ class ClientConfig:
             raise InterfaceError("fetch_size must be positive")
         if self.compute_wait < 0:
             raise InterfaceError("compute_wait must not be negative")
+        if self.statement_wait is not None:
+            if self.statement_wait < 0:
+                raise InterfaceError("statement_wait must not be negative")
+            if self.statement_wait >= self.http_timeout:
+                # The server holds the response for the whole wait, so a socket
+                # deadline inside it would abort the request the wait exists to serve
+                # -- and on a POST, which is not retried.
+                raise InterfaceError("statement_wait must be less than http_timeout")
         # The session endpoint selects compute by agent_id (a UUID). A friendly
         # agent name would need a lookup the API does not yet expose.
         if self.agent is not None:

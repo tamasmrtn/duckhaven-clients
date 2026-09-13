@@ -344,6 +344,7 @@ def connect(
     tls_verify: bool = True,
     retry: RetryPolicy | None = None,
     compute_wait: float = 300.0,
+    statement_wait: float | None = None,
     application: str | None = None,
     hooks: Hooks | None = None,
 ) -> Connection:
@@ -351,6 +352,10 @@ def connect(
 
     ``compute_wait`` is how long to wait if the server has to start elastic compute
     before it can open the session; 0 fails immediately instead.
+
+    ``statement_wait`` is how long the server may hold a statement call waiting for
+    it to finish, so a statement is answered when it completes rather than on the
+    next poll. ``None`` takes the server's own budget; 0 asks it never to wait.
     """
     config = ClientConfig(
         host=host,
@@ -364,6 +369,7 @@ def connect(
         tls_verify=tls_verify,
         retry=retry or RetryPolicy(),
         compute_wait=compute_wait,
+        statement_wait=statement_wait,
         application=application,
     )
     return Connection.open(config, hooks=hooks)

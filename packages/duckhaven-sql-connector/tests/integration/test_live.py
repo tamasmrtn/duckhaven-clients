@@ -92,3 +92,51 @@ def test_server_version(conn):
     if version is not None:
         assert isinstance(version.version, str) and version.version
         assert isinstance(version.api_version, int)
+
+
+def _count_status_polls(statement_wait):
+    """Run one statement and count the GET /queries/{id} status calls it cost."""
+    from duckhaven_sql_connector._telemetry import Hooks
+
+    polls = []
+
+    def on_request(method, path, status, duration):
+        if method == "GET" and path.startswith("/queries/") and not path.endswith("/rows"):
+            polls.append(path)
+
+    connection = connect(
+        host=HOST,
+        workspace=WORKSPACE,
+        token=TOKEN,
+        agent=AGENT,
+        catalog=CATALOG,
+        statement_wait=statement_wait,
+        hooks=Hooks(on_request=on_request),
+    )
+    try:
+        cur = connection.cursor()
+        cur.execute("SELECT 1")  # warm the session; ignore its calls
+        polls.clear()
+        cur.execute("SELECT 42 AS n")
+        assert cur.fetchall() == [(42,)]
+        return len(polls)
+    finally:
+        connection.close()
+
+
+def test_statement_wait_removes_the_status_poll_round_trips():
+    """The behaviour the wait exists for, against a real server: a statement that
+    finishes inside the budget costs no status polls at all.
+
+    Unit tests can only prove the connector *stops* polling when handed a terminal
+    submit response — that the server actually holds the call is a property of the
+    pair, so it is asserted here. Skips against a server too old to know the field,
+    which answers 202 immediately and polls exactly as it always did.
+    """
+    with_wait = _count_status_polls(30.0)
+    if with_wait > 0:
+        pytest.skip("server does not support wait_timeout_s on the statement call")
+    without_wait = _count_status_polls(0)
+
+    assert with_wait == 0
+    assert without_wait >= 1, "wait_timeout_s=0 must restore submit-then-poll"
