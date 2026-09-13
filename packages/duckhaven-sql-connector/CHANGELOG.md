@@ -6,24 +6,32 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
-### Added
+## [0.6.0] - 2026-09-13
 
-- `first_page_limit` on `connect()` (default 200, 0 to disable): asks the server to return
-  the first page of rows on the statement response. A statement whose result fits costs
-  **one** HTTP call instead of two — the second was previously unavoidable because
-  `cursor.description` needs the column names. Measured end to end: broker overhead
-  159ms -> 128ms per statement. A larger result pages from the inlined page as usual, and
-  a server that does not support the field behaves exactly as before.
+Two round trips removed from every statement. Against a DuckHaven that supports both, a
+statement whose result fits in the first page now costs a single HTTP call, where it
+previously cost a submit, several status polls, and a row fetch.
 
 ### Added
 
 - `statement_wait` on `connect()`: how long the server may hold a statement call waiting
   for it to finish, sent as the statement body's `wait_timeout_s`. A statement that
-  completes inside the budget now needs no status poll at all — measured over 440 TPC-H
+  completes inside the budget needs no status poll at all — measured over 440 TPC-H
   statements, waiting to *notice* completion was roughly half of the connector's
   per-statement overhead. `None` (the default) takes the server's own budget; `0` restores
-  the previous submit-then-poll behaviour. Against a server that does not support the
-  field, behaviour is unchanged.
+  the previous submit-then-poll behaviour.
+- `first_page_limit` on `connect()` (default 200, `0` to disable): asks the server to
+  return the first page of rows on the statement response. The second call was previously
+  unavoidable rather than optional — PEP 249 requires `cursor.description` and the column
+  names arrive with the rows — so even `SELECT 1` paid a round trip for it. A larger
+  result carries a cursor in its first page and pages from there as usual.
+
+Measured end to end on TPC-H SF10, four alternating passes per arm: broker overhead
+(client wall minus engine time) fell from 332ms to 97ms per statement across the two
+changes, with engine time unchanged.
+
+Both degrade cleanly: against a server that does not support a field, it is ignored and
+the connector behaves exactly as before.
 
 ### Fixed
 
