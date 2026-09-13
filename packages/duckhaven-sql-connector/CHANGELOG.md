@@ -16,6 +16,16 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
   the previous submit-then-poll behaviour. Against a server that does not support the
   field, behaviour is unchanged.
 
+### Fixed
+
+- `cursor.rowcount` and the error message on a statement that finished inside the server's
+  wait. `_poll_to_completion` rebuilt its result from the submit response's id and status
+  alone, which was harmless while submit always answered "queued" — the terminal payload
+  only ever came from a poll. Once the server started answering submit terminally, that
+  discarded `row_count` (so `rowcount` was -1, which PEP 249 specifies and dbt and dlt
+  both read) and `error` (so failures raised the generic "statement failed (failed)"
+  instead of the real cause).
+
 ## [0.5.0] - 2026-09-09
 
 ### Changed
