@@ -63,6 +63,13 @@ class ClientConfig:
     # deadline the held response has to arrive within. Capped server-side by
     # SQL_STATEMENT_MAX_WAIT_TIMEOUT_S -- asking for more is a 422.
     statement_wait: float | None = None
+    # Rows to ask for on the statement response itself, saving the round trip the
+    # cursor would otherwise always make just to learn the result's column names.
+    # Capped server-side (200 today); a larger result simply pages from there as
+    # usual. 0 disables it, which is the behaviour of connectors before this existed
+    # and the control arm for measuring it. Never larger than fetch_size, since
+    # asking for more rows than the caller wants buffered is pointless.
+    first_page_limit: int = 200
     # Optional client identifier appended to the User-Agent, so the server can attribute
     # traffic to the calling application (e.g. "dbt-duckhaven/1.2.3"). Free text.
     application: str | None = None
@@ -82,6 +89,8 @@ class ClientConfig:
             raise InterfaceError("fetch_size must be positive")
         if self.compute_wait < 0:
             raise InterfaceError("compute_wait must not be negative")
+        if self.first_page_limit < 0:
+            raise InterfaceError("first_page_limit must not be negative")
         if self.statement_wait is not None:
             if self.statement_wait < 0:
                 raise InterfaceError("statement_wait must not be negative")

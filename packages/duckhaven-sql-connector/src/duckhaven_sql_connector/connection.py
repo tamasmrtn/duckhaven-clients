@@ -345,6 +345,7 @@ def connect(
     retry: RetryPolicy | None = None,
     compute_wait: float = 300.0,
     statement_wait: float | None = None,
+    first_page_limit: int = 200,
     application: str | None = None,
     hooks: Hooks | None = None,
 ) -> Connection:
@@ -356,6 +357,10 @@ def connect(
     ``statement_wait`` is how long the server may hold a statement call waiting for
     it to finish, so a statement is answered when it completes rather than on the
     next poll. ``None`` takes the server's own budget; 0 asks it never to wait.
+
+    ``first_page_limit`` is how many result rows to ask for on the statement response
+    itself, saving the round trip the cursor would otherwise always make to learn the
+    result's columns. 0 disables it.
     """
     config = ClientConfig(
         host=host,
@@ -370,6 +375,7 @@ def connect(
         retry=retry or RetryPolicy(),
         compute_wait=compute_wait,
         statement_wait=statement_wait,
+        first_page_limit=first_page_limit,
         application=application,
     )
     return Connection.open(config, hooks=hooks)

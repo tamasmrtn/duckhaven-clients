@@ -82,6 +82,16 @@
             ],
             "title": "Finished At"
           },
+          "first_page": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowsPageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -499,6 +509,19 @@
       },
       "SqlStatementCreate": {
         "properties": {
+          "first_page_limit": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Page Limit"
+          },
           "sql": {
             "title": "Sql",
             "type": "string"
@@ -507,6 +530,18 @@
             "default": 600.0,
             "title": "Timeout S",
             "type": "number"
+          },
+          "wait_timeout_s": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Timeout S"
           }
         },
         "required": [
@@ -660,7 +695,7 @@
         ]
       },
       "get": {
-        "description": "One query's status, timings and error, by its global id.\n\nAddressed globally rather than under its workspace: the id is unique, and the\nsubmitter already holds it. Any member of the query's workspace may read it,\nwhich is what makes the history an audit trail.",
+        "description": "One query's status, timings and error, by its global id.\n\nAddressed globally rather than under its workspace: the id is unique, and the\nsubmitter already holds it. Any member of the query's workspace may read it,\nwhich is what makes the history an audit trail.\n\nPass `wait_timeout_s` to hold the response until the query reaches a terminal\nstate, for a client following a statement that outlived the wait on submit.\nIt is **opt-in and defaults to 0** deliberately: this is also the route the\nworksheet refreshes several times a second and the history reads, and neither\nwants a held request. Capped by `SQL_STATEMENT_MAX_WAIT_TIMEOUT_S`.",
         "operationId": "get_query",
         "parameters": [
           {
@@ -671,6 +706,17 @@
               "format": "uuid",
               "title": "Query Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wait_timeout_s",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Wait Timeout S",
+              "type": "number"
             }
           }
         ],
@@ -844,16 +890,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "A dependency the request needs is not available right now."
           }
         },
         "security": [
@@ -1129,7 +1165,7 @@
     },
     "/sql/sessions/{session_id}/statements": {
       "post": {
-        "description": "Run a statement on this session's DuckDB connection. 202 with a query id.\n\nUnlike `POST /workspaces/{workspace}/queries`, this reuses one held connection, so\ntemp tables, `SET`s and attached catalogs persist between statements. 409 if\nthe session is not open.",
+        "description": "Run a statement on this session's DuckDB connection. 200 if it finished\nwithin `wait_timeout_s`, 202 with a query id if it is still running.\n\nUnlike `POST /workspaces/{workspace}/queries`, this reuses one held connection, so\ntemp tables, `SET`s and attached catalogs persist between statements. 409 if\nthe session is not open.\n\nThe call blocks for up to `wait_timeout_s` (server default\n`SQL_STATEMENT_WAIT_TIMEOUT_S`, `0` to never block) so a client learns the\nstatement finished when it does, instead of on its own next poll. A statement\nthat outlives the budget comes back 202 and is polled through\n`GET /queries/{id}` as before \u2014 it is never cancelled for outrunning a wait.",
         "operationId": "run_statement",
         "parameters": [
           {

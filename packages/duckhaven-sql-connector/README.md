@@ -127,6 +127,29 @@ back still running and the connector polls it to completion as before, so the wo
 is exactly the old behaviour. Against a server too old to know the field, nothing changes:
 it ignores it and the connector polls.
 
+## First page of rows
+
+Running a statement used to cost two HTTP calls: the submit, and one to fetch rows. The
+second was unavoidable — PEP 249 requires `cursor.description`, and the column names come
+with the rows — so even `SELECT 1`, and even a statement whose rows you never read, paid
+a full round trip for it.
+
+The server can now return the first page on the submit response, and the connector asks
+for it by default:
+
+```python
+connect(..., first_page_limit=200)  # the default; 0 disables it
+```
+
+A statement whose result fits in that page costs **one** HTTP call. A larger result is
+unaffected in behaviour: the inlined page carries a cursor and paging continues from it
+exactly as before. The request is capped at your `fetch_size`, since asking for more rows
+than you will buffer is pointless, and the server caps it again on its side — this saves a
+round trip on rows you are about to read, it is not a bulk transport.
+
+Against a server too old to support it, the response simply carries no page and the
+connector fetches rows the way it always did.
+
 ## Column types
 
 `cursor.description` carries the result's column types in PEP 249's `type_code` field,
