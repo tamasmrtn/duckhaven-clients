@@ -25,7 +25,7 @@ dependencies = [
     "typer>=0.15",
     # click.Abort is caught directly (Ctrl-C/Ctrl-D handling); typer>=0.27 no longer
     # pulls click in as its own dependency, so it must be declared here too.
-    "click>=8.0",
+    "click>=8.5.0",
     "httpx>=0.28",
     # The SQL execution path (sessions, statements, polling, row pagination) is the
     # connector's, not a second implementation of it.
