@@ -7,11 +7,11 @@ members = ["packages/*"]
 
 [dependency-groups]
 dev = [
-    "ruff>=0.16.6",
+    "ruff>=0.16.7",
     "pytest>=8.3",
     "pytest-cov>=5.0",
     "respx>=0.21",
-    "build>=1.6.0",
+    "build>=1.6.1",
     "twine>=7.0.0",
     # Installed so the optional-extra code paths (arrow, otel) are exercised in tests.
     "pyarrow>=25.0.1",
