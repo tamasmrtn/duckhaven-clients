@@ -30,7 +30,7 @@ dynamic = ["version"]
 
 [project.optional-dependencies]
 # Per-load-job spans; the connector owns transport-level trace propagation.
-otel = ["opentelemetry-api>=1.44.0"]
+otel = ["opentelemetry-api>=1.45.0"]
 
 [project.urls]
 Homepage = "https://github.com/tamasmrtn/duckhaven-clients"
