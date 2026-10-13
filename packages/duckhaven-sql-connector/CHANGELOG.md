@@ -6,6 +6,8 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-13
+
 ### Added
 
 - `use_cache` on `connect()`: whether the server may answer a repeated read from its
