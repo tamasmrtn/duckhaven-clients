@@ -97,6 +97,15 @@ with `ALTER TABLE … ADD COLUMN`, one statement per new column — DuckDB accep
 `ALTER` action per statement, so several columns arriving in the same run are added one
 after another rather than in a single combined statement.
 
+### DuckLake catalogs
+
+A DuckHaven catalog is either Iceberg (Polaris) or [DuckLake](https://ducklake.select);
+the Iceberg notes on this page describe Iceberg catalogs. The destination's end-to-end
+suite — append and schema evolution, idempotent merge, several new columns at once and
+parallel load jobs into one table — also passes against a DuckLake catalog (checked against
+an unreleased DuckHaven server). The Iceberg-specific details, such as how concurrent
+commits are settled, were not re-characterised for DuckLake.
+
 ### Concurrent loads
 
 dlt loads in parallel by default, so several jobs can write to the same table at once —
