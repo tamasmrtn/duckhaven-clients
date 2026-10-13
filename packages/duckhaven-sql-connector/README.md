@@ -55,8 +55,13 @@ configuration.
 - `ProgrammingError` — a rejected statement (`statement_not_allowed`), a denied grant, or a
   missing object.
 - `OperationalError` — an unavailable/disconnected agent, a reaped or closed session
-  (reconnect), a timeout, or the session surface being disabled. `MaxRetryDurationError`
-  (a subtype) is raised when retries exhaust the configured time budget.
+  (reconnect), a timeout, or the session surface being disabled. Also an agent the server
+  will not use: `runtime_retired` (its DuckDB runtime has been retired), `runtime_unsupported`
+  (the runtime is not one the server recognises) and `agent_sandbox_unverified` (the agent
+  could not lock its configuration, which a session requires). These describe the
+  deployment rather than your SQL, so naming another agent, or none, can succeed.
+  `MaxRetryDurationError` (a subtype) is raised when retries exhaust the configured time
+  budget.
 - `InterfaceError` — bad connection configuration or a malformed response.
 
 ### Agent access denials
@@ -149,6 +154,30 @@ round trip on rows you are about to read, it is not a bulk transport.
 
 Against a server too old to support it, the response simply carries no page and the
 connector fetches rows the way it always did.
+
+## Result cache
+
+DuckHaven answers a read from its result cache when nothing the query reads has changed
+since an identical query ran, so a repeated dashboard or health-check query can come back
+without any compute running. This is on by default on the server and needs nothing from the
+connector: a cached statement looks exactly like any other (same rows, same
+`cursor.description`, same `rowcount`), and costs the same single HTTP call.
+
+The server decides what is eligible. Among the things it never serves from the cache: writes
+and DDL, queries using `now()`, `random()` and similar, views, `information_schema`, table
+functions that read outside the catalog such as `read_parquet`, statements inside a
+transaction, and anything after the session has created a temporary object or attached a
+catalog. See the DuckHaven documentation for the full list.
+
+Turn it off when you are measuring something it would short-circuit — a benchmark that
+repeats its queries would otherwise time the cache:
+
+```python
+connect(..., use_cache=False)  # None (the default) takes the server's own setting
+```
+
+`False` is sent on session open and on every statement; the result still refreshes the
+cache for everyone else. A server that predates the cache ignores the field.
 
 ## Column types
 
