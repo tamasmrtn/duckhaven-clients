@@ -104,6 +104,16 @@ session has a fixed 256 MiB budget — so very high batch counts in one run are 
   (Snapshots *do* handle a new column: that path is covered.)
 - **`external` materialization / dbt-duckdb source plugins** — out of scope.
 
+### DuckLake catalogs
+
+A DuckHaven catalog is either Iceberg (Polaris) or [DuckLake](https://ducklake.select); the
+notes on this page about Iceberg (merge-on-read, `TRUNCATE`, the missing `CREATE VIEW`)
+describe Iceberg catalogs. The adapter's functional and end-to-end suites — basic,
+incremental, snapshot, seed and run/test — also pass unchanged against a DuckLake catalog
+(checked against an unreleased DuckHaven server). That is the extent of what has been
+verified: the Iceberg-specific caveats above were not re-characterised for DuckLake, and the
+`view` materialization in particular was not exercised there.
+
 ### Model constraints
 
 Polaris/Iceberg does not enforce relational constraints. In model contracts, `not_null` is

@@ -6,6 +6,12 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Documentation only: the README now says that the destination suite was run against both an Iceberg
+  and a DuckLake catalog on a DuckHaven server with the result cache and on-demand catalog
+  attach, and passed unchanged. No code changed.
+
 ## [0.6.0] - 2026-09-09
 
 ### Changed
