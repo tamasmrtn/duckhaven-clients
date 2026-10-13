@@ -18,25 +18,6 @@
         "title": "AccessModeUpdate",
         "type": "object"
       },
-      "ActivityPointOut": {
-        "properties": {
-          "state": {
-            "title": "State",
-            "type": "string"
-          },
-          "t": {
-            "format": "date-time",
-            "title": "T",
-            "type": "string"
-          }
-        },
-        "required": [
-          "t",
-          "state"
-        ],
-        "title": "ActivityPointOut",
-        "type": "object"
-      },
       "AddMemberRequest": {
         "properties": {
           "role": {
@@ -130,6 +111,17 @@
       },
       "AgentCapabilitiesOut": {
         "properties": {
+          "agent_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Version"
+          },
           "cores": {
             "title": "Cores",
             "type": "integer"
@@ -160,6 +152,17 @@
             "title": "Duckdb Version",
             "type": "string"
           },
+          "engine_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engine Version"
+          },
           "extensions": {
             "items": {
               "type": "string"
@@ -181,6 +184,52 @@
           "memory_limit_gb": {
             "title": "Memory Limit Gb",
             "type": "number"
+          },
+          "platform": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Platform"
+          },
+          "protocol_features": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "title": "Protocol Features",
+            "type": "array"
+          },
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Id"
+          },
+          "sandbox": {
+            "anyOf": [
+              {
+                "enum": [
+                  "verified",
+                  "failed",
+                  "disabled"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sandbox"
           },
           "tailscale_ip": {
             "anyOf": [
@@ -347,75 +396,63 @@
         "type": "object"
       },
       "AgentMonitoringOut": {
-        "description": "Every series for one agent over one window, on a shared bucket grid.",
+        "description": "Every series for one agent over one range, on a shared bucket grid.",
         "properties": {
-          "activity": {
-            "items": {
-              "$ref": "#/components/schemas/ActivityPointOut"
-            },
-            "title": "Activity",
-            "type": "array"
-          },
           "bucket_seconds": {
             "title": "Bucket Seconds",
             "type": "integer"
           },
-          "completed_query_count": {
+          "buckets": {
             "items": {
-              "$ref": "#/components/schemas/CompletedQueryPointOut"
+              "$ref": "#/components/schemas/MonitoringBucketOut"
             },
-            "title": "Completed Query Count",
+            "title": "Buckets",
             "type": "array"
           },
-          "end": {
+          "generated_at": {
             "format": "date-time",
-            "title": "End",
+            "title": "Generated At",
             "type": "string"
           },
-          "failures": {
-            "items": {
-              "$ref": "#/components/schemas/FailurePointOut"
-            },
-            "title": "Failures",
-            "type": "array"
+          "preset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preset"
           },
-          "peak_query_count": {
-            "items": {
-              "$ref": "#/components/schemas/PeakQueryPointOut"
-            },
-            "title": "Peak Query Count",
-            "type": "array"
-          },
-          "start": {
+          "range_end": {
             "format": "date-time",
-            "title": "Start",
+            "title": "Range End",
             "type": "string"
+          },
+          "range_start": {
+            "format": "date-time",
+            "title": "Range Start",
+            "type": "string"
+          },
+          "spans": {
+            "items": {
+              "$ref": "#/components/schemas/MonitoringSpanOut"
+            },
+            "title": "Spans",
+            "type": "array"
           },
           "summary": {
             "$ref": "#/components/schemas/MonitoringSummaryOut"
-          },
-          "utilization": {
-            "items": {
-              "$ref": "#/components/schemas/UtilizationPointOut"
-            },
-            "title": "Utilization",
-            "type": "array"
-          },
-          "window": {
-            "title": "Window",
-            "type": "string"
           }
         },
         "required": [
-          "window",
+          "range_start",
+          "range_end",
           "bucket_seconds",
-          "start",
-          "end",
-          "peak_query_count",
-          "completed_query_count",
-          "activity",
-          "failures",
-          "utilization",
+          "generated_at",
+          "buckets",
+          "spans",
           "summary"
         ],
         "title": "AgentMonitoringOut",
@@ -552,6 +589,16 @@
             ],
             "title": "Requested Memory Gb"
           },
+          "runtime": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/AgentRuntimeOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "status": {
             "title": "Status",
             "type": "string"
@@ -566,6 +613,268 @@
           "created_at"
         ],
         "title": "AgentOut",
+        "type": "object"
+      },
+      "AgentQueryOut": {
+        "description": "One run on an agent, with what it cost \u2014 the Monitoring tab's table.",
+        "properties": {
+          "bytes_read": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bytes Read"
+          },
+          "cpu_time_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Time Ms"
+          },
+          "duration_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duration Ms"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "failure_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Failure Reason"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "origin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Origin"
+          },
+          "peak_memory_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Peak Memory Bytes"
+          },
+          "row_count": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Count"
+          },
+          "running_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Running At"
+          },
+          "spill_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spill Bytes"
+          },
+          "sql": {
+            "title": "Sql",
+            "type": "string"
+          },
+          "started_at": {
+            "format": "date-time",
+            "title": "Started At",
+            "type": "string"
+          },
+          "statement_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement Type"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "user_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Name"
+          },
+          "wait_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Ms"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "sql",
+          "status",
+          "started_at"
+        ],
+        "title": "AgentQueryOut",
+        "type": "object"
+      },
+      "AgentRuntimeOut": {
+        "description": "The runtime an agent runs, as the control plane judges it.\n\n``state`` says whether it is trusted with work: ``ok`` and ``inferred`` (an\nimage from before runtimes, matched by its DuckDB line) are; ``mismatch``,\n``unrecognized`` and ``retired`` are shown but refused; ``pending`` means the\nagent hasn't reported yet (for elastic compute, ``id`` is then the runtime it\nwas started as).",
+        "properties": {
+          "default": {
+            "default": false,
+            "title": "Default",
+            "type": "boolean"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "state": {
+            "enum": [
+              "pending",
+              "ok",
+              "inferred",
+              "mismatch",
+              "unrecognized",
+              "retired"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "enum": [
+                  "beta",
+                  "ga",
+                  "deprecated",
+                  "retired"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "status",
+          "state"
+        ],
+        "title": "AgentRuntimeOut",
         "type": "object"
       },
       "AuthMethods": {
@@ -595,6 +904,23 @@
         "title": "AuthMethods",
         "type": "object"
       },
+      "BootstrapCreate": {
+        "properties": {
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Id"
+          }
+        },
+        "title": "BootstrapCreate",
+        "type": "object"
+      },
       "BootstrapTokenOut": {
         "properties": {
           "agent_image": {
@@ -610,6 +936,10 @@
             "title": "Expires At",
             "type": "string"
           },
+          "runtime_id": {
+            "title": "Runtime Id",
+            "type": "string"
+          },
           "token": {
             "title": "Token",
             "type": "string"
@@ -619,7 +949,8 @@
           "token",
           "expires_at",
           "control_plane_url",
-          "agent_image"
+          "agent_image",
+          "runtime_id"
         ],
         "title": "BootstrapTokenOut",
         "type": "object"
@@ -636,6 +967,48 @@
         "title": "CatalogAttachRequest",
         "type": "object"
       },
+      "CatalogCapabilitiesOut": {
+        "description": "What a catalog's kind can do, so clients never switch on `kind` itself.",
+        "properties": {
+          "external_engine_readable": {
+            "title": "External Engine Readable",
+            "type": "boolean"
+          },
+          "supported_storage_kinds": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Supported Storage Kinds",
+            "type": "array"
+          },
+          "supports_agentless_ddl": {
+            "default": true,
+            "title": "Supports Agentless Ddl",
+            "type": "boolean"
+          },
+          "supports_iceberg_export": {
+            "default": false,
+            "title": "Supports Iceberg Export",
+            "type": "boolean"
+          },
+          "supports_maintenance_apply": {
+            "default": false,
+            "title": "Supports Maintenance Apply",
+            "type": "boolean"
+          },
+          "supports_storage_migration": {
+            "title": "Supports Storage Migration",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "supports_storage_migration",
+          "external_engine_readable",
+          "supported_storage_kinds"
+        ],
+        "title": "CatalogCapabilitiesOut",
+        "type": "object"
+      },
       "CatalogCreate": {
         "properties": {
           "access_mode": {
@@ -645,6 +1018,15 @@
               "scoped"
             ],
             "title": "Access Mode",
+            "type": "string"
+          },
+          "kind": {
+            "default": "iceberg_polaris",
+            "enum": [
+              "iceberg_polaris",
+              "ducklake"
+            ],
+            "title": "Kind",
             "type": "string"
           },
           "name": {
@@ -670,6 +1052,123 @@
           "name"
         ],
         "title": "CatalogCreate",
+        "type": "object"
+      },
+      "CatalogExportOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "finished_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Finished At"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Query Id"
+          },
+          "source_catalog_id": {
+            "format": "uuid",
+            "title": "Source Catalog Id",
+            "type": "string"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "tables_done": {
+            "title": "Tables Done",
+            "type": "integer"
+          },
+          "tables_total": {
+            "title": "Tables Total",
+            "type": "integer"
+          },
+          "target_catalog_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Catalog Id"
+          },
+          "target_name": {
+            "title": "Target Name",
+            "type": "string"
+          },
+          "target_storage_backend_id": {
+            "format": "uuid",
+            "title": "Target Storage Backend Id",
+            "type": "string"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "source_catalog_id",
+          "target_name",
+          "target_storage_backend_id",
+          "workspace_id",
+          "status",
+          "tables_total",
+          "tables_done",
+          "created_at"
+        ],
+        "title": "CatalogExportOut",
         "type": "object"
       },
       "CatalogGrantsOut": {
@@ -701,6 +1200,45 @@
         "title": "CatalogGrantsOut",
         "type": "object"
       },
+      "CatalogKindOut": {
+        "description": "One catalog kind this deployment can offer, for the create flow.",
+        "properties": {
+          "available": {
+            "title": "Available",
+            "type": "boolean"
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/CatalogCapabilitiesOut"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unavailable Reason"
+          }
+        },
+        "required": [
+          "kind",
+          "label",
+          "available",
+          "capabilities"
+        ],
+        "title": "CatalogKindOut",
+        "type": "object"
+      },
       "CatalogOut": {
         "properties": {
           "access_mode": {
@@ -719,6 +1257,16 @@
             ],
             "title": "Attached Workspaces"
           },
+          "capabilities": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CatalogCapabilitiesOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "created_at": {
             "format": "date-time",
             "title": "Created At",
@@ -734,13 +1282,36 @@
             "title": "Is Default",
             "type": "boolean"
           },
+          "kind": {
+            "default": "iceberg_polaris",
+            "title": "Kind",
+            "type": "string"
+          },
+          "metadata_schema": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Schema"
+          },
           "name": {
             "title": "Name",
             "type": "string"
           },
           "polaris_name": {
-            "title": "Polaris Name",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polaris Name"
           },
           "slug": {
             "title": "Slug",
@@ -768,7 +1339,6 @@
           "id",
           "slug",
           "name",
-          "polaris_name",
           "storage_backend_id",
           "storage_backend_kind",
           "storage_backend_name",
@@ -875,25 +1445,6 @@
         "title": "ColumnSpec",
         "type": "object"
       },
-      "CompletedQueryPointOut": {
-        "properties": {
-          "per_minute": {
-            "title": "Per Minute",
-            "type": "number"
-          },
-          "t": {
-            "format": "date-time",
-            "title": "T",
-            "type": "string"
-          }
-        },
-        "required": [
-          "t",
-          "per_minute"
-        ],
-        "title": "CompletedQueryPointOut",
-        "type": "object"
-      },
       "ComputeOptionsOut": {
         "description": "Ranges + rates the admin UI needs to render the create-compute dialog.\n\nThe UI shows a vCPU slider and a memory slider and computes cost as\n``cpu * price_vcpu_hour + memory_gb * price_memory_gb_hour``.",
         "properties": {
@@ -924,6 +1475,17 @@
             "title": "Default Idle Minutes",
             "type": "integer"
           },
+          "default_runtime": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Runtime"
+          },
           "enabled": {
             "title": "Enabled",
             "type": "boolean"
@@ -951,6 +1513,14 @@
           "provider": {
             "title": "Provider",
             "type": "string"
+          },
+          "runtimes": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/RuntimeOut"
+            },
+            "title": "Runtimes",
+            "type": "array"
           }
         },
         "required": [
@@ -1260,6 +1830,11 @@
             "title": "Access Mode",
             "type": "string"
           },
+          "allow_beta": {
+            "default": false,
+            "title": "Allow Beta",
+            "type": "boolean"
+          },
           "cpu": {
             "title": "Cpu",
             "type": "number"
@@ -1304,6 +1879,17 @@
               }
             ],
             "title": "Name"
+          },
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Id"
           }
         },
         "required": [
@@ -1354,28 +1940,25 @@
         "title": "ErrorOut",
         "type": "object"
       },
-      "FailurePointOut": {
+      "ExportStartRequest": {
         "properties": {
-          "count": {
-            "title": "Count",
-            "type": "integer"
-          },
-          "reason": {
-            "title": "Reason",
+          "target_name": {
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Target Name",
             "type": "string"
           },
-          "t": {
-            "format": "date-time",
-            "title": "T",
+          "target_storage_backend_id": {
+            "format": "uuid",
+            "title": "Target Storage Backend Id",
             "type": "string"
           }
         },
         "required": [
-          "t",
-          "reason",
-          "count"
+          "target_name",
+          "target_storage_backend_id"
         ],
-        "title": "FailurePointOut",
+        "title": "ExportStartRequest",
         "type": "object"
       },
       "GrantOut": {
@@ -2319,9 +2902,69 @@
             "title": "Cpu Percent",
             "type": "number"
           },
+          "executing_queries": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Executing Queries"
+          },
+          "growth_waiting": {
+            "default": 0,
+            "title": "Growth Waiting",
+            "type": "integer"
+          },
+          "idle_sessions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Idle Sessions"
+          },
+          "interval_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Interval S"
+          },
+          "memory_peak_percent": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory Peak Percent"
+          },
           "memory_percent": {
             "title": "Memory Percent",
             "type": "number"
+          },
+          "oom_kills": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oom Kills"
           },
           "queued_queries": {
             "default": 0,
@@ -2337,6 +2980,11 @@
             "format": "date-time",
             "title": "Sampled At",
             "type": "string"
+          },
+          "session_count": {
+            "default": 0,
+            "title": "Session Count",
+            "type": "integer"
           }
         },
         "required": [
@@ -2568,6 +3216,201 @@
         "title": "ModelSummaryOut",
         "type": "object"
       },
+      "MonitoringBucketOut": {
+        "description": "One bucket of every series. Flat, so all charts index the same row.",
+        "properties": {
+          "busy_s": {
+            "title": "Busy S",
+            "type": "number"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "integer"
+          },
+          "compute_wait_avg": {
+            "title": "Compute Wait Avg",
+            "type": "number"
+          },
+          "coverage": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Coverage"
+          },
+          "cpu_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Avg"
+          },
+          "cpu_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Max"
+          },
+          "done": {
+            "title": "Done",
+            "type": "integer"
+          },
+          "down_s": {
+            "title": "Down S",
+            "type": "number"
+          },
+          "failed": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Failed",
+            "type": "object"
+          },
+          "idle_s": {
+            "title": "Idle S",
+            "type": "number"
+          },
+          "mem_avg": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mem Avg"
+          },
+          "mem_max": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mem Max"
+          },
+          "oom_kills": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Oom Kills"
+          },
+          "partial": {
+            "title": "Partial",
+            "type": "boolean"
+          },
+          "peak_running": {
+            "title": "Peak Running",
+            "type": "integer"
+          },
+          "queued_avg": {
+            "title": "Queued Avg",
+            "type": "number"
+          },
+          "running_avg": {
+            "title": "Running Avg",
+            "type": "number"
+          },
+          "seconds": {
+            "title": "Seconds",
+            "type": "number"
+          },
+          "starting_s": {
+            "title": "Starting S",
+            "type": "number"
+          },
+          "t": {
+            "format": "date-time",
+            "title": "T",
+            "type": "string"
+          },
+          "unknown_s": {
+            "title": "Unknown S",
+            "type": "number"
+          },
+          "wait_n": {
+            "title": "Wait N",
+            "type": "integer"
+          },
+          "wait_p95_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait P95 Ms"
+          }
+        },
+        "required": [
+          "t",
+          "seconds",
+          "partial",
+          "busy_s",
+          "idle_s",
+          "starting_s",
+          "down_s",
+          "unknown_s",
+          "running_avg",
+          "queued_avg",
+          "compute_wait_avg",
+          "peak_running",
+          "done",
+          "cancelled",
+          "failed",
+          "wait_n"
+        ],
+        "title": "MonitoringBucketOut",
+        "type": "object"
+      },
+      "MonitoringSpanOut": {
+        "properties": {
+          "end": {
+            "format": "date-time",
+            "title": "End",
+            "type": "string"
+          },
+          "start": {
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "state": {
+            "title": "State",
+            "type": "string"
+          }
+        },
+        "required": [
+          "start",
+          "end",
+          "state"
+        ],
+        "title": "MonitoringSpanOut",
+        "type": "object"
+      },
       "MonitoringSummaryOut": {
         "properties": {
           "busy_ratio": {
@@ -2581,15 +3424,80 @@
             ],
             "title": "Busy Ratio"
           },
-          "completed": {
-            "title": "Completed",
+          "busy_s": {
+            "title": "Busy S",
             "type": "integer"
+          },
+          "cancelled": {
+            "title": "Cancelled",
+            "type": "integer"
+          },
+          "cpu_peak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cpu Peak"
           },
           "failed": {
             "title": "Failed",
             "type": "integer"
           },
-          "idle_timeout_minutes": {
+          "failed_by_reason": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Failed By Reason",
+            "type": "object"
+          },
+          "finished": {
+            "title": "Finished",
+            "type": "integer"
+          },
+          "idle_s": {
+            "title": "Idle S",
+            "type": "integer"
+          },
+          "mem_peak": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mem Peak"
+          },
+          "peak_running": {
+            "title": "Peak Running",
+            "type": "integer"
+          },
+          "resources_as_of": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resources As Of"
+          },
+          "uptime_s": {
+            "title": "Uptime S",
+            "type": "integer"
+          },
+          "wait_n": {
+            "title": "Wait N",
+            "type": "integer"
+          },
+          "wait_p95_ms": {
             "anyOf": [
               {
                 "type": "integer"
@@ -2598,17 +3506,19 @@
                 "type": "null"
               }
             ],
-            "title": "Idle Timeout Minutes"
-          },
-          "uptime_s": {
-            "title": "Uptime S",
-            "type": "integer"
+            "title": "Wait P95 Ms"
           }
         },
         "required": [
           "uptime_s",
-          "completed",
-          "failed"
+          "busy_s",
+          "idle_s",
+          "finished",
+          "failed",
+          "cancelled",
+          "failed_by_reason",
+          "wait_n",
+          "peak_running"
         ],
         "title": "MonitoringSummaryOut",
         "type": "object"
@@ -2649,6 +3559,74 @@
         "title": "OidcProviderInfo",
         "type": "object"
       },
+      "Page_AgentQueryOut_": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque; feed back as `cursor` for the next page. Null on the last page.",
+            "title": "Cursor"
+          },
+          "has_more": {
+            "default": false,
+            "description": "Whether another page follows.",
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AgentQueryOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[AgentQueryOut]",
+        "type": "object"
+      },
+      "Page_CatalogExportOut_": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque; feed back as `cursor` for the next page. Null on the last page.",
+            "title": "Cursor"
+          },
+          "has_more": {
+            "default": false,
+            "description": "Whether another page follows.",
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/CatalogExportOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[CatalogExportOut]",
+        "type": "object"
+      },
       "Page_QueryOut_": {
         "properties": {
           "cursor": {
@@ -2681,6 +3659,40 @@
           "items"
         ],
         "title": "Page[QueryOut]",
+        "type": "object"
+      },
+      "Page_RecommendationOut_": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque; feed back as `cursor` for the next page. Null on the last page.",
+            "title": "Cursor"
+          },
+          "has_more": {
+            "default": false,
+            "description": "Whether another page follows.",
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RecommendationOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[RecommendationOut]",
         "type": "object"
       },
       "Page_SavedQueryOut_": {
@@ -2819,6 +3831,40 @@
         "title": "Page[UserOut]",
         "type": "object"
       },
+      "Page_WorksheetOut_": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque; feed back as `cursor` for the next page. Null on the last page.",
+            "title": "Cursor"
+          },
+          "has_more": {
+            "default": false,
+            "description": "Whether another page follows.",
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/WorksheetOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[WorksheetOut]",
+        "type": "object"
+      },
       "PatCreateRequest": {
         "properties": {
           "expires_in_days": {
@@ -2902,30 +3948,6 @@
           "expires_at"
         ],
         "title": "PatTokenOut",
-        "type": "object"
-      },
-      "PeakQueryPointOut": {
-        "properties": {
-          "queued": {
-            "title": "Queued",
-            "type": "integer"
-          },
-          "running": {
-            "title": "Running",
-            "type": "integer"
-          },
-          "t": {
-            "format": "date-time",
-            "title": "T",
-            "type": "string"
-          }
-        },
-        "required": [
-          "t",
-          "running",
-          "queued"
-        ],
-        "title": "PeakQueryPointOut",
         "type": "object"
       },
       "PolicyOut": {
@@ -3031,6 +4053,11 @@
             "default": 600.0,
             "title": "Timeout S",
             "type": "number"
+          },
+          "use_cache": {
+            "default": true,
+            "title": "Use Cache",
+            "type": "boolean"
           }
         },
         "required": [
@@ -3052,6 +4079,28 @@
               }
             ],
             "title": "Agent Id"
+          },
+          "cache_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Detail"
+          },
+          "cache_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Status"
           },
           "column_schema": {
             "anyOf": [
@@ -3101,6 +4150,16 @@
             ],
             "title": "Finished At"
           },
+          "first_page": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RowsPageOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -3140,6 +4199,18 @@
             ],
             "title": "Result Bytes"
           },
+          "result_source_query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Source Query Id"
+          },
           "row_count": {
             "anyOf": [
               {
@@ -3162,6 +4233,17 @@
               }
             ],
             "title": "Running At"
+          },
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Id"
           },
           "schedule_id": {
             "anyOf": [
@@ -3257,6 +4339,64 @@
       },
       "RecommendationOut": {
         "properties": {
+          "applied_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied At"
+          },
+          "applied_query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Applied Query Id"
+          },
+          "apply_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Error"
+          },
+          "apply_result": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Result"
+          },
+          "apply_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Apply Status"
+          },
           "confidence": {
             "title": "Confidence",
             "type": "string"
@@ -3531,6 +4671,79 @@
         "title": "RowsPageOut",
         "type": "object"
       },
+      "RuntimeOut": {
+        "description": "One curated agent runtime: a DuckDB line plus its baked extensions.",
+        "properties": {
+          "default": {
+            "title": "Default",
+            "type": "boolean"
+          },
+          "display_name": {
+            "title": "Display Name",
+            "type": "string"
+          },
+          "duckdb_line": {
+            "title": "Duckdb Line",
+            "type": "string"
+          },
+          "ducklake_format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ducklake Format"
+          },
+          "extensions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extensions",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "beta",
+              "ga",
+              "deprecated",
+              "retired"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "upstream_eol": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Upstream Eol"
+          }
+        },
+        "required": [
+          "id",
+          "display_name",
+          "duckdb_line",
+          "status",
+          "extensions",
+          "ducklake_format",
+          "upstream_eol",
+          "default"
+        ],
+        "title": "RuntimeOut",
+        "type": "object"
+      },
       "SavedQueryCreate": {
         "properties": {
           "default_agent_id": {
@@ -3546,6 +4759,8 @@
             "title": "Default Agent Id"
           },
           "name": {
+            "maxLength": 255,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           },
@@ -3621,6 +4836,27 @@
             "title": "Sql",
             "type": "string"
           },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "format": "uuid",
+            "title": "Updated By",
+            "type": "string"
+          },
+          "updated_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By Name"
+          },
           "workspace_id": {
             "format": "uuid",
             "title": "Workspace Id",
@@ -3635,6 +4871,8 @@
           "default_agent_id",
           "created_by",
           "created_at",
+          "updated_at",
+          "updated_by",
           "last_run_at"
         ],
         "title": "SavedQueryOut",
@@ -3657,6 +4895,8 @@
           "name": {
             "anyOf": [
               {
+                "maxLength": 255,
+                "minLength": 1,
                 "type": "string"
               },
               {
@@ -3901,7 +5141,7 @@
         "type": "object"
       },
       "SearchResultOut": {
-        "description": "A single command-palette (\u2318K) result.\n\nDeliberately minimal \u2014 just enough for the palette to show disambiguating\nparent-path context and build its destination route without a second\nround-trip. Table/schema results are name-addressed (catalog/schema/table\nhave no separate routable id); saved queries carry their real id plus\nenough to seed a worksheet tab the same way SavedQueriesPage does.",
+        "description": "A single command-palette (\u2318K) result.\n\nDeliberately minimal \u2014 just enough for the palette to show disambiguating\nparent-path context and build its destination route without a second\nround-trip. Catalog/schema/table results are name-addressed (they have no\nseparate routable id; a catalog result carries its slug in both `name` and\n`catalog`); saved queries carry their real id plus\nenough to seed a worksheet tab the same way SavedQueriesPage does.",
         "properties": {
           "catalog": {
             "anyOf": [
@@ -3966,6 +5206,7 @@
           },
           "type": {
             "enum": [
+              "catalog",
               "schema",
               "table",
               "saved_query"
@@ -4225,6 +5466,11 @@
             ],
             "title": "Deleted Records"
           },
+          "granularity": {
+            "default": "table",
+            "title": "Granularity",
+            "type": "string"
+          },
           "is_current": {
             "default": false,
             "title": "Is Current",
@@ -4297,108 +5543,6 @@
         "title": "SnapshotOut",
         "type": "object"
       },
-      "SqlFunctionOut": {
-        "properties": {
-          "examples": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Examples"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "return_type": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Return Type"
-          },
-          "signature": {
-            "title": "Signature",
-            "type": "string"
-          },
-          "type": {
-            "title": "Type",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name",
-          "type",
-          "return_type",
-          "signature"
-        ],
-        "title": "SqlFunctionOut",
-        "type": "object"
-      },
-      "SqlKeywordOut": {
-        "properties": {
-          "category": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "SqlKeywordOut",
-        "type": "object"
-      },
-      "SqlMetadataOut": {
-        "properties": {
-          "functions": {
-            "items": {
-              "$ref": "#/components/schemas/SqlFunctionOut"
-            },
-            "title": "Functions",
-            "type": "array"
-          },
-          "keywords": {
-            "items": {
-              "$ref": "#/components/schemas/SqlKeywordOut"
-            },
-            "title": "Keywords",
-            "type": "array"
-          },
-          "types": {
-            "items": {
-              "$ref": "#/components/schemas/SqlTypeOut"
-            },
-            "title": "Types",
-            "type": "array"
-          }
-        },
-        "required": [
-          "functions",
-          "keywords",
-          "types"
-        ],
-        "title": "SqlMetadataOut",
-        "type": "object"
-      },
       "SqlSessionCreate": {
         "properties": {
           "agent_id": {
@@ -4432,6 +5576,11 @@
             ],
             "title": "On Wait Timeout",
             "type": "string"
+          },
+          "use_cache": {
+            "default": true,
+            "title": "Use Cache",
+            "type": "boolean"
           },
           "wait_timeout_s": {
             "anyOf": [
@@ -4557,6 +5706,17 @@
             ],
             "title": "Opened At"
           },
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Id"
+          },
           "staging_uri": {
             "anyOf": [
               {
@@ -4571,6 +5731,11 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "use_cache": {
+            "default": true,
+            "title": "Use Cache",
+            "type": "boolean"
           },
           "user_id": {
             "anyOf": [
@@ -4724,6 +5889,17 @@
             ],
             "title": "Opened At"
           },
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Id"
+          },
           "staging_uri": {
             "anyOf": [
               {
@@ -4743,6 +5919,11 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "use_cache": {
+            "default": true,
+            "title": "Use Cache",
+            "type": "boolean"
           },
           "user_id": {
             "anyOf": [
@@ -4789,6 +5970,19 @@
       },
       "SqlStatementCreate": {
         "properties": {
+          "first_page_limit": {
+            "anyOf": [
+              {
+                "maximum": 200.0,
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Page Limit"
+          },
           "sql": {
             "title": "Sql",
             "type": "string"
@@ -4797,36 +5991,29 @@
             "default": 600.0,
             "title": "Timeout S",
             "type": "number"
+          },
+          "use_cache": {
+            "default": true,
+            "title": "Use Cache",
+            "type": "boolean"
+          },
+          "wait_timeout_s": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Timeout S"
           }
         },
         "required": [
           "sql"
         ],
         "title": "SqlStatementCreate",
-        "type": "object"
-      },
-      "SqlTypeOut": {
-        "properties": {
-          "category": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Category"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          }
-        },
-        "required": [
-          "name"
-        ],
-        "title": "SqlTypeOut",
         "type": "object"
       },
       "StorageBackendHealth": {
@@ -5469,64 +6656,6 @@
         "title": "UserOut",
         "type": "object"
       },
-      "UtilizationPointOut": {
-        "properties": {
-          "cpu_avg": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cpu Avg"
-          },
-          "cpu_max": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Cpu Max"
-          },
-          "mem_avg": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mem Avg"
-          },
-          "mem_max": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Mem Max"
-          },
-          "t": {
-            "format": "date-time",
-            "title": "T",
-            "type": "string"
-          }
-        },
-        "required": [
-          "t"
-        ],
-        "title": "UtilizationPointOut",
-        "type": "object"
-      },
       "ValidationErrorOut": {
         "properties": {
           "detail": {
@@ -5605,6 +6734,333 @@
           "api_version"
         ],
         "title": "VersionOut",
+        "type": "object"
+      },
+      "WorksheetCreate": {
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "catalog": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog"
+          },
+          "is_open": {
+            "default": true,
+            "title": "Is Open",
+            "type": "boolean"
+          },
+          "saved_query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Query Id"
+          },
+          "sql": {
+            "default": "",
+            "maxLength": 1000000,
+            "title": "Sql",
+            "type": "string"
+          },
+          "timeout_s": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 7200.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout S"
+          },
+          "title": {
+            "default": "Untitled",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "title": "WorksheetCreate",
+        "type": "object"
+      },
+      "WorksheetOut": {
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "catalog": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "is_open": {
+            "title": "Is Open",
+            "type": "boolean"
+          },
+          "last_query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Query Id"
+          },
+          "owner_id": {
+            "format": "uuid",
+            "title": "Owner Id",
+            "type": "string"
+          },
+          "saved_query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Query Id"
+          },
+          "sql": {
+            "title": "Sql",
+            "type": "string"
+          },
+          "tab_position": {
+            "title": "Tab Position",
+            "type": "integer"
+          },
+          "timeout_s": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout S"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "workspace_id": {
+            "format": "uuid",
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "workspace_id",
+          "owner_id",
+          "title",
+          "sql",
+          "agent_id",
+          "catalog",
+          "timeout_s",
+          "saved_query_id",
+          "last_query_id",
+          "is_open",
+          "tab_position",
+          "version",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "WorksheetOut",
+        "type": "object"
+      },
+      "WorksheetUpdate": {
+        "description": "A partial update. An omitted field is left alone; an explicit null clears it.\n\nContent (`sql`, `title`) is versioned: send the `version` you last read as\n`base_version`, and a stale one is a 409 rather than a silent overwrite. The\nrest is last-write-wins metadata and needs no version.",
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "base_version": {
+            "anyOf": [
+              {
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Version"
+          },
+          "catalog": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog"
+          },
+          "is_open": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Open"
+          },
+          "last_query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Query Id"
+          },
+          "saved_query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Query Id"
+          },
+          "sql": {
+            "anyOf": [
+              {
+                "maxLength": 1000000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sql"
+          },
+          "tab_position": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tab Position"
+          },
+          "timeout_s": {
+            "anyOf": [
+              {
+                "exclusiveMinimum": 0.0,
+                "maximum": 7200.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Timeout S"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "WorksheetUpdate",
         "type": "object"
       },
       "WorkspaceCreate": {
@@ -5714,6 +7170,11 @@
             "title": "Name",
             "type": "string"
           },
+          "result_cache_enabled": {
+            "default": true,
+            "title": "Result Cache Enabled",
+            "type": "boolean"
+          },
           "slug": {
             "title": "Slug",
             "type": "string"
@@ -5774,6 +7235,17 @@
               }
             ],
             "title": "Name"
+          },
+          "result_cache_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Cache Enabled"
           }
         },
         "title": "WorkspaceUpdate",
@@ -5849,8 +7321,25 @@
     },
     "/admin/agents/bootstrap": {
       "post": {
-        "description": "Mint a short-lived token an agent uses to register itself.\n\nReturns the token with the WebSocket URL to dial and the agent image to run,\nso the response is everything needed to start an agent. Single-use and\nexpiring; it is shown once and cannot be listed again.",
+        "description": "Mint a short-lived token an agent uses to register itself.\n\nReturns the token with the WebSocket URL to dial and the agent image to run \u2014\nthe requested runtime's, or the default's \u2014 so the response is everything\nneeded to start an agent. Single-use and expiring; it is shown once and cannot\nbe listed again.",
         "operationId": "bootstrap",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "anyOf": [
+                  {
+                    "$ref": "#/components/schemas/BootstrapCreate"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "title": "Body"
+              }
+            }
+          }
+        },
         "responses": {
           "201": {
             "content": {
@@ -6507,7 +7996,7 @@
     },
     "/admin/agents/{agent_id}/monitoring": {
       "get": {
-        "description": "Every chart on the agent's Monitoring tab, for one time window.\n\nOne response rather than one per chart: the series share a bucket grid, so\nsplitting them would let a slow request leave two charts describing different\nstretches of time.",
+        "description": "Every chart on the agent's Monitoring tab, for one time range.\n\nEither a preset ``window`` (default 8h, ending now) or an explicit ``start`` and\n``end`` (a zoomed range), not both. One response rather than one per chart: the\nseries share a bucket grid, so splitting them would let a slow request leave two\ncharts describing different stretches of time.",
         "operationId": "agent_monitoring",
         "parameters": [
           {
@@ -6525,9 +8014,49 @@
             "name": "window",
             "required": false,
             "schema": {
-              "default": "8h",
-              "title": "Window",
-              "type": "string"
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Window"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Start"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "End"
             }
           }
         ],
@@ -6592,6 +8121,188 @@
           }
         ],
         "summary": "Agent Monitoring",
+        "tags": [
+          "admin-agents"
+        ]
+      }
+    },
+    "/admin/agents/{agent_id}/queries": {
+      "get": {
+        "description": "Runs on this agent that were alive during a range, with what each cost.\n\n\"Alive during\" rather than \"started in\": the same overlap the monitoring charts\nuse, so clicking a bucket lists exactly the runs that make up its bars,\nincluding one that started before it. Sortable by what a run cost \u2014 wait,\nduration, peak memory, CPU time, spill, bytes read \u2014 worst first, nulls last.\n\nSpans workspaces, so it also needs the cross-workspace query permission the\nglobal History view does; the agent tier alone would expose other workspaces'\nSQL to anyone allowed to use a shared agent.",
+        "operationId": "agent_queries",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "agent_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Agent Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "Start",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "end",
+            "required": true,
+            "schema": {
+              "format": "date-time",
+              "title": "End",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "started_at",
+              "enum": [
+                "started_at",
+                "duration",
+                "wait",
+                "peak_memory",
+                "cpu_time",
+                "spill",
+                "bytes_read"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "default": "desc",
+              "enum": [
+                "asc",
+                "desc"
+              ],
+              "title": "Dir",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 200,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AgentQueryOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Agent Queries",
         "tags": [
           "admin-agents"
         ]
@@ -6778,6 +8489,70 @@
         "summary": "Terminate Elastic Agent",
         "tags": [
           "admin-agents"
+        ]
+      }
+    },
+    "/admin/catalogs/ducklake/reconcile-roles": {
+      "post": {
+        "description": "Create any DuckLake login role that does not exist yet.\n\nPost-upgrade step: the Alembic migration can only write credential rows, not\nroles in the catalog database. Idempotent; also repairs a dropped role.",
+        "operationId": "reconcile_ducklake_roles",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": {
+                    "type": "integer"
+                  },
+                  "title": "Response Reconcile Ducklake Roles",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reconcile Ducklake Roles",
+        "tags": [
+          "catalog"
         ]
       }
     },
@@ -7404,6 +9179,16 @@
               }
             },
             "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
           },
           "422": {
             "content": {
@@ -8428,6 +10213,70 @@
         ]
       }
     },
+    "/catalog-kinds": {
+      "get": {
+        "description": "The catalog kinds this deployment knows, with capabilities and availability.",
+        "operationId": "list_catalog_kinds",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/CatalogKindOut"
+                  },
+                  "title": "Response List Catalog Kinds",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Catalog Kinds",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/catalogs": {
       "get": {
         "description": "Every catalog in the deployment \u2014 the source for the attach picker.",
@@ -8567,6 +10416,413 @@
         ]
       }
     },
+    "/catalogs/{catalog_id}/ducklake/rotate-role": {
+      "post": {
+        "description": "Give this catalog's PostgreSQL role a new password.\n\nOpen SQL sessions keep their authenticated connections and are counted in\nthe response, not closed.",
+        "operationId": "rotate_ducklake_role",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Catalog Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Rotate Ducklake Role",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Rotate Ducklake Role",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/catalogs/{catalog_id}/exports": {
+      "get": {
+        "description": "Export history for a catalog, newest first.",
+        "operationId": "list_exports",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Catalog Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_CatalogExportOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Exports",
+        "tags": [
+          "catalog"
+        ]
+      },
+      "post": {
+        "description": "Copy this DuckLake catalog's current state (not its history) into a new Iceberg one.\n\nRequires the catalog's creator or `catalogs:admin`, plus `owner` on the\ntarget workspace.",
+        "operationId": "start_export",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Catalog Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Workspace to attach the new catalog to",
+            "in": "query",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "description": "Workspace to attach the new catalog to",
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExportStartRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogExportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Start Export",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/catalogs/{catalog_id}/exports/{export_id}/cancel": {
+      "post": {
+        "description": "Ask a running export to stop. A dispatched copy leaves a partial target behind.",
+        "operationId": "cancel_export",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "catalog_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Catalog Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "export_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Export Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CatalogExportOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Cancel Export",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "description": "Liveness: is this process up and can it reach its database?\n\n503 when the database is unreachable. Does not check Polaris -- an upstream\noutage should not make an otherwise healthy replica get restarted.",
@@ -8658,6 +10914,216 @@
           }
         ],
         "summary": "Deployment Health",
+        "tags": [
+          "maintenance"
+        ]
+      }
+    },
+    "/maintenance/recommendations": {
+      "get": {
+        "description": "Maintenance work the scanner suggests, across every workspace the caller\nis a member of.\n\nMost severe first, then newest. Each recommendation names the table, why it\nwas raised, and how severe it is. Omitting `status` returns every state --\npass `status=open` for the ones still outstanding.",
+        "operationId": "list_recommendations",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "severity",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Severity"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_RecommendationOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Recommendations",
+        "tags": [
+          "maintenance"
+        ]
+      }
+    },
+    "/maintenance/recommendations/{recommendation_id}/apply": {
+      "post": {
+        "description": "Run the maintenance this recommendation asks for.\n\nNeeds `maintenance:manage` on top of membership: it rewrites or deletes data.\nReturns once dispatched; `apply_status` reports the outcome.",
+        "operationId": "apply_recommendation",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "recommendation_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Recommendation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Apply Recommendation",
         "tags": [
           "maintenance"
         ]
@@ -8829,6 +11295,16 @@
               }
             },
             "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
           },
           "422": {
             "content": {
@@ -9002,7 +11478,7 @@
         ]
       },
       "get": {
-        "description": "One query's status, timings and error, by its global id.\n\nAddressed globally rather than under its workspace: the id is unique, and the\nsubmitter already holds it. Any member of the query's workspace may read it,\nwhich is what makes the history an audit trail.",
+        "description": "One query's status, timings and error, by its global id.\n\nAddressed globally rather than under its workspace: the id is unique, and the\nsubmitter already holds it. Any member of the query's workspace may read it,\nwhich is what makes the history an audit trail.\n\nPass `wait_timeout_s` to hold the response until the query reaches a terminal\nstate, for a client following a statement that outlived the wait on submit.\nIt is **opt-in and defaults to 0** deliberately: this is also the route the\nworksheet refreshes several times a second and the history reads, and neither\nwants a held request. Capped by `SQL_STATEMENT_MAX_WAIT_TIMEOUT_S`.",
         "operationId": "get_query",
         "parameters": [
           {
@@ -9013,6 +11489,17 @@
               "format": "uuid",
               "title": "Query Id",
               "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "wait_timeout_s",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Wait Timeout S",
+              "type": "number"
             }
           }
         ],
@@ -9084,7 +11571,7 @@
     },
     "/queries/{query_id}/profile": {
       "get": {
-        "description": "The normalized post-execution profile, or null when none was captured.\n\nKept off ``QueryOut`` so list/history stay lean; the worksheet fetches it on\ndemand when a query is done.",
+        "description": "The normalized post-execution profile, or null when none was captured.\n\nKept off ``QueryOut`` so list/history stay lean; the worksheet fetches it on\ndemand when a query is done. A result-cache hit executed nothing, so it\nanswers with the profile of the run whose result it served\n(``result_source_query_id``).",
         "operationId": "get_query_profile",
         "parameters": [
           {
@@ -9277,16 +11764,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "A dependency the request needs is not available right now."
           }
         },
         "security": [
@@ -9336,6 +11813,70 @@
         "summary": "Readyz",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/runtimes": {
+      "get": {
+        "description": "The curated agent runtimes: each one's DuckDB line, baked extensions and\nlifecycle status, and which is this deployment's default.\n\nEvery one this release knows, retired ones included, so an agent still running\none can be labelled. Which may be chosen for new compute is in\n``/admin/agents/compute-options``.",
+        "operationId": "list_runtimes",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/RuntimeOut"
+                  },
+                  "title": "Response List Runtimes",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Runtimes",
+        "tags": [
+          "agents"
         ]
       }
     },
@@ -9604,7 +12145,7 @@
         ]
       },
       "post": {
-        "description": "Run a statement on this session's DuckDB connection. 202 with a query id.\n\nUnlike `POST /workspaces/{workspace}/queries`, this reuses one held connection, so\ntemp tables, `SET`s and attached catalogs persist between statements. 409 if\nthe session is not open.",
+        "description": "Run a statement on this session's DuckDB connection. 200 if it finished\nwithin `wait_timeout_s`, 202 with a query id if it is still running.\n\nUnlike `POST /workspaces/{workspace}/queries`, this reuses one held connection, so\ntemp tables, `SET`s and attached catalogs persist between statements. 409 if\nthe session is not open.\n\nThe call blocks for up to `wait_timeout_s` (server default\n`SQL_STATEMENT_WAIT_TIMEOUT_S`, `0` to never block) so a client learns the\nstatement finished when it does, instead of on its own next poll. A statement\nthat outlives the budget comes back 202 and is polled through\n`GET /queries/{id}` as before \u2014 it is never cancelled for outrunning a wait.",
         "operationId": "run_statement",
         "parameters": [
           {
@@ -10031,7 +12572,7 @@
         ]
       },
       "patch": {
-        "description": "Rename a workspace or change its description.\n\nA partial update: an omitted field is left alone, and an explicit ``null``\ndescription clears it. The slug is immutable -- it addresses the workspace.",
+        "description": "Rename a workspace, change its description, or turn its result cache on or\noff.\n\nA partial update: an omitted field is left alone, and an explicit ``null``\ndescription clears it. The slug is immutable -- it addresses the workspace.",
         "operationId": "update_workspace",
         "parameters": [
           {
@@ -10878,7 +13419,7 @@
     },
     "/workspaces/{workspace}/catalogs/{catalog}/refresh-stats": {
       "post": {
-        "description": "Probe row counts for tables in this catalog that have none yet.",
+        "description": "Probe tables in this catalog whose row count or size is still unknown.",
         "operationId": "refresh_table_stats",
         "parameters": [
           {
@@ -13242,7 +15783,7 @@
         ]
       },
       "post": {
-        "description": "Submit SQL for execution. Accepted, not completed: 202 with a query id.\n\nDispatch picks a connected agent the caller may use, so 503 means no\ncompatible compute is available rather than that the SQL was wrong. Poll\n`GET /queries/{query_id}` for status and read results from\n`GET /queries/{query_id}/rows`.",
+        "description": "Submit SQL for execution. Accepted, not completed: 202 with a query id.\n\nDispatch picks a connected agent the caller may use, so 503 means no\ncompatible compute is available rather than that the SQL was wrong. Poll\n`GET /queries/{query_id}` for status and read results from\n`GET /queries/{query_id}/rows`.\n\nA read whose tables are unchanged since an identical query ran is answered\nfrom the result cache instead: the 202 then carries a query that is already\n`done`, with `cache_status` \"hit\". Send `use_cache: false` to always run.",
         "operationId": "create_query",
         "parameters": [
           {
@@ -13325,16 +15866,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "A dependency the request needs is not available right now."
           }
         },
         "security": [
@@ -13353,7 +15884,7 @@
     },
     "/workspaces/{workspace}/saved-queries": {
       "get": {
-        "description": "The workspace's saved queries, newest first, with who saved each one.\n\nShared, not per-user: a saved query belongs to the workspace, so any member\nsees all of them.",
+        "description": "The workspace's saved queries, newest first, with who saved and last edited each.\n\nShared, not per-user: a saved query belongs to the workspace, so any member\nsees all of them.",
         "operationId": "list_saved_queries",
         "parameters": [
           {
@@ -13460,7 +15991,7 @@
         ]
       },
       "post": {
-        "description": "Save SQL under a name, replacing any query already using that name.\n\nOverwrite-by-name is deliberate: saving over \"report\" updates that query\nrather than accumulating duplicates. 201 when it created one, 200 when it\nreplaced one. Requires `writer`.",
+        "description": "Save SQL under a name.\n\nBy default an existing query with the same name (ignoring case) is replaced\nrather than duplicated: 201 when a query was created, 200 when one was\nreplaced. Pass `on_conflict=error` to get a 409 instead, so a client can ask\nbefore overwriting a query someone else shares. Requires `writer`.",
         "operationId": "create_saved_query",
         "parameters": [
           {
@@ -13469,6 +16000,22 @@
             "required": true,
             "schema": {
               "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "What to do when a saved query with this name (ignoring case) exists: `replace` its SQL and default agent, or fail with 409 `saved_query_exists`.",
+            "in": "query",
+            "name": "on_conflict",
+            "required": false,
+            "schema": {
+              "default": "replace",
+              "description": "What to do when a saved query with this name (ignoring case) exists: `replace` its SQL and default agent, or fail with 409 `saved_query_exists`.",
+              "enum": [
+                "replace",
+                "error"
+              ],
+              "title": "On Conflict",
               "type": "string"
             }
           }
@@ -13643,7 +16190,7 @@
         ]
       },
       "patch": {
-        "description": "Change a saved query's name, SQL or default agent. Requires `writer`.\n\nA partial update: omitted fields are left alone.",
+        "description": "Change a saved query's name, SQL or default agent. Requires `writer`.\n\nA partial update: omitted fields are left alone. Changing the SQL or the\ndefault agent makes the caller the query's editor, which is the principal its\nscheduled runs execute as. Renaming onto another query's name is a 409.",
         "operationId": "update_saved_query",
         "parameters": [
           {
@@ -14375,10 +16922,37 @@
             "required": false,
             "schema": {
               "default": 20,
-              "maximum": 50,
+              "maximum": 200,
               "minimum": 1,
               "title": "Limit",
               "type": "integer"
+            }
+          },
+          {
+            "description": "Only these kinds of object. Every kind when omitted.",
+            "in": "query",
+            "name": "types",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "catalog",
+                      "schema",
+                      "table",
+                      "saved_query"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only these kinds of object. Every kind when omitted.",
+              "title": "Types"
             }
           }
         ],
@@ -15287,97 +17861,6 @@
         ]
       }
     },
-    "/workspaces/{workspace}/sql-metadata": {
-      "get": {
-        "description": "DuckDB function/keyword/type dictionary for editor autocomplete.\n\nSourced live from a connected agent (cached per DuckDB version). Returns 503\nwhen no compatible agent is connected so the editor falls back to its static\nkeyword list rather than caching an empty dictionary.",
-        "operationId": "get_sql_metadata",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "workspace",
-            "required": true,
-            "schema": {
-              "title": "Workspace",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SqlMetadataOut"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "No valid session cookie or bearer token was supplied."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "Authenticated, but not permitted to perform this operation."
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "No such resource, or the caller may not know it exists."
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "A dependency the request needs is not available right now."
-          }
-        },
-        "security": [
-          {
-            "cookieAuth": []
-          },
-          {
-            "bearerAuth": []
-          }
-        ],
-        "summary": "Get Sql Metadata",
-        "tags": [
-          "queries"
-        ]
-      }
-    },
     "/workspaces/{workspace}/sql/sessions": {
       "get": {
         "description": "The workspace's SQL sessions, newest first \u2014 the audit list.\n\nAny workspace member sees every session in the workspace, consistent with\n``GET /workspaces/{workspace}/queries``, which already returns every member's SQL.\nThe ``user_id``/``agent_id``/``since`` filters are admin-only affordances and\nrejected with 403 for non-admins, mirroring that endpoint exactly.\n\nEach row carries the joined principal/agent names and its statement count so\nthe list renders without a request per session.",
@@ -15639,6 +18122,16 @@
             },
             "description": "No such resource, or the caller may not know it exists."
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
+          },
           "422": {
             "content": {
               "application/json": {
@@ -15671,6 +18164,584 @@
         "summary": "Open Session",
         "tags": [
           "sql-sessions"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/worksheets": {
+      "get": {
+        "description": "The caller's worksheets in this workspace, open tabs and closed ones.",
+        "operationId": "list_worksheets",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only open tabs, only closed ones, or both.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "items": {
+                    "enum": [
+                      "open",
+                      "closed"
+                    ],
+                    "type": "string"
+                  },
+                  "type": "array"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only open tabs, only closed ones, or both.",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "saved_query_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Saved Query Id"
+            }
+          },
+          {
+            "description": "Case-insensitive title substring.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Case-insensitive title substring.",
+              "title": "Q"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "updated_at",
+              "enum": [
+                "updated_at",
+                "title",
+                "position"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Defaults to newest first for `updated_at`, ascending otherwise.",
+            "in": "query",
+            "name": "dir",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "asc",
+                    "desc"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Defaults to newest first for `updated_at`, ascending otherwise.",
+              "title": "Dir"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_WorksheetOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Worksheets",
+        "tags": [
+          "worksheets"
+        ]
+      },
+      "post": {
+        "description": "Create a worksheet owned by the caller. An open one is appended as the last tab.",
+        "operationId": "create_worksheet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorksheetCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create Worksheet",
+        "tags": [
+          "worksheets"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/worksheets/{worksheet_id}": {
+      "delete": {
+        "description": "Delete one of the caller's worksheets. A linked saved query is unaffected.",
+        "operationId": "delete_worksheet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "worksheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Worksheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete Worksheet",
+        "tags": [
+          "worksheets"
+        ]
+      },
+      "get": {
+        "description": "One of the caller's worksheets, open or closed.",
+        "operationId": "get_worksheet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "worksheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Worksheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Worksheet",
+        "tags": [
+          "worksheets"
+        ]
+      },
+      "patch": {
+        "description": "Autosave a worksheet's content, or change its metadata.\n\nChanging `sql` or `title` requires `base_version`. If the worksheet moved on\nsince that version -- another window saved it -- the answer is 409\n`worksheet_conflict`, with the current worksheet under `details.current` so the\nclient can offer to load it or keep its own edit. A content change bumps\n`version` and `updated_at`; metadata changes bump neither.",
+        "operationId": "update_worksheet",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "worksheet_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Worksheet Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorksheetUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorksheetOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update Worksheet",
+        "tags": [
+          "worksheets"
         ]
       }
     }

@@ -69,10 +69,20 @@ def test_the_pin_has_no_dangling_references(contract):
 #: Schema -> the fields `dh` reads off it by name. A rename here breaks the CLI
 #: silently, because a mocked transport answers with whatever the test invented.
 FIELDS = {
-    "QueryOut": {"id", "status", "error", "row_count"},
+    "QueryOut": {
+        "id",
+        "status",
+        "error",
+        "row_count",
+        "cache_status",
+        "cache_detail",
+        "result_source_query_id",
+    },
+    "QueryCreate": {"sql", "agent_id", "catalog", "timeout_s", "saved_query_id", "use_cache"},
     "RowsPageOut": {"rows", "columns", "cursor", "total"},
     "PatTokenOut": {"id", "token", "expires_at"},
-    "WorkspaceOut": {"slug", "default_catalog"},
+    "WorkspaceOut": {"slug", "default_catalog", "result_cache_enabled"},
+    "WorkspaceUpdate": {"name", "description", "result_cache_enabled"},
     "VersionOut": {"version", "api_version"},
     "UserOut": {"email", "name", "role"},
     "AuthMethods": {"local", "ldap", "oidc_providers"},
@@ -81,11 +91,25 @@ FIELDS = {
     "GrantPrincipalOut": {"user_id", "name", "email"},
     "GrantUpsert": {"user_id", "tier", "schema_name", "table_name"},
     "LineageImportOut": {"created", "updated", "removed", "skipped"},
-    "SqlSessionOut": {"id", "status"},
+    "SqlSessionOut": {"id", "status", "runtime_id", "use_cache"},
+    "SqlSessionCreate": {"agent_id", "catalog", "wait_timeout_s", "on_wait_timeout", "use_cache"},
+    "SqlStatementCreate": {"sql", "timeout_s", "use_cache"},
     "TableCreate": {"name", "columns"},
     "ColumnSpec": {"name", "type", "nullable"},
     "ScheduleCreate": {"job_type", "saved_query_id", "cron", "enabled"},
     "SavedQueryCreate": {"name", "sql"},
+    "SavedQueryOut": {"id", "name", "updated_at", "updated_by"},
+    "CatalogCreate": {"name", "kind", "storage_backend_id", "access_mode"},
+    "CatalogOut": {"id", "slug", "kind", "storage_backend_id"},
+    "CatalogKindOut": {"kind", "label", "available", "unavailable_reason"},
+    "ExportStartRequest": {"target_name", "target_storage_backend_id"},
+    "ElasticAgentCreate": {"cpu", "memory_gb", "idle_timeout_minutes", "runtime_id", "allow_beta"},
+    "RuntimeOut": {"id", "display_name", "status", "default"},
+    "WorksheetCreate": {"title", "sql", "agent_id", "catalog", "timeout_s", "is_open"},
+    "WorksheetUpdate": {"base_version", "title", "sql", "is_open"},
+    "WorksheetOut": {"id", "title", "sql", "version"},
+    "RecommendationOut": {"id", "status", "apply_status", "apply_error"},
+    "AgentMonitoringOut": {"preset", "range_start", "range_end", "buckets", "spans", "summary"},
     "SelfPatCreateRequest": {"expires_in_days"},
     # Metadata only, by design: the value is shown once at creation and only its
     # hash is stored, so a listing could not return it even if it wanted to.
@@ -140,3 +164,43 @@ def test_self_service_token_issuance_is_cookie_only(contract):
     """A bearer-accepting mint would let a leaked token outlive its own revocation."""
     security = contract["paths"]["/me/pats"]["post"].get("security")
     assert security == [{"cookieAuth": []}], security
+
+
+#: (path, method) -> the query parameters the CLI sends. Parameters are invisible to
+#: the schema check above, and a server that dropped or renamed one would make the
+#: flag silently do nothing.
+PARAMS = {
+    ("/admin/agents/{agent_id}/monitoring", "get"): {"window", "start", "end"},
+    ("/admin/agents/{agent_id}/queries", "get"): {
+        "start",
+        "end",
+        "status",
+        "sort",
+        "dir",
+        "limit",
+        "cursor",
+    },
+    ("/workspaces/{workspace}/search", "get"): {"q", "limit", "types"},
+    ("/workspaces/{workspace}/saved-queries", "post"): {"on_conflict"},
+    ("/queries/{query_id}", "get"): {"wait_timeout_s"},
+    ("/catalogs/{catalog_id}/exports", "post"): {"workspace"},
+    ("/maintenance/recommendations", "get"): {"status", "severity", "limit", "cursor"},
+    ("/workspaces/{workspace}/worksheets", "get"): {
+        "status",
+        "saved_query_id",
+        "q",
+        "sort",
+        "dir",
+        "limit",
+        "cursor",
+    },
+}
+
+
+@pytest.mark.parametrize(("endpoint", "params"), sorted(PARAMS.items()))
+def test_the_query_parameters_the_cli_sends_still_exist(contract, endpoint, params):
+    path, method = endpoint
+    offered = {p["name"] for p in contract["paths"][path][method].get("parameters", [])}
+    assert not params - offered, (
+        f"{method.upper()} {path} no longer takes: {sorted(params - offered)}"
+    )

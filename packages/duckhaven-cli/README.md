@@ -28,6 +28,26 @@ dh auth login --host https://duckhaven.example.com
 dh sql -q "select 1"
 ```
 
+## The result cache
+
+DuckHaven answers a repeated read from its result cache when nothing the query reads has
+changed. `dh sql` says so on stderr when it happens; pass `--no-cache` to run the query
+anyway (also on `dh session open` and `dh session exec`). An owner can switch the cache off
+for a whole workspace with `dh workspace update --no-result-cache`. The interactive REPL
+does not take `--no-cache`: it holds its session through the connector, which has its own
+`use_cache` option, and the shell does not expose it yet.
+
+## Newer server features
+
+A server that supports them offers: DuckLake catalogs (`dh catalog kinds`,
+`dh catalog create --kind ducklake`, `dh catalog rotate-role`, `dh catalog export`), the
+DuckDB runtimes agents run (`dh agent runtimes`, `--runtime` on
+`dh admin agent elastic-create`), per-agent monitoring over a window or range and the
+queries behind it (`dh admin agent monitoring`, `dh admin agent queries`), applying
+maintenance recommendations (`dh admin maintenance recommendations|apply`), and your
+private editor tabs (`dh worksheet`). Against an older server these commands answer with the
+server's own not-found or validation error.
+
 ## Documentation
 
 - [Command-line quickstart](https://tamasmrtn.github.io/duckhaven/getting-started/cli-quickstart/) — install, sign in,

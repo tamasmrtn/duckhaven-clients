@@ -102,13 +102,21 @@ def update_workspace(
     workspace: str = typer.Argument(None),
     name: str = typer.Option(None, "--name"),
     description: str = typer.Option(None, "--description"),
+    result_cache: bool = typer.Option(
+        None,
+        "--result-cache/--no-result-cache",
+        help="Whether repeated queries may be answered from the result cache. Owner only.",
+    ),
 ) -> None:
-    """Rename or re-describe a workspace."""
+    """Rename or re-describe a workspace, or switch its result cache on or off."""
     cli = context.of(ctx)
     settings = cli.settings()
-    body = {k: v for k, v in {"name": name, "description": description}.items() if v is not None}
+    fields = {"name": name, "description": description, "result_cache_enabled": result_cache}
+    body = {k: v for k, v in fields.items() if v is not None}
     if not body:
-        raise ConflictError("nothing_to_update", "Give --name or --description.")
+        raise ConflictError(
+            "nothing_to_update", "Give --name, --description or --result-cache/--no-result-cache."
+        )
     with cli.client(settings) as client:
         target = workspace or settings.require("workspace")
         cli.emit(client.patch(f"workspaces/{target}", json=body))
@@ -171,6 +179,19 @@ def list_agents(ctx: typer.Context) -> None:
         cli.emit(client.get("agents"))
 
 
+@agent_app.command("runtimes")
+def list_runtimes(ctx: typer.Context) -> None:
+    """The DuckDB runtimes agents can run, and which one is the default.
+
+    Each is a DuckDB line with its baked-in extensions and a lifecycle status
+    (`beta`, `ga`, `deprecated`, `retired`). Retired runtimes are listed so an agent
+    still running one can be recognised, but the server will not send them work.
+    """
+    cli = context.of(ctx)
+    with cli.client() as client:
+        cli.emit(client.get("runtimes"))
+
+
 # --- Catalogs --------------------------------------------------------------
 
 
@@ -191,6 +212,11 @@ def list_catalogs(
 def create_catalog(
     ctx: typer.Context,
     name: str = typer.Argument(..., help="Identifier-safe name."),
+    kind: str = typer.Option(
+        None,
+        "--kind",
+        help="iceberg_polaris (the server default) or ducklake. See `dh catalog kinds`.",
+    ),
     storage_backend: str = typer.Option(None, "--storage-backend", help="Backend id."),
     access_mode: str = typer.Option(None, "--access-mode", help="open or scoped."),
 ) -> None:
@@ -198,12 +224,90 @@ def create_catalog(
     cli = context.of(ctx)
     settings = cli.settings()
     body = {"name": name}
+    if kind:
+        body["kind"] = kind
     if storage_backend:
         body["storage_backend_id"] = storage_backend
     if access_mode:
         body["access_mode"] = access_mode
     with cli.client(settings) as client:
         cli.emit(client.post(f"workspaces/{settings.require('workspace')}/catalogs", json=body))
+
+
+@catalog_app.command("kinds")
+def list_catalog_kinds(ctx: typer.Context) -> None:
+    """The catalog kinds this deployment offers, and what each can do.
+
+    A kind that is known but switched off is listed with `available: false` and the
+    reason, so `dh catalog create --kind` failing is explicable.
+    """
+    cli = context.of(ctx)
+    with cli.client() as client:
+        cli.emit(client.get("catalog-kinds"))
+
+
+@catalog_app.command("rotate-role")
+def rotate_role(ctx: typer.Context, catalog_id: str, yes: bool = context.YES) -> None:
+    """Rotate the database credential of a DuckLake catalog.
+
+    Queries already running keep their connection; ones that start afterwards use
+    the new credential.
+    """
+    cli = context.of(ctx)
+    cli.confirm("Rotate the database role of catalog", catalog_id, yes=yes)
+    with cli.client() as client:
+        cli.emit(client.post(f"catalogs/{catalog_id}/ducklake/rotate-role"))
+
+
+export_app = typer.Typer(name="export", help="Copy a DuckLake catalog out as Iceberg.")
+catalog_app.add_typer(export_app)
+
+
+@export_app.command("list")
+def list_exports(
+    ctx: typer.Context, catalog_id: str, fetch_all: bool = typer.Option(False, "--all")
+) -> None:
+    """A catalog's exports, newest first."""
+    cli = context.of(ctx)
+    with cli.client() as client:
+        cli.page(client, f"catalogs/{catalog_id}/exports", fetch_all=fetch_all)
+
+
+@export_app.command("create")
+def create_export(
+    ctx: typer.Context,
+    catalog_id: str,
+    target_name: str = typer.Option(..., "--target-name", help="Name of the new Iceberg catalog."),
+    storage_backend: str = typer.Option(
+        ..., "--storage-backend", help="Storage backend id for the new catalog."
+    ),
+) -> None:
+    """Start exporting a DuckLake catalog to a new Iceberg catalog.
+
+    The new catalog is attached to the current workspace. This only starts the
+    export; follow it with `dh catalog export list`.
+    """
+    cli = context.of(ctx)
+    settings = cli.settings()
+    with cli.client(settings) as client:
+        cli.emit(
+            client.post(
+                f"catalogs/{catalog_id}/exports",
+                params={"workspace": settings.require("workspace")},
+                json={
+                    "target_name": target_name,
+                    "target_storage_backend_id": storage_backend,
+                },
+            )
+        )
+
+
+@export_app.command("cancel")
+def cancel_export(ctx: typer.Context, catalog_id: str, export_id: str) -> None:
+    """Stop an export that has not finished."""
+    cli = context.of(ctx)
+    with cli.client() as client:
+        cli.emit(client.post(f"catalogs/{catalog_id}/exports/{export_id}/cancel"))
 
 
 @catalog_app.command("attach")
