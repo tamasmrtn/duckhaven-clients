@@ -22,7 +22,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "typer>=0.15",
+    "typer>=0.27.3",
     # click.Abort is caught directly (Ctrl-C/Ctrl-D handling); typer>=0.27 no longer
     # pulls click in as its own dependency, so it must be declared here too.
     "click>=8.5.0",
