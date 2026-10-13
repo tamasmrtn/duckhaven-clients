@@ -114,12 +114,15 @@ jobs:
         if: needs.changes.outputs.connector == 'true'
         run: make test-integration
 
+      # The dbt and dlt steps run even when an earlier suite failed (`!cancelled()`
+      # rather than the implicit `success()`), so one broken suite cannot hide the
+      # others -- the job still fails overall.
       - name: Run dbt-duckhaven conformance + e2e
-        if: needs.changes.outputs.dbt == 'true'
+        if: ${{ !cancelled() && needs.changes.outputs.dbt == 'true' }}
         run: make test-dbt-integration
 
       - name: Run dlt-duckhaven e2e
-        if: needs.changes.outputs.dlt == 'true'
+        if: ${{ !cancelled() && needs.changes.outputs.dlt == 'true' }}
         run: make test-dlt-integration
 
       - name: Dump stack logs on failure
