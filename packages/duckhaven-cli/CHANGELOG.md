@@ -6,6 +6,8 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-13
+
 Brings the CLI up to date with the DuckHaven server's result cache, DuckLake catalogs,
 agent runtimes, worksheets and reshaped monitoring. Everything new needs a server that
 offers it; against an older one the command fails with that server's own error.
