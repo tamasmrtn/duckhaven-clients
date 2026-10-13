@@ -40,6 +40,14 @@ ROUTES = [
     (["workspace", "member", "add", ID], "POST", f"{WS}/members"),
     # catalogs
     (["catalog", "create", "new"], "POST", f"{WS}/catalogs"),
+    (["catalog", "kinds"], "GET", f"{API}/catalog-kinds"),
+    (["catalog", "rotate-role", ID, "--yes"], "POST", f"{API}/catalogs/{ID}/ducklake/rotate-role"),
+    (["catalog", "export", "list", ID], "GET", f"{API}/catalogs/{ID}/exports"),
+    (
+        ["catalog", "export", "cancel", ID, "e1"],
+        "POST",
+        f"{API}/catalogs/{ID}/exports/e1/cancel",
+    ),
     (["catalog", "drop", ID, "--yes"], "DELETE", f"{API}/catalogs/{ID}"),
     (["catalog", "refresh-stats"], "POST", f"{CAT}/refresh-stats"),
     # schemas
@@ -72,6 +80,8 @@ ROUTES = [
         "DELETE",
         f"{API}/admin/users/{ID}/workspaces/analytics",
     ),
+    # agents
+    (["agent", "runtimes"], "GET", f"{API}/runtimes"),
     # admin: agents
     (["admin", "agent", "list"], "GET", f"{API}/admin/agents"),
     (["admin", "agent", "get", ID], "GET", f"{API}/admin/agents/{ID}"),
@@ -83,6 +93,17 @@ ROUTES = [
     # admin: storage and maintenance
     (["admin", "storage", "list"], "GET", f"{API}/admin/storage-backends"),
     (["admin", "maintenance", "policy"], "GET", f"{API}/admin/maintenance/policy"),
+    (["admin", "maintenance", "recommendations"], "GET", f"{API}/maintenance/recommendations"),
+    (
+        ["admin", "maintenance", "apply", ID, "--yes"],
+        "POST",
+        f"{API}/maintenance/recommendations/{ID}/apply",
+    ),
+    (
+        ["admin", "catalog", "reconcile-roles"],
+        "POST",
+        f"{API}/admin/catalogs/ducklake/reconcile-roles",
+    ),
 ]
 
 

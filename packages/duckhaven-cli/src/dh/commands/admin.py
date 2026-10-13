@@ -12,6 +12,7 @@ from __future__ import annotations
 import typer
 
 from dh import context
+from dh.errors import ConflictError
 
 app = typer.Typer(name="admin", help="Operator tasks: accounts, users, agents.")
 
@@ -20,9 +21,12 @@ pat_app = typer.Typer(name="pat", help="Tokens issued to a service account.")
 user_app = typer.Typer(name="user", help="People and their workspace roles.")
 agent_app = typer.Typer(name="agent", help="Compute agents.")
 storage_app = typer.Typer(name="storage", help="Storage backends.")
-maintenance_app = typer.Typer(name="maintenance", help="Deployment maintenance policy.")
+maintenance_app = typer.Typer(
+    name="maintenance", help="Maintenance policy, scans and recommendations."
+)
+catalog_app = typer.Typer(name="catalog", help="Catalog-wide operations.")
 
-for sub in (sa_app, pat_app, user_app, agent_app, storage_app, maintenance_app):
+for sub in (sa_app, pat_app, user_app, agent_app, storage_app, maintenance_app, catalog_app):
     app.add_typer(sub)
 
 
@@ -239,12 +243,24 @@ def create_elastic_agent(
     cpu: float = typer.Option(..., "--cpu"),
     memory_gb: float = typer.Option(..., "--memory-gb"),
     idle_timeout_minutes: int = typer.Option(None, "--idle-timeout-minutes"),
+    runtime: str = typer.Option(
+        None,
+        "--runtime",
+        help="DuckDB runtime id, from `dh agent runtimes`. Omitted: the deployment's default.",
+    ),
+    allow_beta: bool = typer.Option(
+        False, "--allow-beta", help="Permit a beta runtime, which is otherwise refused."
+    ),
 ):
     """Provision an elastic agent. Accepted asynchronously; poll `admin agent get`."""
     cli = context.of(ctx)
     body: dict[str, object] = {"cpu": cpu, "memory_gb": memory_gb}
     if idle_timeout_minutes is not None:
         body["idle_timeout_minutes"] = idle_timeout_minutes
+    if runtime:
+        body["runtime_id"] = runtime
+    if allow_beta:
+        body["allow_beta"] = True
     with cli.client() as client:
         cli.emit(client.post("admin/agents/elastic", json=body))
 
@@ -266,11 +282,60 @@ def agent_metrics(ctx: typer.Context):
 
 
 @agent_app.command("monitoring")
-def agent_monitoring(ctx: typer.Context, agent_id: str):
-    """One agent's monitoring detail."""
+def agent_monitoring(
+    ctx: typer.Context,
+    agent_id: str,
+    window: str = typer.Option(
+        None, "--window", help="A preset ending now: 1h, 3h, 8h (the default), 12h, 24h, 3d or 7d."
+    ),
+    start: str = typer.Option(None, "--start", help="ISO-8601 start of a custom range."),
+    end: str = typer.Option(None, "--end", help="ISO-8601 end of a custom range."),
+):
+    """One agent's monitoring detail over a window or a custom range.
+
+    Returns flat time buckets (busy, idle, concurrency, outcomes, CPU and memory)
+    on one shared grid, the lifecycle spans and a summary for the range.
+    """
     cli = context.of(ctx)
+    if (start is None) != (end is None):
+        raise ConflictError("bad_range", "Give both --start and --end, or neither.")
+    if window and start:
+        raise ConflictError("bad_range", "Give --window or --start/--end, not both.")
+    params = {"window": window, "start": start, "end": end}
     with cli.client() as client:
-        cli.emit(client.get(f"admin/agents/{agent_id}/monitoring"))
+        cli.emit(client.get(f"admin/agents/{agent_id}/monitoring", params=params))
+
+
+@agent_app.command("queries")
+def agent_queries(
+    ctx: typer.Context,
+    agent_id: str,
+    start: str = typer.Option(..., "--start", help="ISO-8601 start of the range."),
+    end: str = typer.Option(..., "--end", help="ISO-8601 end of the range."),
+    status: list[str] = typer.Option(None, "--status", help="Repeatable."),
+    sort: str = typer.Option(
+        None,
+        "--sort",
+        help="started_at (default), duration, wait, peak_memory, cpu_time, spill or bytes_read.",
+    ),
+    direction: str = typer.Option(None, "--dir", help="asc or desc (default)."),
+    limit: int = typer.Option(None, "--limit"),
+    fetch_all: bool = typer.Option(False, "--all"),
+):
+    """The runs that were running or waiting on an agent during a range, with what they cost.
+
+    Needs the permission to see queries across workspaces as well as `use` on the agent.
+    """
+    cli = context.of(ctx)
+    params = {"start": start, "end": end, "status": status, "sort": sort, "dir": direction}
+    with cli.client() as client:
+        cli.page(
+            client,
+            f"admin/agents/{agent_id}/queries",
+            params=params,
+            limit=limit,
+            fetch_all=fetch_all,
+        )
 
 
 @agent_app.command("access")
@@ -351,3 +416,51 @@ def trigger_scan(ctx: typer.Context):
     cli = context.of(ctx)
     with cli.client() as client:
         cli.emit(client.post("admin/maintenance/scan"))
+
+
+@maintenance_app.command("recommendations")
+def list_recommendations(
+    ctx: typer.Context,
+    status: list[str] = typer.Option(None, "--status", help="Repeatable."),
+    severity: list[str] = typer.Option(None, "--severity", help="Repeatable."),
+    limit: int = typer.Option(None, "--limit"),
+    fetch_all: bool = typer.Option(False, "--all"),
+):
+    """What the maintenance scan recommends, with the outcome of any apply."""
+    cli = context.of(ctx)
+    params = {"status": status, "severity": severity}
+    with cli.client() as client:
+        cli.page(
+            client, "maintenance/recommendations", params=params, limit=limit, fetch_all=fetch_all
+        )
+
+
+@maintenance_app.command("apply")
+def apply_recommendation(ctx: typer.Context, recommendation_id: str, yes: bool = context.YES):
+    """Run the maintenance a recommendation asks for.
+
+    Rewrites or deletes data files, so it asks first. Needs `maintenance:manage` and
+    only works for catalog kinds that support applying (see `dh catalog kinds`).
+    Accepted asynchronously: the recommendation's `apply_status` reports the outcome,
+    so follow with `dh admin maintenance recommendations`.
+    """
+    cli = context.of(ctx)
+    cli.confirm("Apply maintenance recommendation", recommendation_id, yes=yes)
+    with cli.client() as client:
+        cli.emit(client.post(f"maintenance/recommendations/{recommendation_id}/apply"))
+
+
+# --- Catalogs ----------------------------------------------------------------
+
+
+@catalog_app.command("reconcile-roles")
+def reconcile_ducklake_roles(ctx: typer.Context):
+    """Create any DuckLake database role that does not exist yet.
+
+    A post-upgrade step for operators: a migration can only write the credentials,
+    not the roles themselves in the catalog database. Idempotent, and it also repairs
+    a role that was dropped. Prints how many catalogs it saw and how many it reconciled.
+    """
+    cli = context.of(ctx)
+    with cli.client() as client:
+        cli.emit(client.post("admin/catalogs/ducklake/reconcile-roles"))

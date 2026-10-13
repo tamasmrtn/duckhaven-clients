@@ -291,3 +291,82 @@ def test_table_drop(with_catalog):
     )
     assert runner.invoke(app, ["table", "drop", "sales.orders", "--yes"]).exit_code == 0
     assert route.called
+
+
+# --- Result cache, catalog kinds and exports ---------------------------------
+
+
+@respx.mock
+@pytest.mark.parametrize(
+    ("flag", "value"), [("--result-cache", True), ("--no-result-cache", False)]
+)
+def test_workspace_update_switches_the_result_cache(with_catalog, flag, value):
+    route = respx.patch(WS).mock(return_value=httpx.Response(200, json={}))
+    assert runner.invoke(app, ["workspace", "update", flag]).exit_code == 0
+    assert json.loads(route.calls[0].request.content) == {"result_cache_enabled": value}
+
+
+@respx.mock
+def test_workspace_update_leaves_the_cache_alone_unless_asked(with_catalog):
+    route = respx.patch(WS).mock(return_value=httpx.Response(200, json={}))
+    runner.invoke(app, ["workspace", "update", "--name", "New"])
+    assert json.loads(route.calls[0].request.content) == {"name": "New"}
+
+
+@respx.mock
+def test_catalog_create_can_pick_the_kind(with_catalog):
+    route = respx.post(f"{WS}/catalogs").mock(return_value=httpx.Response(201, json={}))
+    runner.invoke(app, ["catalog", "create", "lake", "--kind", "ducklake"])
+    assert json.loads(route.calls[0].request.content) == {"name": "lake", "kind": "ducklake"}
+
+
+@respx.mock
+def test_catalog_create_names_no_kind_by_default(with_catalog):
+    """Absent, so the server's default (Iceberg) applies and older servers see nothing new."""
+    route = respx.post(f"{WS}/catalogs").mock(return_value=httpx.Response(201, json={}))
+    runner.invoke(app, ["catalog", "create", "plain"])
+    assert json.loads(route.calls[0].request.content) == {"name": "plain"}
+
+
+@respx.mock
+def test_a_kind_that_is_switched_off_surfaces_the_servers_reason(with_catalog):
+    respx.post(f"{WS}/catalogs").mock(
+        return_value=httpx.Response(
+            422, json={"error": "validation_error", "message": "DuckLake is not enabled"}
+        )
+    )
+    result = runner.invoke(app, ["catalog", "create", "lake", "--kind", "ducklake"])
+    assert result.exit_code == ExitCode.CONFLICT
+    assert "DuckLake is not enabled" in result.stderr
+
+
+@respx.mock
+def test_rotate_role_asks_before_it_rotates(with_catalog):
+    route = respx.post(f"{API}/catalogs/c1/ducklake/rotate-role")
+    result = runner.invoke(app, ["catalog", "rotate-role", "c1"])
+    assert result.exit_code != 0
+    assert not route.called
+
+
+@respx.mock
+def test_export_create_attaches_the_new_catalog_to_the_current_workspace(with_catalog):
+    route = respx.post(f"{API}/catalogs/c1/exports").mock(
+        return_value=httpx.Response(202, json={"id": "e1", "status": "pending"})
+    )
+    result = runner.invoke(
+        app,
+        ["catalog", "export", "create", "c1", "--target-name", "lake_iceberg"]
+        + ["--storage-backend", "b1"],
+    )
+    assert result.exit_code == 0, result.output
+    request = route.calls[0].request
+    assert request.url.params["workspace"] == "analytics"
+    assert json.loads(request.content) == {
+        "target_name": "lake_iceberg",
+        "target_storage_backend_id": "b1",
+    }
+
+
+def test_export_create_needs_a_target_and_a_backend(with_catalog):
+    result = runner.invoke(app, ["catalog", "export", "create", "c1"])
+    assert result.exit_code == ExitCode.USAGE

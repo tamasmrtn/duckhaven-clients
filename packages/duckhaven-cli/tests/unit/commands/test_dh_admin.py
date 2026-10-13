@@ -140,6 +140,106 @@ def test_elastic_create_sends_the_shape(logged_in):
 
 
 @respx.mock
+def test_elastic_create_picks_a_runtime_and_can_allow_beta(logged_in):
+    route = respx.post(f"{API}/admin/agents/elastic").mock(
+        return_value=httpx.Response(202, json={"id": AGENT})
+    )
+    runner.invoke(
+        app,
+        ["admin", "agent", "elastic-create", "--cpu", "2", "--memory-gb", "4"]
+        + ["--runtime", "1.6", "--allow-beta"],
+    )
+    body = json.loads(route.calls[0].request.content)
+    assert body["runtime_id"] == "1.6"
+    assert body["allow_beta"] is True
+
+
+@respx.mock
+def test_a_retired_runtime_is_a_conflict_with_the_servers_reason(logged_in):
+    """409 runtime_retired comes back in the v2 envelope; the message must survive."""
+    respx.post(f"{API}/admin/agents/elastic").mock(
+        return_value=httpx.Response(
+            409, json={"error": "runtime_retired", "message": "Runtime 1.4 is retired."}
+        )
+    )
+    result = runner.invoke(
+        app, ["admin", "agent", "elastic-create", "--cpu", "2", "--memory-gb", "4"]
+    )
+    assert result.exit_code == ExitCode.CONFLICT
+    assert "retired" in result.stderr
+
+
+@respx.mock
+def test_monitoring_takes_a_preset_window(logged_in):
+    route = respx.get(f"{API}/admin/agents/{AGENT}/monitoring").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    runner.invoke(app, ["admin", "agent", "monitoring", AGENT, "--window", "24h"])
+    assert route.calls[0].request.url.params["window"] == "24h"
+    assert "start" not in route.calls[0].request.url.params
+
+
+@respx.mock
+def test_monitoring_takes_a_custom_range(logged_in):
+    route = respx.get(f"{API}/admin/agents/{AGENT}/monitoring").mock(
+        return_value=httpx.Response(200, json={})
+    )
+    runner.invoke(
+        app,
+        ["admin", "agent", "monitoring", AGENT]
+        + ["--start", "2026-10-12T00:00:00Z", "--end", "2026-10-12T06:00:00Z"],
+    )
+    params = route.calls[0].request.url.params
+    assert params["start"] == "2026-10-12T00:00:00Z"
+    assert params["end"] == "2026-10-12T06:00:00Z"
+    assert "window" not in params
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        ["--start", "2026-10-12T00:00:00Z"],
+        ["--end", "2026-10-12T00:00:00Z"],
+        ["--window", "1h", "--start", "2026-10-12T00:00:00Z", "--end", "2026-10-12T01:00:00Z"],
+    ],
+)
+@respx.mock
+def test_monitoring_refuses_an_ambiguous_range_before_asking(logged_in, extra):
+    route = respx.get(f"{API}/admin/agents/{AGENT}/monitoring")
+    result = runner.invoke(app, ["admin", "agent", "monitoring", AGENT, *extra])
+    assert result.exit_code == ExitCode.CONFLICT
+    assert not route.called
+
+
+@respx.mock
+def test_agent_queries_sends_the_range_filters_and_sort(logged_in):
+    route = respx.get(f"{API}/admin/agents/{AGENT}/queries").mock(
+        return_value=httpx.Response(
+            200, json={"items": [{"id": "q1"}], "cursor": None, "has_more": False}
+        )
+    )
+    result = runner.invoke(
+        app,
+        ["--format", "json", "admin", "agent", "queries", AGENT]
+        + ["--start", "2026-10-12T00:00:00Z", "--end", "2026-10-12T06:00:00Z"]
+        + ["--status", "failed", "--status", "done", "--sort", "peak_memory", "--dir", "asc"]
+        + ["--limit", "5"],
+    )
+    assert result.exit_code == 0, result.output
+    params = route.calls[0].request.url
+    assert params.params.get_list("status") == ["failed", "done"]
+    assert params.params["sort"] == "peak_memory"
+    assert params.params["dir"] == "asc"
+    assert params.params["limit"] == "5"
+    assert _data(result) == [{"id": "q1"}]
+
+
+def test_agent_queries_needs_a_range(logged_in):
+    result = runner.invoke(app, ["admin", "agent", "queries", AGENT])
+    assert result.exit_code == ExitCode.USAGE
+
+
+@respx.mock
 def test_agent_revoke_credential(logged_in):
     route = respx.delete(f"{API}/admin/agents/{AGENT}/credential").mock(
         return_value=httpx.Response(204)
@@ -167,6 +267,54 @@ def test_maintenance_scan(logged_in):
     )
     assert runner.invoke(app, ["admin", "maintenance", "scan"]).exit_code == 0
     assert route.called
+
+
+@respx.mock
+def test_maintenance_recommendations_filter_and_list(logged_in):
+    route = respx.get(f"{API}/maintenance/recommendations").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "items": [{"id": "r1", "apply_status": None}],
+                "cursor": None,
+                "has_more": False,
+            },
+        )
+    )
+    result = runner.invoke(
+        app,
+        ["--format", "json", "admin", "maintenance", "recommendations"]
+        + ["--status", "open", "--severity", "high", "--severity", "medium"],
+    )
+    assert result.exit_code == 0
+    url = route.calls[0].request.url
+    assert url.params.get_list("severity") == ["high", "medium"]
+    assert _data(result)[0]["id"] == "r1"
+
+
+@respx.mock
+def test_maintenance_apply_refuses_without_confirmation(logged_in):
+    """It rewrites or deletes data, so a pipeline must say --yes."""
+    route = respx.post(f"{API}/maintenance/recommendations/{AGENT}/apply")
+    result = runner.invoke(app, ["admin", "maintenance", "apply", AGENT])
+    assert result.exit_code != 0
+    assert not route.called
+
+
+@respx.mock
+def test_maintenance_apply_for_a_kind_that_cannot_is_the_servers_refusal(logged_in):
+    respx.post(f"{API}/maintenance/recommendations/{AGENT}/apply").mock(
+        return_value=httpx.Response(
+            403,
+            json={
+                "error": "forbidden",
+                "message": "Applying maintenance requires the 'maintenance:manage' permission.",
+            },
+        )
+    )
+    result = runner.invoke(app, ["admin", "maintenance", "apply", AGENT, "--yes"])
+    assert result.exit_code == ExitCode.AUTH
+    assert "maintenance:manage" in result.stderr
 
 
 # --- dh api ----------------------------------------------------------------

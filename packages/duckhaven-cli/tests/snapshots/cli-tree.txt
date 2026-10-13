@@ -42,6 +42,8 @@ dh admin agent elastic-create
     . --cpu
     . --memory-gb
     . --idle-timeout-minutes
+    . --runtime
+    . --allow-beta
 
 dh admin agent get
     One agent's registration, capabilities and lifecycle state.
@@ -54,8 +56,22 @@ dh admin agent metrics
     Current load and capacity for every agent.
 
 dh admin agent monitoring
-    One agent's monitoring detail.
+    One agent's monitoring detail over a window or a custom range.
     . <agent_id>
+    . --window
+    . --start
+    . --end
+
+dh admin agent queries
+    The runs that were running or waiting on an agent during a range, with what they cost.
+    . <agent_id>
+    . --start
+    . --end
+    . --status
+    . --sort
+    . --dir
+    . --limit
+    . --all
 
 dh admin agent restart
     Restart an elastic agent.
@@ -69,11 +85,29 @@ dh admin agent terminate
     Terminate an elastic agent.
     . <agent_id>
 
+dh admin catalog
+    Catalog-wide operations.
+
+dh admin catalog reconcile-roles
+    Create any DuckLake database role that does not exist yet.
+
 dh admin maintenance
-    Deployment maintenance policy.
+    Maintenance policy, scans and recommendations.
+
+dh admin maintenance apply
+    Run the maintenance a recommendation asks for.
+    . <recommendation_id>
+    . --yes/-y
 
 dh admin maintenance policy
     The deployment's maintenance policy.
+
+dh admin maintenance recommendations
+    What the maintenance scan recommends, with the outcome of any apply.
+    . --status
+    . --severity
+    . --limit
+    . --all
 
 dh admin maintenance scan
     Run a maintenance scan now rather than waiting for the schedule.
@@ -172,6 +206,9 @@ dh agent
 dh agent list
     The agents this caller may run queries on, with their capabilities.
 
+dh agent runtimes
+    The DuckDB runtimes agents can run, and which one is the default.
+
 dh api
     Call any endpoint directly.
 
@@ -245,6 +282,7 @@ dh catalog attach
 dh catalog create
     Create a catalog and attach it to the workspace.
     . <name>
+    . --kind
     . --storage-backend
     . --access-mode
 
@@ -258,6 +296,28 @@ dh catalog drop
     . <catalog_id>
     . --yes/-y
 
+dh catalog export
+    Copy a DuckLake catalog out as Iceberg.
+
+dh catalog export cancel
+    Stop an export that has not finished.
+    . <catalog_id>
+    . <export_id>
+
+dh catalog export create
+    Start exporting a DuckLake catalog to a new Iceberg catalog.
+    . <catalog_id>
+    . --target-name
+    . --storage-backend
+
+dh catalog export list
+    A catalog's exports, newest first.
+    . <catalog_id>
+    . --all
+
+dh catalog kinds
+    The catalog kinds this deployment offers, and what each can do.
+
 dh catalog list
     Catalogs attached to the workspace.
     . --all
@@ -265,6 +325,11 @@ dh catalog list
 dh catalog refresh-stats
     Recompute table statistics across the catalog.
     . --catalog
+
+dh catalog rotate-role
+    Rotate the database credential of a DuckLake catalog.
+    . <catalog_id>
+    . --yes/-y
 
 dh grant
     Catalog access control.
@@ -655,7 +720,8 @@ dh workspace member list
     Who belongs to the workspace, and in what role.
 
 dh workspace update
-    Rename or re-describe a workspace.
+    Rename or re-describe a workspace, or switch its result cache on or off.
     . <workspace>
     . --name
     . --description
+    . --result-cache
