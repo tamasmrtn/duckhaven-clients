@@ -37,6 +37,10 @@ def test_exception_hierarchy_matches_pep249():
         (403, "grant_denied", dbapi.ProgrammingError),
         (403, "agent_forbidden", dbapi.ProgrammingError),
         (422, "agent_incompatible", dbapi.ProgrammingError),
+        # Environment conditions the caller cannot fix by changing the statement.
+        (409, "runtime_retired", dbapi.OperationalError),
+        (422, "runtime_unsupported", dbapi.OperationalError),
+        (422, "agent_sandbox_unverified", dbapi.OperationalError),
         (503, "compute_starting", dbapi.OperationalError),
         (503, "compute_unavailable", dbapi.OperationalError),
         (409, "session_not_open", dbapi.OperationalError),
@@ -61,6 +65,10 @@ def test_maps_structured_error_codes(status, code, expected):
         (403, "grant_denied", dbapi.ProgrammingError),
         (403, "agent_forbidden", dbapi.ProgrammingError),
         (422, "agent_incompatible", dbapi.ProgrammingError),
+        # Environment conditions the caller cannot fix by changing the statement.
+        (409, "runtime_retired", dbapi.OperationalError),
+        (422, "runtime_unsupported", dbapi.OperationalError),
+        (422, "agent_sandbox_unverified", dbapi.OperationalError),
         (503, "compute_starting", dbapi.OperationalError),
         (503, "compute_unavailable", dbapi.OperationalError),
         (409, "session_not_open", dbapi.OperationalError),
