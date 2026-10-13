@@ -6,6 +6,22 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Added
+
+- `use_cache` on `connect()`: whether the server may answer a repeated read from its
+  result cache, sent on session open and on every statement. `None` (the default) sends
+  nothing, so the server's own default (on) applies; `False` always executes, which is what
+  a benchmark or a test that counts round trips needs. A server that predates the cache
+  ignores the field. Nothing is needed to *use* the cache: a cached statement already works
+  like any other.
+
+### Changed
+
+- `runtime_retired`, `runtime_unsupported` and `agent_sandbox_unverified` now raise
+  `OperationalError`. They describe the chosen agent rather than the statement; the two
+  422s previously arrived as `ProgrammingError` purely from their status code. Code that
+  caught `ProgrammingError` for these should catch `OperationalError`.
+
 ## [0.6.0] - 2026-09-13
 
 Two round trips removed from every statement. Against a DuckHaven that supports both, a

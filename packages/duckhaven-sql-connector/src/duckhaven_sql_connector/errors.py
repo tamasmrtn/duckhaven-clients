@@ -44,6 +44,13 @@ _OPERATIONAL_CODES = frozenset(
         # rather than failing the connect. See Connection._open_session.
         "compute_starting",
         "compute_unavailable",
+        # The chosen agent runs a DuckDB runtime the server won't dispatch to, or could
+        # not lock its configuration. Properties of the deployment, not of the
+        # statement, so retrying the same SQL elsewhere can succeed -- unlike the 422
+        # the status alone would map to.
+        "runtime_retired",
+        "runtime_unsupported",
+        "agent_sandbox_unverified",
     }
 )
 

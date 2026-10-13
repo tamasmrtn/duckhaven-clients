@@ -34,6 +34,28 @@
             ],
             "title": "Agent Id"
           },
+          "cache_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Detail"
+          },
+          "cache_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cache Status"
+          },
           "column_schema": {
             "anyOf": [
               {
@@ -131,6 +153,18 @@
             ],
             "title": "Result Bytes"
           },
+          "result_source_query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result Source Query Id"
+          },
           "row_count": {
             "anyOf": [
               {
@@ -153,6 +187,17 @@
               }
             ],
             "title": "Running At"
+          },
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Id"
           },
           "schedule_id": {
             "anyOf": [
@@ -336,6 +381,11 @@
             "title": "On Wait Timeout",
             "type": "string"
           },
+          "use_cache": {
+            "default": true,
+            "title": "Use Cache",
+            "type": "boolean"
+          },
           "wait_timeout_s": {
             "anyOf": [
               {
@@ -460,6 +510,17 @@
             ],
             "title": "Opened At"
           },
+          "runtime_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Runtime Id"
+          },
           "staging_uri": {
             "anyOf": [
               {
@@ -474,6 +535,11 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "use_cache": {
+            "default": true,
+            "title": "Use Cache",
+            "type": "boolean"
           },
           "user_id": {
             "anyOf": [
@@ -513,7 +579,7 @@
             "anyOf": [
               {
                 "maximum": 200.0,
-                "minimum": 1.0,
+                "minimum": 0.0,
                 "type": "integer"
               },
               {
@@ -530,6 +596,11 @@
             "default": 600.0,
             "title": "Timeout S",
             "type": "number"
+          },
+          "use_cache": {
+            "default": true,
+            "title": "Use Cache",
+            "type": "boolean"
           },
           "wait_timeout_s": {
             "anyOf": [
@@ -1358,6 +1429,16 @@
               }
             },
             "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
           },
           "422": {
             "content": {

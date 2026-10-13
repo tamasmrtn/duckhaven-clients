@@ -10,6 +10,7 @@ a member of the workspace with at least one connected, compatible agent.
 """
 
 import os
+import uuid
 
 import pytest
 
@@ -111,6 +112,9 @@ def _count_status_polls(statement_wait):
         agent=AGENT,
         catalog=CATALOG,
         statement_wait=statement_wait,
+        # The server answers a repeated read from its result cache, with no status
+        # polls at all -- which would make the "wait=0" arm look like the wait.
+        use_cache=False,
         hooks=Hooks(on_request=on_request),
     )
     try:
@@ -162,6 +166,7 @@ def test_the_first_page_arrives_on_the_submit_response():
         token=TOKEN,
         agent=AGENT,
         catalog=CATALOG,
+        use_cache=False,  # measure the executed path, not a cache hit
         hooks=Hooks(on_request=on_request),
     )
     try:
@@ -178,3 +183,44 @@ def test_the_first_page_arrives_on_the_submit_response():
         assert len(calls) == 1, f"expected one HTTP call, got {calls}"
     finally:
         connection.close()
+
+
+def _cache_status_of(connection, cursor):
+    """What the result cache did with the cursor's last statement, as the server
+    reports it on the query row; None against a server that predates the cache."""
+    return connection._transport.get(f"/queries/{cursor._query_id}").json().get("cache_status")
+
+
+def test_a_repeated_read_is_served_from_the_result_cache_unless_opted_out():
+    """The server answers a read from its result cache when nothing it reads changed.
+
+    Unit tests can only show the connector copes with a hit and sends the opt-out;
+    that the server honours both is a property of the pair. A literal unique to this
+    run keeps earlier runs' cache entries from answering the first call. Skips
+    against a server that does not report `cache_status`.
+    """
+    sql = f"SELECT '{uuid.uuid4()}' AS cached"
+    statuses = {}
+    for label, use_cache in (("first", None), ("repeat", None), ("opted_out", False)):
+        # A fresh session each time: the cache is shared by the workspace, not tied
+        # to one connection.
+        connection = connect(
+            host=HOST,
+            workspace=WORKSPACE,
+            token=TOKEN,
+            agent=AGENT,
+            catalog=CATALOG,
+            use_cache=use_cache,
+        )
+        try:
+            cur = connection.cursor()
+            cur.execute(sql)
+            assert len(cur.fetchall()) == 1
+            statuses[label] = _cache_status_of(connection, cur)
+        finally:
+            connection.close()
+
+    if statuses["first"] is None:
+        pytest.skip("server does not report a result cache status")
+    assert statuses["repeat"] == "hit", statuses
+    assert statuses["opted_out"] != "hit", statuses
