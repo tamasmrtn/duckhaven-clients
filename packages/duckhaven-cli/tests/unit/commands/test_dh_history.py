@@ -249,3 +249,52 @@ def test_search_sends_the_term(logged_in):
     runner.invoke(app, ["search", "orders", "--limit", "5"])
     assert route.calls[0].request.url.params["q"] == "orders"
     assert route.calls[0].request.url.params["limit"] == "5"
+
+
+@respx.mock
+def test_search_can_be_narrowed_to_kinds(logged_in):
+    route = respx.get(f"{WS}/search").mock(
+        return_value=httpx.Response(200, json={"items": [], "has_more": False})
+    )
+    runner.invoke(app, ["search", "ord", "--type", "catalog", "--type", "table"])
+    assert route.calls[0].request.url.params.get_list("types") == ["catalog", "table"]
+
+
+@respx.mock
+def test_search_asks_for_every_kind_by_default(logged_in):
+    route = respx.get(f"{WS}/search").mock(
+        return_value=httpx.Response(200, json={"items": [], "has_more": False})
+    )
+    runner.invoke(app, ["search", "ord"])
+    assert "types" not in route.calls[0].request.url.params
+
+
+# --- saved-query naming ----------------------------------------------------
+
+
+@respx.mock
+def test_saved_query_create_defaults_to_replacing_by_name(logged_in):
+    """No `on_conflict` is sent, so the server's own default (replace) applies."""
+    route = respx.post(f"{WS}/saved-queries").mock(return_value=httpx.Response(201, json={}))
+    runner.invoke(app, ["saved-query", "create", "report", "-q", "select 1"])
+    assert "on_conflict" not in route.calls[0].request.url.params
+
+
+@respx.mock
+def test_saved_query_create_can_refuse_to_overwrite(logged_in):
+    route = respx.post(f"{WS}/saved-queries").mock(
+        return_value=httpx.Response(
+            409,
+            json={
+                "error": "saved_query_exists",
+                "message": "A saved query named 'Report' already exists in this workspace",
+                "details": {"id": "sq1", "name": "Report"},
+            },
+        )
+    )
+    result = runner.invoke(
+        app, ["saved-query", "create", "report", "-q", "select 1", "--on-conflict", "error"]
+    )
+    assert route.calls[0].request.url.params["on_conflict"] == "error"
+    assert result.exit_code == ExitCode.CONFLICT
+    assert "already exists" in result.stderr

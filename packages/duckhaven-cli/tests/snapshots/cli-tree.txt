@@ -460,6 +460,7 @@ dh saved-query create
     . --query/-q
     . --file/-f
     . --agent
+    . --on-conflict
 
 dh saved-query delete
     Delete a saved query.
@@ -530,6 +531,7 @@ dh search
     Find catalogs, schemas, tables and saved queries by name.
     . <query>
     . --limit
+    . --type
 
 dh semantic
     Publish and manage semantic models.
@@ -687,6 +689,52 @@ dh table snapshots
 
 dh version
     The CLI's version, and the server's when one is reachable.
+
+dh worksheet
+    Your private editor tabs, autosaved.
+
+dh worksheet create
+    Create a worksheet. Open ones are appended as the last editor tab.
+    . --title
+    . --query/-q
+    . --file/-f
+    . --agent
+    . --catalog
+    . --timeout
+    . --saved-query
+    . --closed
+
+dh worksheet delete
+    Delete a worksheet. A saved query linked to it is left alone.
+    . <worksheet_id>
+    . --yes/-y
+
+dh worksheet get
+    One worksheet, open or closed, with the `version` to save against.
+    . <worksheet_id>
+
+dh worksheet list
+    Your worksheets in this workspace. Worksheets are private to their owner.
+    . --status
+    . --saved-query
+    . --title
+    . --sort
+    . --dir
+    . --limit
+    . --all
+
+dh worksheet update
+    Change a worksheet.
+    . <worksheet_id>
+    . --title
+    . --query/-q
+    . --file/-f
+    . --base-version
+    . --agent
+    . --catalog
+    . --timeout
+    . --saved-query
+    . --open
 
 dh workspace
     Workspaces and their members.
