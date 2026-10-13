@@ -41,7 +41,17 @@ stack that has no scoped catalog.
 
 The default tag is `latest`, which carries the **SQL session surface** the tests need. To
 pin a specific release or test a candidate image, set the repo variable
-`DUCKHAVEN_IMAGE_TAG` (or use the `workflow_dispatch` input).
+`DUCKHAVEN_IMAGE_TAG` (or use the `workflow_dispatch` input). The compose file comes from the
+server repo's `main` (`server_ref`) while the images come from this tag, so the two can
+drift apart; when pinning an image, pin `server_ref` to the matching ref for manual runs.
+
+## Result cache
+
+The server answers a repeated read from its result cache, so two identical statements can
+differ in cost: the second may need no compute and no status polls. A live test that counts
+round trips or measures the wait must open its connection with `use_cache=False`, or use
+a statement that is never cached (one calling `now()` or `random()`), otherwise it measures
+the cache instead of what it set out to.
 
 ## Running the seed locally
 
@@ -50,9 +60,15 @@ sessions enabled), mint a test PAT without the setup-token dance by passing an e
 admin's PAT:
 
 ```sh
-DH_ADMIN_PAT=dh_pat_… DH_WORKSPACE=dev DH_CATALOG=sales python3 ci/integration/seed.py
-# then export the printed DUCKHAVEN_TEST_* and: make test-integration
+touch /tmp/dh-test.env && chmod 600 /tmp/dh-test.env
+GITHUB_ENV=/tmp/dh-test.env DH_ADMIN_PAT=dh_pat_… DH_WORKSPACE=dev DH_CATALOG=sales \
+  python3 ci/integration/seed.py
+set -a; . /tmp/dh-test.env; set +a   # then: make test-integration
 ```
+
+The seed prints the PAT masked, so point `GITHUB_ENV` at a file to capture the real
+`DUCKHAVEN_TEST_*` values. On a stack whose first admin already exists you can log in
+instead of passing a PAT: set `DH_ADMIN_EMAIL` and `DH_ADMIN_PASSWORD`.
 
 The dlt e2e (`make test-dlt-integration`) stages Parquet by HTTP PUT to a presigned URL. The
 API signs the upload URL for its client-facing endpoint (`S3_ENDPOINT_PUBLIC`, default
