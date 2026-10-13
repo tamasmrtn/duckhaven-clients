@@ -57,6 +57,29 @@ def test_session_open_no_wait_asks_the_server_to_continue(logged_in):
 
 
 @respx.mock
+def test_session_open_no_cache_is_sent_and_otherwise_omitted(logged_in):
+    route = respx.post(f"{WS}/sql/sessions").mock(
+        return_value=httpx.Response(201, json={"id": SID, "status": "open"})
+    )
+    runner.invoke(app, ["session", "open", "--no-cache"])
+    runner.invoke(app, ["session", "open"])
+    assert json.loads(route.calls[0].request.content)["use_cache"] is False
+    assert "use_cache" not in json.loads(route.calls[1].request.content)
+
+
+@respx.mock
+def test_session_open_leaves_agent_choice_to_the_server(logged_in):
+    """No agent named means no `agent_id` and no agent listing."""
+    listing = respx.get(f"{API}/agents")
+    route = respx.post(f"{WS}/sql/sessions").mock(
+        return_value=httpx.Response(201, json={"id": SID, "status": "open"})
+    )
+    runner.invoke(app, ["session", "open"])
+    assert "agent_id" not in json.loads(route.calls[0].request.content)
+    assert not listing.called
+
+
+@respx.mock
 def test_session_get_and_close(logged_in):
     respx.get(f"{API}/sql/sessions/{SID}").mock(
         return_value=httpx.Response(200, json={"id": SID, "status": "open"})
@@ -95,6 +118,40 @@ def test_session_exec_runs_and_returns_rows(logged_in, monkeypatch):
     result = runner.invoke(app, ["--format", "json", "session", "exec", SID, "-q", "select 1"])
     assert result.exit_code == 0
     assert json.loads(result.stdout)["data"]["rows"] == [{"n": 1}]
+
+
+@respx.mock
+def test_session_exec_no_cache_is_sent(logged_in, monkeypatch):
+    monkeypatch.setattr("dh.execute.time.sleep", lambda _s: None)
+    submit = respx.post(f"{API}/sql/sessions/{SID}/statements").mock(
+        return_value=httpx.Response(202, json={"id": QID, "status": "done", "row_count": 1})
+    )
+    respx.get(f"{API}/queries/{QID}/rows").mock(
+        return_value=httpx.Response(
+            200, json={"columns": ["n"], "rows": [{"n": 1}], "cursor": None, "total": 1}
+        )
+    )
+    runner.invoke(app, ["session", "exec", SID, "-q", "select 1", "--no-cache"])
+    assert json.loads(submit.calls[0].request.content)["use_cache"] is False
+
+
+@respx.mock
+def test_session_exec_cache_hit_needs_no_poll(logged_in):
+    """A hit answers 200, already done, so the follow-up status read is skipped."""
+    hit = {"id": QID, "status": "done", "row_count": 1, "cache_status": "hit"}
+    respx.post(f"{API}/sql/sessions/{SID}/statements").mock(
+        return_value=httpx.Response(200, json=hit)
+    )
+    polled = respx.get(f"{API}/queries/{QID}")
+    respx.get(f"{API}/queries/{QID}/rows").mock(
+        return_value=httpx.Response(
+            200, json={"columns": ["n"], "rows": [{"n": 1}], "cursor": None, "total": 1}
+        )
+    )
+    result = runner.invoke(app, ["--format", "json", "session", "exec", SID, "-q", "select 1"])
+    assert result.exit_code == 0
+    assert not polled.called
+    assert "result cache" in result.stderr
 
 
 # --- Sessions switched off -------------------------------------------------

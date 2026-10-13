@@ -220,22 +220,11 @@ def test_an_unknown_agent_name_lists_the_candidates(client):
 
 
 @respx.mock
-def test_a_lone_agent_is_chosen_without_being_named(client):
-    respx.get(f"{API}/agents").mock(
-        return_value=httpx.Response(200, json=[{"id": AGENT, "name": "only"}])
-    )
-    assert execute.resolve_agent(client, None) == AGENT
-
-
-@respx.mock
-def test_no_agent_is_chosen_when_several_could_serve(client):
-    """Leave it to the server's elastic pool rather than picking arbitrarily."""
-    respx.get(f"{API}/agents").mock(
-        return_value=httpx.Response(
-            200, json=[{"id": AGENT, "name": "a"}, {"id": "x", "name": "b"}]
-        )
-    )
+def test_no_agent_named_means_the_server_chooses_and_nothing_is_looked_up(client):
+    """The server picks a connected agent on the default runtime itself, so listing the
+    agents first only added a round trip -- and, with several, a refusal."""
     assert execute.resolve_agent(client, None) is None
+    assert not respx.calls
 
 
 # --- dh sql end to end -----------------------------------------------------
@@ -369,3 +358,98 @@ def test_query_profile_passes_through_null(logged_in):
     respx.get(f"{API}/queries/{QID}/profile").mock(return_value=httpx.Response(200, json=None))
     result = runner.invoke(app, ["--format", "json", "query", "profile", QID])
     assert json.loads(result.stdout)["data"] is None
+
+
+# --- Result cache ----------------------------------------------------------
+
+
+@respx.mock
+def test_no_cache_sends_use_cache_false(logged_in, monkeypatch):
+    monkeypatch.setattr(execute.time, "sleep", lambda _s: None)
+    submitted = respx.post(f"{API}/workspaces/analytics/queries").mock(
+        return_value=httpx.Response(202, json=_query("queued"))
+    )
+    respx.get(f"{API}/queries/{QID}").mock(return_value=httpx.Response(200, json=_query("done")))
+    respx.get(f"{API}/queries/{QID}/rows").mock(
+        return_value=httpx.Response(200, json=_rows_page([1], None, 1))
+    )
+    result = runner.invoke(app, ["sql", "-q", "select 1", "--no-cache"])
+    assert result.exit_code == 0
+    assert json.loads(submitted.calls[0].request.content)["use_cache"] is False
+
+
+@respx.mock
+def test_the_cache_is_not_mentioned_to_the_server_by_default(logged_in, monkeypatch):
+    """Absent, not true: the server default (and the workspace's own setting) wins."""
+    monkeypatch.setattr(execute.time, "sleep", lambda _s: None)
+    submitted = respx.post(f"{API}/workspaces/analytics/queries").mock(
+        return_value=httpx.Response(202, json=_query("queued"))
+    )
+    respx.get(f"{API}/queries/{QID}").mock(return_value=httpx.Response(200, json=_query("done")))
+    respx.get(f"{API}/queries/{QID}/rows").mock(
+        return_value=httpx.Response(200, json=_rows_page([1], None, 1))
+    )
+    runner.invoke(app, ["sql", "-q", "select 1"])
+    assert "use_cache" not in json.loads(submitted.calls[0].request.content)
+
+
+@respx.mock
+def test_a_cache_hit_is_not_polled_and_says_where_the_answer_came_from(logged_in):
+    """The submit response of a hit is already `done`; a status poll would only repeat it."""
+    hit = _query("done", cache_status="hit", agent_id=None)
+    respx.post(f"{API}/workspaces/analytics/queries").mock(
+        return_value=httpx.Response(202, json=hit)
+    )
+    polled = respx.get(f"{API}/queries/{QID}").mock(return_value=httpx.Response(200, json=hit))
+    respx.get(f"{API}/queries/{QID}/rows").mock(
+        return_value=httpx.Response(200, json=_rows_page([1], None, 1))
+    )
+    result = runner.invoke(app, ["--format", "json", "sql", "-q", "select 1"])
+    assert result.exit_code == 0
+    assert json.loads(result.stdout)["data"]["rows"] == [{"n": 1}]
+    assert not polled.called
+    assert "result cache" in result.stderr
+
+
+@respx.mock
+def test_a_run_that_executed_says_nothing_about_the_cache(logged_in, monkeypatch):
+    monkeypatch.setattr(execute.time, "sleep", lambda _s: None)
+    respx.post(f"{API}/workspaces/analytics/queries").mock(
+        return_value=httpx.Response(202, json=_query("queued", cache_status="miss"))
+    )
+    respx.get(f"{API}/queries/{QID}").mock(
+        return_value=httpx.Response(200, json=_query("done", cache_status="miss"))
+    )
+    respx.get(f"{API}/queries/{QID}/rows").mock(
+        return_value=httpx.Response(200, json=_rows_page([1], None, 1))
+    )
+    result = runner.invoke(app, ["sql", "-q", "select 1"])
+    assert "result cache" not in result.stderr
+
+
+@respx.mock
+def test_each_status_poll_asks_the_server_to_hold_for_the_finish(client, monkeypatch):
+    """A query that finishes inside the hold is noticed when it does, not on the next
+    tick. The hold never outlasts the caller's own deadline."""
+    monkeypatch.setattr(execute.time, "sleep", lambda _s: None)
+    poll = respx.get(f"{API}/queries/{QID}").mock(
+        side_effect=[
+            httpx.Response(200, json=_query("running")),
+            httpx.Response(200, json=_query()),
+        ]
+    )
+    execute.wait(client, QID, timeout=60)
+    assert poll.calls[0].request.url.params["wait_timeout_s"] == "5.0"
+
+    poll.reset()
+    poll.mock(return_value=httpx.Response(200, json=_query()))
+    execute.wait(client, QID, timeout=2)
+    assert float(poll.calls[0].request.url.params["wait_timeout_s"]) <= 2.0
+
+
+@respx.mock
+def test_a_terminal_submit_response_is_the_answer(client):
+    done = _query("done")
+    polled = respx.get(f"{API}/queries/{QID}")
+    assert execute.wait(client, QID, timeout=60, known=done) is done
+    assert not polled.called

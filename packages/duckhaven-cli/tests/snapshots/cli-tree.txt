@@ -384,6 +384,7 @@ dh query run
     . --limit
     . --all
     . --agent
+    . --no-cache
 
 dh saved-query
     Named SQL saved in the workspace.
@@ -533,6 +534,7 @@ dh session exec
     . --timeout
     . --limit
     . --all
+    . --no-cache
 
 dh session get
     One session's status and the agent holding it.
@@ -549,6 +551,7 @@ dh session open
     . --catalog
     . --wait
     . --no-wait
+    . --no-cache
 
 dh session statements
     A session's statements in execution order.
@@ -565,6 +568,7 @@ dh sql
     . --limit
     . --all
     . --agent
+    . --no-cache
 
 dh table
     Tables, their metadata and a sample of rows.

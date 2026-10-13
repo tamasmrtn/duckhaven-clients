@@ -41,6 +41,7 @@ def _run(
     limit: int | None,
     fetch_all: bool,
     agent: str | None,
+    no_cache: bool,
 ) -> None:
     cli = context.of(ctx)
     settings = cli.settings()
@@ -62,16 +63,19 @@ def _run(
             # The same budget bounds the client's wait and the server's execution.
             # Two timeouts would be a contract people get wrong; one cannot drift.
             timeout_s=budget,
+            use_cache=False if no_cache else None,
         )
         if no_wait:
             cli.note(f"Submitted {submitted['id']}.")
             cli.emit(submitted)
             return
 
-        finished = execute.wait(client, submitted["id"], timeout=budget)
+        finished = execute.wait(client, submitted["id"], timeout=budget, known=submitted)
         execute.raise_for_status(finished)
         page = execute.fetch_rows(client, finished["id"], limit=None if fetch_all else limit)
 
+    if finished.get("cache_status") == "hit":
+        cli.note("Answered from the result cache. Use --no-cache to run it again.")
     if page["truncated"]:
         cli.note(f"Showing {len(page['rows'])} of {page['total']} rows. Use --all for the rest.")
     cli.emit({"columns": page["columns"], "rows": page["rows"], "total": page["total"]})
@@ -85,6 +89,11 @@ _TIMEOUT = typer.Option("20m", "--timeout", help="Give up after this long, e.g. 
 _LIMIT = typer.Option(None, "--limit", help="Stop after this many rows.")
 _ALL = typer.Option(False, "--all", help="Fetch every row, ignoring --limit.")
 _AGENT = typer.Option(None, "--agent", help="Agent name or id to run on.")
+_NO_CACHE = typer.Option(
+    False,
+    "--no-cache",
+    help="Always run the query instead of answering it from the result cache.",
+)
 
 
 def sql(
@@ -97,6 +106,7 @@ def sql(
     limit: int = _LIMIT,
     fetch_all: bool = _ALL,
     agent: str = _AGENT,
+    no_cache: bool = _NO_CACHE,
 ) -> None:
     """Run SQL and print the results.
 
@@ -117,6 +127,7 @@ def sql(
         limit=limit,
         fetch_all=fetch_all,
         agent=agent,
+        no_cache=no_cache,
     )
 
 
@@ -131,6 +142,7 @@ def run_query(
     limit: int = _LIMIT,
     fetch_all: bool = _ALL,
     agent: str = _AGENT,
+    no_cache: bool = _NO_CACHE,
 ) -> None:
     """Run SQL and print the results. The noun-first spelling of `dh sql`."""
     _run(
@@ -143,6 +155,7 @@ def run_query(
         limit=limit,
         fetch_all=fetch_all,
         agent=agent,
+        no_cache=no_cache,
     )
 
 

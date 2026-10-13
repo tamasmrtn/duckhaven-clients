@@ -28,6 +28,12 @@ _FIRST_DELAY = 0.2
 _BACKOFF = 1.5
 _MAX_DELAY = 2.0
 
+#: How long each status poll asks the server to hold the call for a finish. A query
+#: that completes inside it is noticed the moment it does rather than on the next
+#: tick; a server too old to know the parameter answers at once and the schedule
+#: above still paces the loop. Well under the client's socket timeout.
+_HOLD_S = 5.0
+
 #: The server caps `limit` here; asking for more is rejected, not truncated.
 _MAX_PAGE = 1000
 
@@ -55,8 +61,13 @@ def submit(
     catalog: str | None = None,
     timeout_s: float | None = None,
     saved_query_id: str | None = None,
+    use_cache: bool | None = None,
 ) -> dict[str, Any]:
-    """Hand the SQL to the server. Returns the accepted, not-yet-run query."""
+    """Hand the SQL to the server. Returns the accepted query.
+
+    Usually not run yet; a read the result cache can answer comes back already
+    `done`. `use_cache=False` always executes it.
+    """
     body: dict[str, Any] = {"sql": sql}
     if agent:
         body["agent_id"] = agent
@@ -66,6 +77,8 @@ def submit(
         body["timeout_s"] = timeout_s
     if saved_query_id:
         body["saved_query_id"] = saved_query_id
+    if use_cache is not None:
+        body["use_cache"] = use_cache
     return client.post(f"workspaces/{workspace}/queries", json=body)
 
 
@@ -74,18 +87,26 @@ def wait(
     query_id: str,
     *,
     timeout: float,
+    known: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Poll until the query reaches a terminal status, cancelling on Ctrl-C.
+
+    `known` is the submit response: when that is already terminal (a result-cache
+    hit, or a session statement that finished inside the server's wait) it *is* the
+    answer, and polling would only repeat it.
 
     Interrupting cancels the query server-side before giving up. Without that,
     Ctrl-C would leave the statement running on an agent with nobody watching it
     -- the CLI would look like it had stopped while the compute kept burning.
     """
+    if known is not None and known.get("status") in TERMINAL:
+        return known
     deadline = time.monotonic() + timeout
     delay = _FIRST_DELAY
     while True:
         try:
-            query = client.get(f"queries/{query_id}")
+            hold = min(_HOLD_S, max(0.0, deadline - time.monotonic()))
+            query = client.get(f"queries/{query_id}", params={"wait_timeout_s": hold})
             if query.get("status") in TERMINAL:
                 return query
             if time.monotonic() >= deadline:
@@ -176,28 +197,24 @@ def raise_for_status(query: dict[str, Any]) -> None:
 
 
 def resolve_agent(client: RestClient, requested: str | None) -> str | None:
-    """The agent to run on, by id or by name.
+    """The agent to run on, by id or by name; `None` leaves the choice to the server.
 
-    Elastic compute is off by default, so omitting `agent_id` gets a bare
-    `422 agent_required`. Resolving a *name* is something the CLI can do and the
-    connector cannot -- a DB-API driver should not spend a round trip on connect
-    -- and an ambiguous choice lists the candidates rather than passing the 422
-    through.
+    With no agent named the server picks one itself -- a connected agent on the
+    default runtime first -- so there is nothing to look up. Resolving a *name* is
+    something the CLI can do and the connector cannot -- a DB-API driver should not
+    spend a round trip on connect -- and an unknown name lists the candidates
+    rather than passing a bare 404 through.
     """
-    if requested and _looks_like_uuid(requested):
+    if not requested:
+        return None
+    if _looks_like_uuid(requested):
         return requested
     agents = client.get("agents") or []
-    if requested:
-        matches = [a for a in agents if a.get("name") == requested]
-        if not matches:
-            names = ", ".join(sorted(a.get("name", "?") for a in agents)) or "none"
-            raise ConflictError(
-                "no_such_agent", f"No agent named {requested!r}. Available: {names}"
-            )
-        return matches[0].get("id")
-    if len(agents) == 1:
-        return agents[0].get("id")
-    return None
+    matches = [a for a in agents if a.get("name") == requested]
+    if not matches:
+        names = ", ".join(sorted(a.get("name", "?") for a in agents)) or "none"
+        raise ConflictError("no_such_agent", f"No agent named {requested!r}. Available: {names}")
+    return matches[0].get("id")
 
 
 def _looks_like_uuid(value: str) -> bool:

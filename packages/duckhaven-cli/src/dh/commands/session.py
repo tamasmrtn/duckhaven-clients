@@ -64,6 +64,11 @@ def open_session(
     no_wait: bool = typer.Option(
         False, "--no-wait", help="Return a pending session instead of holding the request."
     ),
+    no_cache: bool = typer.Option(
+        False,
+        "--no-cache",
+        help="Never answer this session's statements from the result cache.",
+    ),
 ) -> None:
     """Open a session and print its id.
 
@@ -81,6 +86,8 @@ def open_session(
     }
     if catalog or settings.get("catalog"):
         body["catalog"] = catalog or settings.get("catalog")
+    if no_cache:
+        body["use_cache"] = False
     with cli.client(settings) as client:
         chosen = execute.resolve_agent(client, agent or settings.get("agent"))
         if chosen:
@@ -170,11 +177,16 @@ def exec_statement(
     timeout: str = typer.Option("20m", "--timeout"),
     limit: int = typer.Option(None, "--limit"),
     fetch_all: bool = typer.Option(False, "--all"),
+    no_cache: bool = typer.Option(
+        False, "--no-cache", help="Run the statement instead of answering from the result cache."
+    ),
 ) -> None:
     """Run one statement on an existing session's connection.
 
     Unlike `dh sql`, this reuses a held connection, so temp tables, `SET`s and
-    attached catalogs persist between statements.
+    attached catalogs persist between statements. A read can still be answered
+    from the result cache until the session creates something session-local;
+    `--no-cache` here, or when opening the session, always runs it.
     """
     from dh.commands.query import _read_sql
 
@@ -185,13 +197,19 @@ def exec_statement(
         try:
             statement = client.post(
                 f"sql/sessions/{session_id}/statements",
-                json={"sql": sql, "timeout_s": budget},
+                json={
+                    "sql": sql,
+                    "timeout_s": budget,
+                    **({"use_cache": False} if no_cache else {}),
+                },
             )
         except DhError as exc:
             raise _translate(exc) from exc
-        finished = execute.wait(client, statement["id"], timeout=budget)
+        finished = execute.wait(client, statement["id"], timeout=budget, known=statement)
         execute.raise_for_status(finished)
         page = execute.fetch_rows(client, finished["id"], limit=None if fetch_all else limit)
+    if finished.get("cache_status") == "hit":
+        cli.note("Answered from the result cache. Use --no-cache to run it again.")
     cli.emit({"columns": page["columns"], "rows": page["rows"], "total": page["total"]})
 
 
