@@ -47,9 +47,13 @@ def test_rows_endpoint_accepts_limit_and_cursor(spec):
 
 def test_request_bodies_match_what_the_connector_sends(spec):
     # open_session body
-    assert {"agent_id", "catalog"} <= _props(spec, "SqlSessionCreate")
+    assert {"agent_id", "catalog", "wait_timeout_s", "on_wait_timeout", "use_cache"} <= _props(
+        spec, "SqlSessionCreate"
+    )
     # run_statement body
-    assert {"sql", "timeout_s"} <= _props(spec, "SqlStatementCreate")
+    assert {"sql", "timeout_s", "wait_timeout_s", "first_page_limit", "use_cache"} <= _props(
+        spec, "SqlStatementCreate"
+    )
     # stage_files body
     assert {"files"} <= _props(spec, "StagingFilesCreate")
 
@@ -81,3 +85,18 @@ def test_column_schema_is_optional(spec):
     reports no types, and the connector leaves type_code None rather than failing."""
     for schema in ("RowsPageOut", "QueryOut"):
         assert "column_schema" not in spec["components"]["schemas"][schema].get("required", [])
+
+
+def test_first_page_limit_zero_is_allowed(spec):
+    """0 is how a caller opts out of the inline page; the connector sends it as-is, so a
+    server that bounded the field at 1 would turn the opt-out into a 422."""
+    limit = spec["components"]["schemas"]["SqlStatementCreate"]["properties"]["first_page_limit"]
+    bounds = [b for b in limit["anyOf"] if b.get("type") == "integer"]
+    assert bounds and bounds[0]["minimum"] == 0
+
+
+def test_result_cache_fields_exist(spec):
+    """The connector sends `use_cache` and never reads the cache fields, but its
+    integration test and users' tooling do; a rename would otherwise go unnoticed."""
+    assert {"cache_status", "cache_detail", "result_source_query_id"} <= _props(spec, "QueryOut")
+    assert {"use_cache", "runtime_id"} <= _props(spec, "SqlSessionOut")
