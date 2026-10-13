@@ -128,6 +128,8 @@ class Cursor:
         # omitting the field asks for one. 0 has to travel to mean "don't".
         # Never more than the caller will buffer anyway.
         body["first_page_limit"] = min(config.first_page_limit, config.fetch_size)
+        if config.use_cache is not None:
+            body["use_cache"] = config.use_cache
 
         try:
             response = transport.post(

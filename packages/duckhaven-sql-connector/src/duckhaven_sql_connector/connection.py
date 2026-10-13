@@ -147,6 +147,8 @@ class Connection:
             body["agent_id"] = config.agent
         if config.catalog is not None:
             body["catalog"] = config.catalog
+        if config.use_cache is not None:
+            body["use_cache"] = config.use_cache
         if config.compute_wait > 0:
             # Ask to be handed the pending session rather than a 503. Both fields are
             # optional and ignored by a server that predates them, which then behaves
@@ -346,6 +348,7 @@ def connect(
     compute_wait: float = 300.0,
     statement_wait: float | None = None,
     first_page_limit: int = 200,
+    use_cache: bool | None = None,
     application: str | None = None,
     hooks: Hooks | None = None,
 ) -> Connection:
@@ -361,6 +364,10 @@ def connect(
     ``first_page_limit`` is how many result rows to ask for on the statement response
     itself, saving the round trip the cursor would otherwise always make to learn the
     result's columns. 0 disables it.
+
+    ``use_cache`` says whether the server may answer a repeated read from its result
+    cache. ``None`` takes the server's default (on); ``False`` always executes, which is
+    what a benchmark needs.
     """
     config = ClientConfig(
         host=host,
@@ -376,6 +383,7 @@ def connect(
         compute_wait=compute_wait,
         statement_wait=statement_wait,
         first_page_limit=first_page_limit,
+        use_cache=use_cache,
         application=application,
     )
     return Connection.open(config, hooks=hooks)

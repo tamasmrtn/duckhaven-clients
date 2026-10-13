@@ -346,6 +346,29 @@ def test_open_omits_the_wait_fields_when_the_wait_is_disabled():
 
 
 @respx.mock
+@pytest.mark.parametrize("use_cache", [True, False])
+def test_open_sends_use_cache_when_set(use_cache):
+    """False has to travel: the server's default is on, so an omitted field would ask
+    for exactly what the caller refused."""
+    open_route = respx.post(SESSIONS_URL).mock(
+        return_value=httpx.Response(201, json=session_json())
+    )
+    config = make_config(use_cache=use_cache)
+    Connection.open(config, transport=make_transport(config))
+    assert json.loads(open_route.calls.last.request.content)["use_cache"] is use_cache
+
+
+@respx.mock
+def test_open_omits_use_cache_by_default_so_the_server_default_wins():
+    open_route = respx.post(SESSIONS_URL).mock(
+        return_value=httpx.Response(201, json=session_json())
+    )
+    config = make_config()
+    Connection.open(config, transport=make_transport(config))
+    assert "use_cache" not in json.loads(open_route.calls.last.request.content)
+
+
+@respx.mock
 def test_top_level_connect_opens_over_a_real_transport():
     mock_open_session()
     respx.delete(SESSION_URL).mock(return_value=httpx.Response(204))

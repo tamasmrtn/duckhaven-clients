@@ -514,3 +514,75 @@ def test_a_server_that_ignores_the_field_still_works():
 
     assert rows_route.call_count == 1
     assert cur.fetchall() == [(7,)]
+
+
+@respx.mock
+@pytest.mark.parametrize("use_cache", [True, False])
+def test_use_cache_is_sent_on_every_statement_when_set(use_cache):
+    conn = open_conn(make_config(use_cache=use_cache))
+    submit = _submit(status="done", row_count=0, first_page=_page([], []))
+
+    conn.cursor().execute("SELECT 1")
+
+    assert json.loads(submit.calls[0].request.content)["use_cache"] is use_cache
+
+
+@respx.mock
+def test_use_cache_unset_sends_nothing_so_the_server_default_wins():
+    conn = open_conn()
+    submit = _submit(status="done", row_count=0, first_page=_page([], []))
+
+    conn.cursor().execute("SELECT 1")
+
+    assert "use_cache" not in json.loads(submit.calls[0].request.content)
+
+
+def _cache_hit(**over):
+    """What the server answers when the result cache serves a statement: 200 rather
+    than 202, already done, no agent, with the first page of rows inline."""
+    body = {
+        "id": QUERY_ID,
+        "status": "done",
+        "agent_id": None,
+        "row_count": 1,
+        "cache_status": "hit",
+        "result_source_query_id": "00000000-0000-0000-0000-0000000000aa",
+        "first_page": _page([{"n": 42}], ["n"], schema=[{"name": "n", "type": "INTEGER"}]),
+    }
+    body.update(over)
+    return respx.post(STATEMENTS_URL).mock(return_value=httpx.Response(200, json=body))
+
+
+@respx.mock
+def test_a_cache_hit_is_one_http_call_and_reads_like_any_other_result():
+    """The server's result cache answers with no agent behind the query. Nothing here
+    may depend on one: rowcount, description and rows all come off the response."""
+    conn = open_conn()
+    submit = _cache_hit()
+    poll = respx.get(QUERY_URL).mock(return_value=httpx.Response(200, json={"id": QUERY_ID}))
+    rows_route = respx.get(ROWS_URL).mock(return_value=httpx.Response(500))
+
+    cur = conn.cursor().execute("SELECT 42 AS n")
+
+    assert cur.fetchall() == [(42,)]
+    assert cur.rowcount == 1
+    assert cur.description[0][0] == "n"
+    assert submit.call_count == 1
+    assert poll.call_count == 0
+    assert rows_route.call_count == 0
+
+
+@respx.mock
+def test_a_cache_hit_without_an_inlined_page_fetches_rows_by_its_own_id():
+    """first_page_limit=0 means no inline page, so the rows come from the query's own
+    /rows route -- which the server serves from the source run for a hit."""
+    conn = open_conn(make_config(first_page_limit=0))
+    _cache_hit(first_page=None)
+    rows_route = respx.get(ROWS_URL).mock(
+        return_value=httpx.Response(200, json=_page([{"n": 42}], ["n"]))
+    )
+
+    cur = conn.cursor().execute("SELECT 42 AS n")
+
+    assert cur.fetchall() == [(42,)]
+    assert rows_route.call_count == 1

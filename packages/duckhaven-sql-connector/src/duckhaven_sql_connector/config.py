@@ -70,6 +70,12 @@ class ClientConfig:
     # and the control arm for measuring it. Never larger than fetch_size, since
     # asking for more rows than the caller wants buffered is pointless.
     first_page_limit: int = 200
+    # Whether the server may answer a read from its result cache, sent on session open
+    # and on every statement as `use_cache`. None (the default) sends nothing, so the
+    # server's own default (on) wins; False always executes -- what a benchmark or a
+    # test that counts round trips needs -- and the result still refreshes the cache.
+    # A server that predates the cache ignores the field.
+    use_cache: bool | None = None
     # Optional client identifier appended to the User-Agent, so the server can attribute
     # traffic to the calling application (e.g. "dbt-duckhaven/1.2.3"). Free text.
     application: str | None = None
