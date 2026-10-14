@@ -14,7 +14,7 @@ dev = [
     "build>=1.6.1",
     "twine>=7.0.0",
     # Installed so the optional-extra code paths (arrow, otel) are exercised in tests.
-    "pyarrow>=25.0.1",
+    "pyarrow>=26.0.0",
     "opentelemetry-api>=1.45.1",
     "opentelemetry-sdk>=1.36",
     # dbt's standard adapter conformance harness, for the dbt-duckhaven member.
