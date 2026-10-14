@@ -6,6 +6,18 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Changed
+
+- Result values are converted to the Python type their column type calls for:
+  `Decimal` for `DECIMAL`, `int` for every integer type, `date`/`time`/`datetime` for the
+  temporal types, `UUID` and `bytes`, member by member inside lists, structs and maps.
+  Previously they came back as JSON gave them, so dates and timestamps were ISO strings and
+  decimals were floats. Code that parsed those strings itself must take the Python values
+  instead.
+- Ready for DuckHaven `api_version` 3, which sends `DECIMAL` and wide integers as exact
+  strings: they convert to the same Python values as from an older server, now without
+  precision loss. Upgrade the connector before the server.
+
 ## [0.7.0] - 2026-10-13
 
 ### Added
