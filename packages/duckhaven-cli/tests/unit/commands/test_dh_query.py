@@ -453,3 +453,29 @@ def test_a_terminal_submit_response_is_the_answer(client):
     polled = respx.get(f"{API}/queries/{QID}")
     assert execute.wait(client, QID, timeout=60, known=done) is done
     assert not polled.called
+
+
+@respx.mock
+def test_dh_sql_holds_the_submit_so_a_quick_query_needs_no_poll(logged_in):
+    submitted = respx.post(f"{API}/workspaces/analytics/queries").mock(
+        return_value=httpx.Response(200, json=_query("done"))
+    )
+    polled = respx.get(f"{API}/queries/{QID}").mock(
+        return_value=httpx.Response(200, json=_query("done"))
+    )
+    respx.get(f"{API}/queries/{QID}/rows").mock(
+        return_value=httpx.Response(200, json=_rows_page([1], None, 1))
+    )
+    result = runner.invoke(app, ["sql", "-q", "select 1"])
+    assert result.exit_code == 0
+    assert json.loads(submitted.calls[0].request.content)["wait_timeout_s"] == 2.0
+    assert not polled.called
+
+
+@respx.mock
+def test_dh_sql_no_wait_does_not_hold_the_submit(logged_in):
+    submitted = respx.post(f"{API}/workspaces/analytics/queries").mock(
+        return_value=httpx.Response(202, json=_query("queued"))
+    )
+    runner.invoke(app, ["sql", "-q", "select 1", "--no-wait"])
+    assert "wait_timeout_s" not in json.loads(submitted.calls[0].request.content)

@@ -6,6 +6,15 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- `dh sql` and the REPL ask the server to hold the submit for up to two seconds, so a quick
+  query finishes in one request instead of a submit and a poll. `--no-wait` still returns at
+  once. A server that predates the hold ignores it.
+- Ready for DuckHaven `api_version` 3: `DECIMAL` and wide integers, which it sends as
+  strings, print as before in table and CSV output and stay exact strings with
+  `--format json`.
+
 ## [0.3.0] - 2026-10-13
 
 Brings the CLI up to date with the DuckHaven server's result cache, DuckLake catalogs,

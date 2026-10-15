@@ -274,3 +274,21 @@ def test_quiet_silences_notes_but_not_the_payload(capsys):
     assert capsys.readouterr().err == ""
     CliContext(quiet=False).note("progress")
     assert "progress" in capsys.readouterr().err
+
+
+# --- Exact numbers from api_version 3 -----------------------------------------
+
+# A DuckHaven with api_version 3 sends DECIMAL and 64-bit-or-wider integers as JSON
+# strings, which keep them exact.
+_EXACT = {"columns": ["n", "amt"], "rows": [{"n": "9007199254740993", "amt": "12.50"}]}
+
+
+def test_exact_numbers_print_bare_in_a_table_and_csv():
+    columns, rows = as_grid(_EXACT)
+    assert "9007199254740993" in render_table(columns, rows)
+    assert render_csv(columns, rows).splitlines()[1] == "9007199254740993,12.50"
+
+
+def test_exact_numbers_stay_exact_strings_in_json():
+    data = json.loads(render(_EXACT, Format.JSON))["data"]
+    assert data["rows"] == [{"n": "9007199254740993", "amt": "12.50"}]

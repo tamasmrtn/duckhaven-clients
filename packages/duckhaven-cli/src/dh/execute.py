@@ -1,7 +1,8 @@
 """One-shot query execution: submit, wait, fetch.
 
-`POST /workspaces/{workspace}/queries` answers **202** with a query that has not
-run yet, so every caller has to poll. This is that loop, done once and correctly.
+`POST /workspaces/{workspace}/queries` holds the call briefly for the run to finish
+and otherwise answers **202** with a query still running, which the caller polls.
+This is that loop, done once and correctly.
 
 It is deliberately not the connector's code path. `duckhaven-sql-connector`
 speaks the *session* API (`connect()` opens one), and sessions are disabled by
@@ -34,6 +35,11 @@ _MAX_DELAY = 2.0
 #: above still paces the loop. Well under the client's socket timeout.
 _HOLD_S = 5.0
 
+#: How long the submit itself asks the server to hold for a finish. Shorter than
+#: `_HOLD_S`: until the submit answers, the query's id is unknown, so a Ctrl-C in
+#: this window cannot cancel the query the way one during polling does.
+_SUBMIT_HOLD_S = 2.0
+
 #: The server caps `limit` here; asking for more is rejected, not truncated.
 _MAX_PAGE = 1000
 
@@ -62,13 +68,20 @@ def submit(
     timeout_s: float | None = None,
     saved_query_id: str | None = None,
     use_cache: bool | None = None,
+    hold: bool = True,
 ) -> dict[str, Any]:
     """Hand the SQL to the server. Returns the accepted query.
 
-    Usually not run yet; a read the result cache can answer comes back already
-    `done`. `use_cache=False` always executes it.
+    Already `done` when it finished within the hold or was answered from the result
+    cache; otherwise still running, for `wait` to follow. `use_cache=False` always
+    executes it. `hold=False` answers at once, for a caller that will not wait.
     """
     body: dict[str, Any] = {"sql": sql}
+    if hold:
+        # A query that finishes inside the hold comes back done on this call, with
+        # nothing to poll. A server too old to know the field ignores it and
+        # answers 202 at once, as before.
+        body["wait_timeout_s"] = _SUBMIT_HOLD_S
     if agent:
         body["agent_id"] = agent
     if catalog:

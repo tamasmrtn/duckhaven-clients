@@ -48,6 +48,14 @@ maintenance recommendations (`dh admin maintenance recommendations|apply`), and 
 private editor tabs (`dh worksheet`). Against an older server these commands answer with the
 server's own not-found or validation error.
 
+## Exact numbers
+
+A DuckHaven with `api_version` 3 or later sends `DECIMAL` values and 64-bit-or-wider integers
+(`BIGINT`, `HUGEINT`, `count(*)`) as strings, because JSON numbers lose precision past about
+16 digits. `dh` prints them exactly as before in table and CSV output. With `--format json`
+they stay strings (`"12.50"`, `"9007199254740993"`), exact. Scripts reading `dh` JSON should
+convert those columns themselves rather than expect JSON numbers.
+
 ## Documentation
 
 - [Command-line quickstart](https://tamasmrtn.github.io/duckhaven/getting-started/cli-quickstart/) — install, sign in,
