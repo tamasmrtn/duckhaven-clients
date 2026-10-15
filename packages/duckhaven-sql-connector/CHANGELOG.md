@@ -6,6 +6,8 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-15
+
 ### Changed
 
 - Result values are converted to the Python type their column type calls for:
