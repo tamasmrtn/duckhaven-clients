@@ -64,6 +64,7 @@ def _run(
             # Two timeouts would be a contract people get wrong; one cannot drift.
             timeout_s=budget,
             use_cache=False if no_cache else None,
+            hold=not no_wait,
         )
         if no_wait:
             cli.note(f"Submitted {submitted['id']}.")

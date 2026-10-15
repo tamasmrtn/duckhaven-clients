@@ -144,7 +144,7 @@ def _run_one_shot(cli, settings, sql: str, agent: str | None) -> None:
             agent=chosen,
             catalog=settings.get("catalog"),
         )
-        finished = execute.wait(client, submitted["id"], timeout=1200)
+        finished = execute.wait(client, submitted["id"], timeout=1200, known=submitted)
         execute.raise_for_status(finished)
         page = execute.fetch_rows(client, finished["id"])
     cli.emit({"columns": page["columns"], "rows": page["rows"], "total": page["total"]})
