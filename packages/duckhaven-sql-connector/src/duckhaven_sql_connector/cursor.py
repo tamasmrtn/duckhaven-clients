@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 
 from . import _metadata
 from ._arrow_result import ArrowResultSet
-from ._params import render_qmark
+from ._params import render_qmark, server_parameter
 from .dbapi import OperationalError, ProgrammingError
 from .result import ResultSet
 
@@ -109,7 +109,12 @@ class Cursor:
 
     def execute(self, operation: str, parameters: Sequence[Any] | None = None) -> Cursor:
         self._ensure_open()
-        sql = render_qmark(operation, parameters) if parameters else operation
+        # A current server renders the values itself, typed; an older one cannot.
+        server_side = bool(parameters) and (self._connection._api_version() or 0) >= 3
+        if parameters and not server_side:
+            sql = render_qmark(operation, parameters)
+        else:
+            sql = operation
 
         if _is_txn_control_noop(sql):
             # Autocommit session: nothing to submit. Reset to a clean, result-less state.
@@ -124,6 +129,8 @@ class Cursor:
         session_id = self._connection._session_id
 
         body: dict[str, Any] = {"sql": sql, "timeout_s": config.timeout}
+        if server_side:
+            body["parameters"] = [server_parameter(v) for v in parameters]
         if config.statement_wait is not None:
             body["wait_timeout_s"] = config.statement_wait
         # Always sent, 0 included: the server returns a first page by default, so
