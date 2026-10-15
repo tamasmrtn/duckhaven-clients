@@ -195,11 +195,27 @@ cur.column_types  # the same types on their own
 Both are `None` against a server (or agent) older than this field, so code that reads them
 should tolerate that.
 
-> **Values are not re-typed to match.** Results travel as JSON, so a `DECIMAL` or `HUGEINT`
-> arrives as a float with its precision **already lost**, a `BLOB` as hex text, an
-> `INTERVAL` as an ISO-8601 duration, and temporal types as ISO-8601 strings. The connector
-> reports the true type but does not cast the value, because casting could not restore
-> precision that was gone before the client saw it — it would only hide the loss.
+Values are converted to match. Results travel as JSON, and the connector uses each column's
+type to hand back the Python value PEP 249 callers expect:
+
+| DuckDB type | Python value |
+|---|---|
+| `DECIMAL(p,s)` | `decimal.Decimal` |
+| every integer type, `HUGEINT` and `UBIGINT` included | `int` |
+| `DATE`, `TIME`, `TIMESTAMP`, `TIMESTAMP WITH TIME ZONE` | `date`, `time`, `datetime` (aware for `WITH TIME ZONE`) |
+| `UUID` | `uuid.UUID` |
+| `BLOB` | `bytes` |
+| lists, structs and maps | converted member by member |
+
+Other types (`VARCHAR`, `DOUBLE`, `BOOLEAN`, `INTERVAL`, `UNION`, `ENUM`, …) arrive as
+JSON gives them. A `BLOB` nested inside a list or struct is passed through as the server
+encoded it.
+
+> **Exactness depends on the server.** A DuckHaven with `api_version` 3 or later sends
+> `DECIMAL` and 64-bit-and-wider integers as exact strings, so they convert exactly. An
+> older server sends them as JSON numbers that have already lost precision past about
+> 16 digits; the connector converts what it gets but cannot restore what is gone. Against a
+> server or agent that sends no `column_schema`, values are passed through unconverted.
 
 ## Metadata
 

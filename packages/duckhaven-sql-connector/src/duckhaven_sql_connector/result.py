@@ -6,7 +6,7 @@ future server-side Arrow / EXTERNAL_LINKS disposition can slot in behind the sam
 ``ResultSet`` interface without touching the cursor.
 
 Rows arrive as ``{column: value}`` objects and are yielded as tuples in ``columns`` order,
-per PEP 249.
+per PEP 249, each value converted to the Python type its ``column_schema`` type calls for.
 """
 
 from __future__ import annotations
@@ -15,6 +15,7 @@ from collections import deque
 from typing import TYPE_CHECKING, Any
 
 from ._telemetry import Hooks
+from ._types import Converter, convert_row, converter_for
 from .dbapi import InterfaceError
 
 if TYPE_CHECKING:
@@ -58,6 +59,9 @@ class ResultSet:
         # them. ``None`` against a server (or agent) predating the ``column_schema``
         # field, and for DDL/DML, which has no result schema at all.
         self.column_schema: list[tuple[str, str]] | None = None
+        # One per column, from ``column_schema``: turns each JSON value into the
+        # Python value its DuckDB type calls for (see ``_types``).
+        self._converters: list[Converter | None] | None = None
         self.total = 0
 
     def prime(self, page: dict[str, Any]) -> None:
@@ -93,9 +97,12 @@ class ResultSet:
             raise InterfaceError("malformed rows page from server") from exc
         if not self._started and schema:
             self.column_schema = [(c["name"], c["type"]) for c in schema]
+            self._converters = [converter_for(t) for _, t in self.column_schema]
         self.columns = columns
+        convert = self._converters is not None and len(self._converters) == len(columns)
         for row in rows:
-            self._buffer.append(tuple(row.get(col) for col in columns))
+            values = tuple(row.get(col) for col in columns)
+            self._buffer.append(convert_row(self._converters, values) if convert else values)
         if self._hooks.on_rows_fetched is not None:
             self._hooks.on_rows_fetched(self._query_id, len(rows))
         if self._next_cursor is None:
