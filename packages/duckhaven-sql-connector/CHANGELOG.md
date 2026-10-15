@@ -8,6 +8,10 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ### Added
 
+- Against DuckHaven `api_version` 3 or later, `?` parameters are sent as typed values next
+  to the SQL (`parameters`) instead of being rendered into it. `Decimal`, `datetime` (with or
+  without a time zone), `date`, `time`, `bytes`, `UUID` and lists of one type are typed for
+  the server; older servers keep client-side rendering.
 - With the `arrow` extra, against DuckHaven `api_version` 3 or later, results are read from
   `GET /queries/{id}/result` as an Arrow stream: one request per result instead of one per
   page, read a record batch at a time. Rows convert to the same Python values as from JSON

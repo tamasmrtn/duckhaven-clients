@@ -107,3 +107,8 @@ def test_the_result_stream_serves_arrow(spec):
     assert "application/vnd.apache.arrow.stream" in op["responses"]["200"]["content"]
     assert "204" in op["responses"]
     assert "format" in {p["name"] for p in op.get("parameters", [])}
+
+
+def test_statements_take_typed_parameters(spec):
+    assert "parameters" in _props(spec, "SqlStatementCreate")
+    assert {"type", "value"} <= _props(spec, "TypedParameter")
