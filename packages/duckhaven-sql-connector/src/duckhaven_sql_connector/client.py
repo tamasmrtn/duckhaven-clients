@@ -9,9 +9,10 @@ can be added behind the same shape later.
 
 from __future__ import annotations
 
+import contextlib
 import random
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from typing import Any
 
 import httpx
@@ -75,6 +76,28 @@ class Transport:
         params: dict[str, Any] | None = None,
     ) -> httpx.Response:
         return self.request("POST", path, json=json, params=params)
+
+    @contextlib.contextmanager
+    def stream(
+        self, path: str, *, params: dict[str, Any] | None = None
+    ) -> Iterator[httpx.Response]:
+        """A GET whose body is read as it arrives, for a whole result.
+
+        One attempt: a failure part-way through a body cannot be resumed, and a
+        failure before it starts surfaces like any other request's error.
+        """
+        headers: dict[str, str] = {}
+        inject_traceparent(headers)
+        started = time.monotonic()
+        try:
+            with self._client.stream("GET", path, params=params, headers=headers) as response:
+                self._on_request("GET", path, response.status_code, time.monotonic() - started)
+                if response.status_code >= 400:
+                    response.read()
+                    raise map_http_error(response)
+                yield response
+        except httpx.TransportError as exc:
+            raise map_transport_error(exc) from exc
 
     def delete(self, path: str, *, params: dict[str, Any] | None = None) -> httpx.Response:
         return self.request("DELETE", path, params=params)

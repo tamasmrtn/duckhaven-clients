@@ -6,6 +6,14 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Added
+
+- With the `arrow` extra, against DuckHaven `api_version` 3 or later, results are read from
+  `GET /queries/{id}/result` as an Arrow stream: one request per result instead of one per
+  page, read a record batch at a time. Rows convert to the same Python values as from JSON
+  pages; `fetch_arrow_table` returns the Arrow data directly. The connector asks the server
+  its version once per connection (`GET /api/version`).
+
 ## [0.8.0] - 2026-10-15
 
 ### Changed

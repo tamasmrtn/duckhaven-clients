@@ -250,12 +250,21 @@ Two things are worth knowing about how these work:
 
 ## Arrow results
 
-With the `arrow` extra, fetch results as a `pyarrow.Table`:
+With the `arrow` extra installed, against a DuckHaven with `api_version` 3 or later, results
+are read as an Arrow stream instead of JSON pages: one request per result, read one record
+batch at a time, with every value keeping its type. Nothing changes for your code. Rows from
+`fetchone`/`fetchall` are the same Python values either way (see [Column types](#column-types)),
+and `fetch_arrow_table` hands over the Arrow data without a round trip through Python:
 
 ```python
 cur.execute("SELECT * FROM sales.orders")
 table = cur.fetch_arrow_table()
 ```
+
+Without the extra, or against an older server, results are paged as JSON and
+`fetch_arrow_table` builds the table from those rows. Two types read differently over Arrow:
+an `INTERVAL` arrives as Parquet's raw 12-byte interval, and a `UNION` as a struct of its
+members.
 
 ## Observability
 

@@ -11,6 +11,7 @@ from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
 from . import _metadata
+from ._arrow_result import ArrowResultSet
 from ._params import render_qmark
 from .dbapi import OperationalError, ProgrammingError
 from .result import ResultSet
@@ -126,8 +127,10 @@ class Cursor:
             body["wait_timeout_s"] = config.statement_wait
         # Always sent, 0 included: the server returns a first page by default, so
         # omitting the field asks for one. 0 has to travel to mean "don't".
-        # Never more than the caller will buffer anyway.
-        body["first_page_limit"] = min(config.first_page_limit, config.fetch_size)
+        # Never more than the caller will buffer anyway. Reading the result as Arrow
+        # takes no JSON page at all: the rows come from the Arrow stream instead.
+        arrow = self._connection._arrow_results()
+        body["first_page_limit"] = 0 if arrow else min(config.first_page_limit, config.fetch_size)
         if config.use_cache is not None:
             body["use_cache"] = config.use_cache
 
@@ -151,6 +154,22 @@ class Cursor:
 
         row_count = query.get("row_count")
         self._rowcount = row_count if isinstance(row_count, int) else -1
+
+        if arrow:
+            schema = query.get("column_schema")
+            self._result = ArrowResultSet(
+                transport,
+                self._query_id,
+                [(c["name"], c["type"]) for c in schema] if schema else None,
+                total=row_count if isinstance(row_count, int) else 0,
+                hooks=transport._hooks,
+            )
+            if not self._result.columns:
+                # No schema on the query (DDL/DML, or an older agent): the stream says.
+                self._result.ensure_started()
+            cols = self._result.columns
+            self._description = _describe(cols, self._result.column_schema) if cols else None
+            return self
 
         self._result = ResultSet(
             transport, self._query_id, config.fetch_size, hooks=transport._hooks
@@ -330,6 +349,8 @@ class Cursor:
         from ._arrow import to_arrow_table
 
         result = self._require_result()
+        if isinstance(result, ArrowResultSet):
+            return result.arrow_table()
         columns = result.columns
         rows = result.fetchall()
         return to_arrow_table(columns, rows)

@@ -100,3 +100,10 @@ def test_result_cache_fields_exist(spec):
     integration test and users' tooling do; a rename would otherwise go unnoticed."""
     assert {"cache_status", "cache_detail", "result_source_query_id"} <= _props(spec, "QueryOut")
     assert {"use_cache", "runtime_id"} <= _props(spec, "SqlSessionOut")
+
+
+def test_the_result_stream_serves_arrow(spec):
+    op = _op(spec, "/queries/{query_id}/result", "get")
+    assert "application/vnd.apache.arrow.stream" in op["responses"]["200"]["content"]
+    assert "204" in op["responses"]
+    assert "format" in {p["name"] for p in op.get("parameters", [])}

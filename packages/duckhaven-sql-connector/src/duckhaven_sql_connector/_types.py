@@ -252,3 +252,37 @@ def convert_row(converters: list[Converter | None], row: tuple[Any, ...]) -> tup
         return tuple(_apply(c, v) for c, v in zip(converters, row, strict=True))
     except (ValueError, TypeError, AttributeError) as exc:
         raise InterfaceError(f"could not decode a result value: {exc}") from exc
+
+
+def arrow_converter_for(type_text: str) -> Converter | None:
+    """For a value read from an Arrow result, the conversion that makes it what the
+    JSON path returns for the same column (see :func:`converter_for`).
+
+    Arrow already carries most types as Python wants them. Two differ: a
+    ``HUGEINT``/``UHUGEINT`` column travels as ``DECIMAL(38,0)`` (Parquet has no
+    128-bit integer) and becomes an ``int`` again, and a ``MAP`` arrives as a list of
+    key/value pairs and becomes a ``dict``.
+    """
+    try:
+        parsed = parse_type(type_text)
+    except ValueError:
+        return None
+    return _arrow_converter(parsed)
+
+
+def _arrow_converter(t: DuckType) -> Converter | None:
+    if t.name in ("HUGEINT", "UHUGEINT"):
+        return _int
+    if t.name == "LIST":
+        element = _arrow_converter(t.fields[0][1])
+        return None if element is None else (lambda v: [_apply(element, x) for x in v])
+    if t.name == "STRUCT":
+        members = {n: c for n, m in t.fields if (c := _arrow_converter(m)) is not None}
+        if not members:
+            return None
+        return lambda v: {k: _apply(members[k], x) if k in members else x for k, x in v.items()}
+    if t.name == "MAP":
+        key = _arrow_converter(t.fields[0][1])
+        value = _arrow_converter(t.fields[1][1])
+        return lambda v: {_apply(key, k): _apply(value, x) for k, x in v}
+    return None
