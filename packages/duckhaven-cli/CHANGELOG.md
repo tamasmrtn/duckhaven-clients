@@ -6,6 +6,8 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-15
+
 ### Changed
 
 - `dh sql` and the REPL ask the server to hold the submit for up to two seconds, so a quick
