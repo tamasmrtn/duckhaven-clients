@@ -177,3 +177,16 @@ def test_without_a_schema_the_stream_names_the_columns():
     cur.execute("SELECT 42 AS answer")
     assert [d[0] for d in cur.description] == ["answer"]
     assert cur.fetchall() == [(42,)]
+
+
+@respx.mock
+def test_a_body_split_across_many_chunks_reads_whole():
+    """A real HTTP body arrives in pieces smaller than a record batch."""
+    mock_api_version(3)
+    _done(schema=[{"name": "i", "type": "BIGINT"}])
+    body = _ipc(pa.table({"i": pa.array(range(5000), pa.int64())}))
+    chunks = [body[i : i + 1000] for i in range(0, len(body), 1000)]
+    respx.get(RESULT_URL).mock(return_value=httpx.Response(200, content=iter(chunks)))
+    cur = open_conn().cursor()
+    cur.execute("SELECT i FROM range(5000) t(i)")
+    assert cur.fetchall() == [(i,) for i in range(5000)]

@@ -31,14 +31,20 @@ class _ChunkReader(io.RawIOBase):
         return True
 
     def readinto(self, buffer: Any) -> int:
-        while not self._pending:
-            try:
-                self._pending = next(self._chunks)
-            except StopIteration:
-                return 0
-        n = min(len(buffer), len(self._pending))
-        buffer[:n] = self._pending[:n]
-        self._pending = self._pending[n:]
+        # Fill the whole buffer unless the body ends: pyarrow reads a message body
+        # with one read() and takes a short read for a truncated stream.
+        n = 0
+        while n < len(buffer):
+            if not self._pending:
+                try:
+                    self._pending = next(self._chunks)
+                except StopIteration:
+                    break
+                continue
+            k = min(len(buffer) - n, len(self._pending))
+            buffer[n : n + k] = self._pending[:k]
+            self._pending = self._pending[k:]
+            n += k
         return n
 
 
