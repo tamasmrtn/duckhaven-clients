@@ -261,6 +261,10 @@ cur.execute("SELECT * FROM sales.orders")
 table = cur.fetch_arrow_table()
 ```
 
+A small result (up to 256 KiB as Arrow, by the server's default) comes back on the statement
+response itself, so the statement costs one HTTP call; a larger one is streamed by a second
+call. Against a server that does not offer this yet, every result takes that second call.
+
 Without the extra, or against an older server, results are paged as JSON and
 `fetch_arrow_table` builds the table from those rows. Two types read differently over Arrow:
 an `INTERVAL` arrives as Parquet's raw 12-byte interval, and a `UNION` as a struct of its

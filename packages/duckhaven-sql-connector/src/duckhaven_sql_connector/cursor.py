@@ -7,6 +7,7 @@ A statement is submitted to the session (``POST …/statements`` → 202), then 
 
 from __future__ import annotations
 
+import base64
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -131,6 +132,10 @@ class Cursor:
         # takes no JSON page at all: the rows come from the Arrow stream instead.
         arrow = self._connection._arrow_results()
         body["first_page_limit"] = 0 if arrow else min(config.first_page_limit, config.fetch_size)
+        if arrow:
+            # A server that can carries a small result whole on this response, so it
+            # costs no second call. Older servers ignore the field.
+            body["inline_format"] = "arrow"
         if config.use_cache is not None:
             body["use_cache"] = config.use_cache
 
@@ -155,14 +160,23 @@ class Cursor:
         row_count = query.get("row_count")
         self._rowcount = row_count if isinstance(row_count, int) else -1
 
+        if query.get("has_result") is False:
+            # DDL/DML: the server says there is nothing to read, so do not ask it for
+            # an empty result just to learn that. An older server sends no field.
+            self._result = ResultSet.from_rows([], [])
+            self._description = None
+            return self
+
         if arrow:
             schema = query.get("column_schema")
+            inline = query.get("inline_arrow")
             self._result = ArrowResultSet(
                 transport,
                 self._query_id,
                 [(c["name"], c["type"]) for c in schema] if schema else None,
                 total=row_count if isinstance(row_count, int) else 0,
                 hooks=transport._hooks,
+                inline=base64.b64decode(inline) if inline else None,
             )
             if not self._result.columns:
                 # No schema on the query (DDL/DML, or an older agent): the stream says.

@@ -1,12 +1,14 @@
 """Results read as Arrow (``GET /queries/{id}/result``) when pyarrow is installed and
 the server is ``api_version`` 3 or later — and the same Python values either way."""
 
+import base64
 import json
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import httpx
 import pyarrow as pa
+import pytest
 import respx
 
 from .dh_support import (
@@ -190,3 +192,88 @@ def test_a_body_split_across_many_chunks_reads_whole():
     cur = open_conn().cursor()
     cur.execute("SELECT i FROM range(5000) t(i)")
     assert cur.fetchall() == [(i,) for i in range(5000)]
+
+
+@respx.mock
+def test_a_small_result_carried_on_the_statement_costs_one_call():
+    mock_api_version(3)
+    submit = respx.post(STATEMENTS_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": QUERY_ID,
+                "status": "done",
+                "row_count": 1,
+                "column_schema": SCHEMA,
+                "inline_arrow": base64.b64encode(_ipc(ARROW)).decode(),
+                "has_result": True,
+            },
+        )
+    )
+    result = respx.get(RESULT_URL)
+    cur = open_conn().cursor()
+    cur.execute("SELECT * FROM t")
+    assert json.loads(submit.calls.last.request.content)["inline_format"] == "arrow"
+    assert cur.fetchall() == [EXPECTED]
+    assert not result.called
+
+
+@respx.mock
+def test_an_inline_result_without_a_schema_names_its_columns_from_the_stream():
+    mock_api_version(3)
+    respx.post(STATEMENTS_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": QUERY_ID,
+                "status": "done",
+                "row_count": 1,
+                "column_schema": None,
+                "inline_arrow": base64.b64encode(_ipc(pa.table({"answer": [42]}))).decode(),
+                "has_result": True,
+            },
+        )
+    )
+    result = respx.get(RESULT_URL)
+    cur = open_conn().cursor()
+    cur.execute("SELECT 42 AS answer")
+    assert [d[0] for d in cur.description] == ["answer"]
+    assert cur.fetchall() == [(42,)]
+    assert not result.called
+
+
+@respx.mock
+def test_a_result_too_big_to_carry_is_read_from_the_stream():
+    mock_api_version(3)
+    _done()  # no inline_arrow: the server left it to /result
+    result = respx.get(RESULT_URL).mock(return_value=httpx.Response(200, content=_ipc(ARROW)))
+    cur = open_conn().cursor()
+    cur.execute("SELECT * FROM t")
+    assert cur.fetchall() == [EXPECTED]
+    assert result.called
+
+
+@pytest.mark.parametrize("api_version", [2, 3])
+@respx.mock
+def test_a_statement_the_server_says_has_no_result_costs_one_call(api_version):
+    """JSON and Arrow alike: has_result false means DDL/DML, nothing to fetch."""
+    mock_api_version(api_version)
+    respx.post(STATEMENTS_URL).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "id": QUERY_ID,
+                "status": "done",
+                "row_count": None,
+                "column_schema": None,
+                "has_result": False,
+            },
+        )
+    )
+    rows, result = respx.get(ROWS_URL), respx.get(RESULT_URL)
+    cur = open_conn().cursor()
+    cur.execute("CREATE TABLE t (x INTEGER)")
+    assert cur.description is None
+    assert cur.fetchall() == []
+    assert not rows.called
+    assert not result.called

@@ -1,4 +1,5 @@
-"""Fetching a whole result as Arrow (``GET /queries/{id}/result``), with pyarrow.
+"""Fetching a whole result as Arrow (``GET /queries/{id}/result``, or carried on the
+statement response when it is small), with pyarrow.
 
 The alternative to paging JSON rows: one request, read one record batch at a time,
 with every value keeping its type. Rows come out as the same Python values the
@@ -58,8 +59,11 @@ class ArrowResultSet:
         column_schema: list[tuple[str, str]] | None,
         total: int,
         hooks: Hooks | None = None,
+        inline: bytes | None = None,
     ) -> None:
         self._transport = transport
+        # The whole stream, when the statement response carried it (inline_arrow).
+        self._inline = inline
         self._query_id = query_id
         self._hooks = hooks or Hooks()
         self.column_schema = column_schema
@@ -83,6 +87,12 @@ class ArrowResultSet:
         import pyarrow as pa
 
         self._started = True
+        if self._inline is not None:
+            self._reader = pa.ipc.open_stream(pa.py_buffer(self._inline))
+            self._inline = None
+            if not self.columns:
+                self.columns = list(self._reader.schema.names)
+            return
         self._stack = contextlib.ExitStack()
         response = self._stack.enter_context(
             self._transport.stream(f"/queries/{self._query_id}/result", params={"format": "arrow"})
