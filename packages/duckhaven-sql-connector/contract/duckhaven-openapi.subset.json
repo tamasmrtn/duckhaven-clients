@@ -56,6 +56,28 @@
             ],
             "title": "Cache Status"
           },
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name"
+          },
+          "client_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Version"
+          },
           "column_schema": {
             "anyOf": [
               {
@@ -114,10 +136,32 @@
               }
             ]
           },
+          "has_result": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Result"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "inline_arrow": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inline Arrow"
           },
           "origin": {
             "anyOf": [
@@ -246,6 +290,20 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
           },
           "user_id": {
             "anyOf": [
@@ -588,9 +646,95 @@
             ],
             "title": "First Page Limit"
           },
+          "inline_format": {
+            "default": "json",
+            "enum": [
+              "json",
+              "arrow"
+            ],
+            "title": "Inline Format",
+            "type": "string"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Values for the placeholders in `sql`, rendered into it as typed literals before it runs: a list for `?`, `?1` or `$1`, an object for `$name`.",
+            "title": "Parameters"
+          },
           "sql": {
             "title": "Sql",
             "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "patternProperties": {
+                  "^[A-Za-z0-9_.:-]{1,64}$": {
+                    "maxLength": 256,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Free-form labels for the run, recorded on it and shown in History: at most 20, keys of letters, digits and `_ . : -` (up to 64), values up to 256 characters.",
+            "title": "Tags"
           },
           "timeout_s": {
             "default": 600.0,
@@ -852,6 +996,158 @@
           }
         ],
         "summary": "Get Query",
+        "tags": [
+          "queries"
+        ]
+      }
+    },
+    "/queries/{query_id}/result": {
+      "get": {
+        "description": "A finished query's whole result in a columnar format.\n\nExact where JSON is not: every value keeps its type (DECIMAL as decimal,\n64-bit and wider integers as integers), and the result streams in one response\ninstead of 1000-row pages. `column_schema` on the query names each column's\nDuckDB type. Guarded exactly like `/rows`.",
+        "operationId": "get_query_result",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "query_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Query Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`arrow` for an Arrow IPC stream, `parquet` for the file as is.",
+            "in": "query",
+            "name": "format",
+            "required": false,
+            "schema": {
+              "default": "arrow",
+              "description": "`arrow` for an Arrow IPC stream, `parquet` for the file as is.",
+              "enum": [
+                "arrow",
+                "parquet"
+              ],
+              "title": "Format",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/vnd.apache.arrow.stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "application/vnd.apache.parquet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The whole result, as an Arrow IPC stream or a Parquet file."
+          },
+          "204": {
+            "content": {
+              "application/vnd.apache.arrow.stream": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              },
+              "application/vnd.apache.parquet": {
+                "schema": {
+                  "format": "binary",
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The statement produced no result grid (DDL or DML)."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The result file has been swept by retention."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The agent holding the result answered with an error."
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Query Result",
         "tags": [
           "queries"
         ]
