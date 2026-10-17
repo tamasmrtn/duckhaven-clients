@@ -34,11 +34,17 @@ with connect(
     # agent="…-uuid-…",       # optional explicit compute (an agent UUID); omit to auto-pick
 ) as conn:
     with conn.cursor() as cur:
-        cur.execute("SELECT ? AS n", [1])  # qmark params, rendered safely client-side
+        cur.execute("SELECT ? AS n", [1])  # qmark params
         print(cur.description, cur.fetchall())
 ```
 
 A runnable version is in [`examples/quickstart.py`](examples/quickstart.py).
+
+Parameters use `?` placeholders. Against a DuckHaven with `api_version` 3 or later they are
+sent as typed values alongside the SQL and the server writes them in: a `Decimal` keeps its
+precision, a `datetime` is a timestamp (with time zone when aware), `bytes`, `UUID`s and lists
+of one type are supported. Against an older server the connector renders them into the SQL
+itself, quoted and escaped.
 
 > **Note:** The DuckHaven SQL session surface is disabled unless the operator sets
 > `SQL_SESSIONS_ENABLED=true` on the server. Against a server with it off, opening a

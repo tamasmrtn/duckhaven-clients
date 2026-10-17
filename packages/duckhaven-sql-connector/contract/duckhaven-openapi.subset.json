@@ -830,6 +830,27 @@
         ],
         "title": "StagingFilesOut",
         "type": "object"
+      },
+      "TypedParameter": {
+        "additionalProperties": false,
+        "description": "A parameter value with the DuckDB type to read it as, for values JSON cannot\nsay on its own: a DECIMAL, a DATE, a UUID, a list.",
+        "properties": {
+          "type": {
+            "description": "A DuckDB type: BOOLEAN, an integer type, FLOAT, DOUBLE, DECIMAL(p,s), VARCHAR, BLOB (value base64-encoded), DATE, TIME, TIMESTAMP, TIMESTAMPTZ, INTERVAL, UUID or JSON, optionally followed by [] for a list.",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "description": "The value, as a string, number, boolean, null or array.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "TypedParameter",
+        "type": "object"
       }
     }
   },
