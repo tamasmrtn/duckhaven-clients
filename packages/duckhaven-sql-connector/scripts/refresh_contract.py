@@ -28,6 +28,8 @@ WANT: dict[str, set[str]] = {
     "/sql/sessions/{session_id}/staging-files": {"post"},
     "/queries/{query_id}": {"get", "delete"},
     "/queries/{query_id}/rows": {"get"},
+    # The Arrow result stream, read when pyarrow is installed (api_version >= 3).
+    "/queries/{query_id}/result": {"get"},
 }
 SCHEMAS = (
     "SqlSessionCreate",

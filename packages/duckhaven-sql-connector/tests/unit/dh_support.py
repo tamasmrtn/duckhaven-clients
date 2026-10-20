@@ -62,8 +62,23 @@ def session_json(**over: Any) -> dict[str, Any]:
     return data
 
 
+VERSION_URL = f"{BASE}/version"
+RESULT_URL = f"{BASE}/queries/{QUERY_ID}/result"
+
+
 def mock_open_session(**over: Any) -> None:
     respx.post(SESSIONS_URL).mock(return_value=httpx.Response(201, json=session_json(**over)))
+    # A server predating GET /version: results are paged as JSON. Tests of the Arrow
+    # path register their own answer (`mock_api_version`), which takes precedence.
+    probe = httpx.Request("GET", VERSION_URL)
+    if not any(route.pattern.match(probe) for route in respx.routes):
+        respx.get(VERSION_URL).mock(return_value=httpx.Response(404))
+
+
+def mock_api_version(api_version: int) -> None:
+    respx.get(VERSION_URL).mock(
+        return_value=httpx.Response(200, json={"version": "test", "api_version": api_version})
+    )
 
 
 def pending_json(**over: Any) -> dict[str, Any]:
