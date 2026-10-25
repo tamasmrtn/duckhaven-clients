@@ -150,8 +150,9 @@ def test_the_first_page_arrives_on_the_submit_response():
     """One HTTP call per statement, against a real server.
 
     A unit test can only show the cursor skips its fetch when handed a page; that the
-    server actually puts one there is a property of the pair. Skips against a server
-    that does not support it, which answers without a page and costs two calls.
+    server actually puts one there is a property of the pair. With pyarrow installed
+    the page is the whole result as Arrow (`inline_format`). Skips against a server
+    that supports neither, which answers without rows and costs two calls.
     """
     from duckhaven_sql_connector._telemetry import Hooks
 
@@ -177,9 +178,9 @@ def test_the_first_page_arrives_on_the_submit_response():
         assert cur.fetchall() == [(42, "x")]
         assert cur.description[0][0] == "answer"
         assert cur.rowcount == 1
-        row_fetches = [p for m, p in calls if m == "GET" and p.endswith("/rows")]
+        row_fetches = [p for m, p in calls if m == "GET" and p.endswith(("/rows", "/result"))]
         if row_fetches:
-            pytest.skip("server does not return a first page on the statement response")
+            pytest.skip("server does not return the rows on the statement response")
         assert len(calls) == 1, f"expected one HTTP call, got {calls}"
     finally:
         connection.close()

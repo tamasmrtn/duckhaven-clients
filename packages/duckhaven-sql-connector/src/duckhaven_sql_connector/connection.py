@@ -102,6 +102,8 @@ class Connection:
         # Live cursors, so a connection-scoped cancel() can reach the in-flight
         # statement. Weak so a finished cursor is not kept alive by this set.
         self._cursors: weakref.WeakSet[Cursor] = weakref.WeakSet()
+        # The server's api_version, learned on first need; see `_api_version`.
+        self._server_api_version: int | None | bool = False
 
     @classmethod
     def open(
@@ -252,6 +254,21 @@ class Connection:
             raise
         data = response.json()
         return ServerVersion(version=data["version"], api_version=data["api_version"])
+
+    def _api_version(self) -> int | None:
+        """The server's API contract version, asked once per connection. ``None``
+        for a server too old to say, which is the oldest supported contract."""
+        if self._server_api_version is False:
+            version = self.server_version()
+            self._server_api_version = None if version is None else version.api_version
+        return self._server_api_version  # type: ignore[return-value]
+
+    def _arrow_results(self) -> bool:
+        """Whether results are read as Arrow: pyarrow is installed and the server
+        (``api_version`` 3 or later) serves ``GET /queries/{id}/result``."""
+        from ._arrow import pyarrow_available
+
+        return pyarrow_available() and (self._api_version() or 0) >= 3
 
     # -- Staging ------------------------------------------------------------
 

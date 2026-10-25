@@ -1,7 +1,8 @@
 """Client-side JSON→Arrow conversion (the ``arrow`` optional extra).
 
-v1 has no server-side Arrow result path, so ``Cursor.fetch_arrow_table`` builds a
-``pyarrow.Table`` from the JSON rows the pager already returns. ``pyarrow`` is an optional
+Against a server without an Arrow result path (``api_version`` below 3),
+``Cursor.fetch_arrow_table`` builds a ``pyarrow.Table`` from the JSON rows the pager
+already returns. ``pyarrow`` is an optional
 dependency; calling the Arrow path without it raises ``NotSupportedError``.
 """
 
@@ -29,3 +30,12 @@ def to_arrow_table(columns: list[str], rows: list[tuple[Any, ...]]) -> Any:
         return pa.table({})
     data = {col: [row[i] for row in rows] for i, col in enumerate(columns)}
     return pa.table(data)
+
+
+def pyarrow_available() -> bool:
+    """Whether the ``arrow`` extra is installed."""
+    try:
+        _load_pyarrow()
+    except NotSupportedError:
+        return False
+    return True
