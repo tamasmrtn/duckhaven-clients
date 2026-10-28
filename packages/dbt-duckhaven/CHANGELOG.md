@@ -6,6 +6,8 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-28
+
 ### Fixed
 
 - A run now keeps one DuckHaven session per dbt thread instead of opening and deleting
