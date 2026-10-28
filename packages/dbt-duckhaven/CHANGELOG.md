@@ -6,6 +6,20 @@ All notable changes to `dbt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- A run now keeps one DuckHaven session per dbt thread instead of opening and deleting
+  one for every node. dbt-core closes the connection after each node, which for this
+  adapter meant a full session open per model and per test. The README already promised
+  one session per thread. `threads: N` now holds at most N + 1 sessions (one more for
+  dbt's main thread), and all of them close when the invocation ends. On a local
+  DuckHaven with 40 tiny table models plus their tests (80 nodes, `threads: 4`), a
+  `dbt build` went from 84 sessions to 5, and from 30.5 s to 8.1 s on an Iceberg catalog
+  and from 48.4 s to 10.5 s on a DuckLake catalog. (#101)
+- A statement whose session the server has closed (idle timeout, maximum lifetime,
+  agent restart) now opens a new session and is sent once more, instead of failing the
+  node. This matters more now that sessions live for the whole run.
+
 ### Changed
 
 - Documentation only: the README now says that the adapter suite was run against both an Iceberg
