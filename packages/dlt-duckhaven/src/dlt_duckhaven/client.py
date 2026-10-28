@@ -10,9 +10,15 @@ and the Iceberg type mapping.
 from __future__ import annotations
 
 from collections.abc import Iterable
+from types import TracebackType
 
 from dlt.common.destination import DestinationCapabilitiesContext
-from dlt.common.destination.client import LoadJob, PreparedTableSchema, SupportsStagingDestination
+from dlt.common.destination.client import (
+    LoadJob,
+    PreparedTableSchema,
+    RunnableLoadJob,
+    SupportsStagingDestination,
+)
 from dlt.common.schema import Schema
 from dlt.common.schema.typing import TColumnType, TTableSchemaColumns
 from dlt.destinations.exceptions import DatabaseUndefinedRelation
@@ -20,7 +26,7 @@ from dlt.destinations.insert_job_client import InsertValuesJobClient
 
 from dlt_duckhaven.configuration import DuckHavenClientConfiguration
 from dlt_duckhaven.load_jobs import DuckHavenCopyJob
-from dlt_duckhaven.sql_client import DuckHavenSqlClient
+from dlt_duckhaven.sql_client import DuckHavenSqlClient, close_idle_sessions
 
 
 def _parse_duckdb_type(type_text: str) -> tuple[str, int | None, int | None]:
@@ -65,6 +71,25 @@ class DuckHavenJobClient(InsertValuesJobClient, SupportsStagingDestination):
         if not job:
             job = DuckHavenCopyJob(file_path)
         return job
+
+    def prepare_load_job_execution(self, job: RunnableLoadJob) -> None:
+        super().prepare_load_job_execution(job)
+        # This client runs a load job: hand its session to the package's next job when it
+        # closes, instead of deleting it (see sql_client._IDLE_SESSIONS).
+        self.sql_client.reuse_session = True
+
+    def __exit__(
+        self, exc_type: type[BaseException], exc_val: BaseException, exc_tb: TracebackType
+    ) -> None:
+        if exc_type is not None:
+            # A failed job may have left its session in any state; do not pass it on.
+            self.sql_client.reuse_session = False
+        super().__exit__(exc_type, exc_val, exc_tb)
+
+    def complete_load(self, load_id: str) -> None:
+        super().complete_load(load_id)
+        # Every job of the package has finished, so nothing is left to take a pooled session.
+        close_idle_sessions()
 
     def _from_db_type(self, db_type: str, precision: int | None, scale: int | None) -> TColumnType:
         return self.type_mapper.from_destination_type(db_type, precision, scale)

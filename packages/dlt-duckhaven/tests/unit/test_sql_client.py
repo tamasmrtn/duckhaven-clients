@@ -338,7 +338,7 @@ def test_commit_conflict_retries_are_bounded(monkeypatch):
 
 
 def test_non_conflict_transient_is_not_retried(monkeypatch):
-    # A reaped session leaves this connection unusable; only dlt can rebuild it.
+    # Not a lost session (no 409) and not a commit conflict: left to dlt's own job retry.
     client, cursor = _retrying_client(monkeypatch, dbapi.OperationalError("session reaped"))
 
     with pytest.raises(DatabaseTransientException):
