@@ -205,8 +205,12 @@ def test_cleanup_all_closes_the_kept_session(sessions):
 
 def test_each_thread_keeps_its_own_session(sessions):
     manager = make_manager()
+    # dbt keys connections by thread ident, which the OS reuses once a thread exits; hold
+    # both workers alive together so they are two threads, as in dbt's pool.
+    both_running = threading.Barrier(2)
 
     def worker(prefix):
+        both_running.wait()
         for i in range(3):
             run_node(manager, f"model.{prefix}{i}")
 
