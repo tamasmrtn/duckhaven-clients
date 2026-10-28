@@ -15,6 +15,7 @@ import os
 import uuid
 
 import dlt
+import httpx
 import pytest
 from dlt_duckhaven import duckhaven
 
@@ -146,3 +147,42 @@ def test_parallel_load_jobs_for_one_table_all_land(monkeypatch):
     # cannot duplicate what it re-runs, and none may be lost either.
     assert _scalar(pipeline, f"SELECT count(*) FROM {table}") == rows
     assert _scalar(pipeline, f"SELECT count(DISTINCT id) FROM {table}") == rows
+
+
+def _dlt_sessions() -> list[dict]:
+    """This principal's newest dlt-duckhaven sessions (``since`` is admin-only)."""
+    host = os.environ["DUCKHAVEN_TEST_HOST"].rstrip("/")
+    response = httpx.get(
+        f"{host}/api/workspaces/{os.environ['DUCKHAVEN_TEST_WORKSPACE']}/sql/sessions",
+        params={"limit": 1000},
+        headers={"Authorization": f"Bearer {os.environ['DUCKHAVEN_TEST_PAT']}"},
+    )
+    response.raise_for_status()
+    return [s for s in response.json()["items"] if s["client_name"] == "dlt-duckhaven"]
+
+
+def test_load_jobs_share_one_session_per_worker(monkeypatch):
+    """Ten load jobs on four workers open a handful of sessions, not one per job, and the
+    load closes all of them when its package completes."""
+    workers = 4
+    monkeypatch.setenv("DATA_WRITER__FILE_MAX_ITEMS", "20")  # -> 10 Parquet files, 10 jobs
+    monkeypatch.setenv("LOAD__WORKERS", str(workers))
+    destination = _destination()
+    pipeline = dlt.pipeline(
+        pipeline_name=f"dlt_duckhaven_sessions_{uuid.uuid4().hex[:8]}",
+        destination=destination,
+        dataset_name=f"dlt_duckhaven_sessions_{uuid.uuid4().hex[:8]}",
+    )
+
+    @dlt.resource(name="intervals", write_disposition="append")
+    def intervals():
+        yield [{"id": n} for n in range(200)]
+
+    before = {s["id"] for s in _dlt_sessions()}
+    pipeline.run(intervals())
+
+    opened = [s for s in _dlt_sessions() if s["id"] not in before]
+    # One per worker, plus the two clients that run before any job (syncing the destination,
+    # then initialising the load step). Without reuse it is one per job on top of those.
+    assert 1 <= len(opened) <= workers + 2
+    assert [s["id"] for s in opened if s["status"] == "open"] == []
