@@ -6,6 +6,8 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-28
+
 ### Changed
 
 - Load jobs now share DuckHaven sessions instead of each opening and deleting its own.
