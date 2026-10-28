@@ -8,6 +8,20 @@ All notable changes to `dlt-duckhaven` are documented here. The format follows
 
 ### Changed
 
+- Load jobs now share DuckHaven sessions instead of each opening and deleting its own.
+  dlt builds a new client for every load job, so every file used to cost a full session
+  open. A finished job now hands its session to the package's next job, so a load holds
+  about one session per load worker, and completing the package closes them all. Schema
+  sync, `pipeline.sql_client()` and `pipeline.dataset()` still open and close their own.
+  On a local DuckHaven, loading 41 jobs with `LOAD__WORKERS=4` went from 43 sessions to 5,
+  and the load step from 12.6 s to 7.8 s on an Iceberg catalog and from 17.6 s to 4.7 s on
+  a DuckLake catalog. These are single runs. See "Sessions" in the README.
+- A statement or staging request whose session the server has closed (idle timeout,
+  maximum lifetime, agent restart) now opens a new session and is sent once more. The
+  exception is the `INSERT` that loads a file the job staged: a session may only read its
+  own staged files, so that `INSERT` still fails as a retryable error and dlt re-runs the
+  job.
+
 - Documentation only: the README now says that the destination suite was run against both an Iceberg
   and a DuckLake catalog on a DuckHaven server with the result cache and on-demand catalog
   attach, and passed unchanged. No code changed.

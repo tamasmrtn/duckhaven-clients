@@ -117,6 +117,30 @@ serialize the load step with `LOAD__WORKERS=1`. A retry is safe because a reject
 publishes nothing — none of its rows are visible, so re-running cannot duplicate them.
 Under sustained contention the retries are bounded and dlt's own job retry takes over.
 
+### Sessions
+
+Every statement runs in a DuckHaven SQL session, and opening one costs more than a small
+load job's own work. dlt builds a fresh client for every load job, one per file, so the
+destination keeps the sessions finished jobs leave behind and hands them to the package's
+next jobs. A load therefore holds about one session per load worker (`LOAD__WORKERS`,
+20 by default, but never more than there are jobs running at once). It also opens one or
+two short-lived sessions of its own before the jobs start, for the destination's schema
+and state. Each open session holds an agent admission slot, so keep `LOAD__WORKERS`
+within the agent's capacity. All of them close when the load package completes. Only load
+jobs hand sessions on: `pipeline.sql_client()`, `pipeline.dataset()` and schema sync open
+and close their own as before. If a load fails before its package completes, its kept
+sessions close when the Python process exits, or when the server closes idle sessions,
+whichever comes first.
+
+A session kept between jobs can be closed by the server in the meantime: it reaps idle
+sessions, sessions reach a maximum lifetime, and an agent restart ends its sessions. When
+a statement or a staging request finds its session gone, the destination opens a new one
+and sends it again, once. The server refuses a request for a closed session before running
+any of it, so this cannot run anything twice. The one exception is the `INSERT` that loads
+a file the job staged. A session may only read its own staged files, so that `INSERT`
+cannot move to a new session. It fails as a retryable error instead, and dlt runs the job
+again from the start, staging the file afresh.
+
 ### Reading values back
 
 DuckHaven returns rows as JSON, so temporal values arrive as ISO-8601 strings and are
