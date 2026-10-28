@@ -9,8 +9,10 @@ schema being set (the dataset schema may not exist yet on first load).
 
 from __future__ import annotations
 
+import atexit
 import random
 import re
+import threading
 import time
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
@@ -92,6 +94,48 @@ _BACKOFF_BASE = 0.2
 _BACKOFF_MAX = 5.0
 
 
+def is_session_lost(exc: BaseException) -> bool:
+    """Whether the server no longer holds the session (reaped, expired, agent gone).
+
+    The connector raises this 409 when a statement or staging request is *submitted*,
+    before anything runs, so re-sending it on a fresh session cannot run it twice.
+    """
+    return isinstance(exc, dbapi.OperationalError) and exc.status_code == 409
+
+
+# Sessions that finished load jobs handed back, for the package's next jobs to take. dlt
+# builds a new job client (and so opens a new session) for every load job, and opening a
+# session costs more than a small job's own statements. Keyed by everything that selects
+# the session, so a client only ever takes one opened with its own settings. Only load jobs
+# return sessions here (see DuckHavenJobClient), and completing the package closes them.
+_IDLE_SESSIONS: dict[tuple[Any, ...], list[Connection]] = {}
+_IDLE_LOCK = threading.Lock()
+
+
+def close_idle_sessions() -> None:
+    """Close every pooled session: when a load package completes, and at exit."""
+    with _IDLE_LOCK:
+        idle = [conn for conns in _IDLE_SESSIONS.values() for conn in conns]
+        _IDLE_SESSIONS.clear()
+    for conn in idle:
+        try:
+            conn.close()
+        except Exception:  # noqa: BLE001 - best effort; the server reaps what is left
+            pass
+
+
+# A load that fails part-way never completes its package; do not leave its pooled sessions
+# holding agent slots until the server's idle reaper gets to them.
+atexit.register(close_idle_sessions)
+
+
+def _submit(cursor: Any, sql: str, params: list[Any] | None) -> None:
+    if params is None:
+        cursor.execute(sql)
+    else:
+        cursor.execute(sql, params)
+
+
 def _backoff_delay(attempt: int) -> float:
     """Capped exponential backoff with full jitter for retry ``attempt`` (0-based).
 
@@ -171,12 +215,37 @@ class DuckHavenSqlClient(SqlClientBase["Connection"]):
         super().__init__(config.catalog, dataset_name, staging_dataset_name, capabilities)
         self.config = config
         self._conn: Connection | None = None
+        # Set by the job client for a load job: closing then returns the session to the
+        # pool for the package's next job instead of deleting it.
+        self.reuse_session = False
+
+    def _pool_key(self) -> tuple[Any, ...]:
+        c = self.config
+        return (c.host, c.workspace, c.credentials.token, c.agent, c.catalog)
 
     @raise_open_connection_error
     def open_connection(self) -> Connection:
+        with _IDLE_LOCK:
+            idle = _IDLE_SESSIONS.get(self._pool_key())
+            self._conn = idle.pop() if idle else None
+        if self._conn is None:
+            self._conn = self._connect()
+        return self._conn
+
+    def reconnect(self) -> Connection:
+        """Replace a session the server dropped with a fresh one."""
+        try:
+            # The connector already marked the session dead: close() sends no DELETE.
+            self._conn.close()
+        except Exception:  # noqa: BLE001 - the old session is gone either way
+            pass
+        self._conn = self._connect()
+        return self._conn
+
+    def _connect(self) -> Connection:
         from dlt_duckhaven import __version__
 
-        self._conn = dbapi.connect(
+        return dbapi.connect(
             host=self.config.host,
             workspace=self.config.workspace,
             token=self.config.credentials.token,
@@ -186,12 +255,17 @@ class DuckHavenSqlClient(SqlClientBase["Connection"]):
             schema=None,
             application=f"dlt-duckhaven/{__version__}",
         )
-        return self._conn
 
     def close_connection(self) -> None:
-        if self._conn is not None:
-            self._conn.close()
-            self._conn = None
+        conn, self._conn = self._conn, None
+        reuse, self.reuse_session = self.reuse_session, False
+        if conn is None:
+            return
+        if reuse:
+            with _IDLE_LOCK:
+                _IDLE_SESSIONS.setdefault(self._pool_key(), []).append(conn)
+            return
+        conn.close()
 
     @property
     def native_connection(self) -> Connection:
@@ -243,10 +317,10 @@ class DuckHavenSqlClient(SqlClientBase["Connection"]):
     def execute_sql(self, sql: AnyStr, *args: Any, **kwargs: Any) -> Sequence[Sequence[Any]] | None:
         """Run ``sql``, retrying a lost Iceberg commit race.
 
-        Only commit conflicts are retried: they are resolved by re-reading the table's
-        refreshed metadata, which is exactly what re-running the statement does. Every other
-        transient failure (a reaped session, an agent that went away) leaves this connection
-        unusable, so it propagates — dlt retries the job against a fresh one.
+        Commit conflicts are retried here: they are resolved by re-reading the table's
+        refreshed metadata, which is exactly what re-running the statement does. A session
+        the server dropped is reopened once in ``execute_query``. Every other transient
+        failure (an agent that went away, say) propagates, and dlt retries the job.
         """
         for attempt in range(_COMMIT_CONFLICT_ATTEMPTS):
             try:
@@ -265,17 +339,31 @@ class DuckHavenSqlClient(SqlClientBase["Connection"]):
     @raise_database_error
     def execute_query(self, query: AnyStr, *args: Any, **kwargs: Any) -> Iterator[DBApiCursor]:
         assert isinstance(query, str)
+        # False for a statement tied to this session, e.g. one reading a file the session
+        # staged: the server lets a session read only its own staging prefix.
+        reopen_lost_session = kwargs.pop("reopen_lost_session", True)
+        if args:
+            # dlt emits pyformat (%s); the connector binds qmark (?) params.
+            statements = [(query.replace("%s", "?"), list(args))]
+        else:
+            # Multi-statement DDL arrives as one string; the session runs one
+            # statement per submit, so split (params never accompany these).
+            statements = [(part, None) for part in query.split(";") if part.strip()]
         cursor = self._conn.cursor()
+        reopened = False
         try:
-            if args:
-                # dlt emits pyformat (%s); the connector binds qmark (?) params.
-                cursor.execute(query.replace("%s", "?"), list(args))
-            else:
-                # Multi-statement DDL arrives as one string; the session runs one
-                # statement per submit, so split (params never accompany these).
-                for part in query.split(";"):
-                    if part.strip():
-                        cursor.execute(part)
+            for sql, params in statements:
+                try:
+                    _submit(cursor, sql, params)
+                except dbapi.OperationalError as exc:
+                    # A pooled session can have idled out since its last job. Re-send only
+                    # the refused statement: any earlier part already ran and committed.
+                    if reopened or not reopen_lost_session or not is_session_lost(exc):
+                        raise
+                    reopened = True
+                    cursor.close()
+                    cursor = self.reconnect().cursor()
+                    _submit(cursor, sql, params)
             yield _DuckHavenCursorImpl(cursor)
         finally:
             cursor.close()

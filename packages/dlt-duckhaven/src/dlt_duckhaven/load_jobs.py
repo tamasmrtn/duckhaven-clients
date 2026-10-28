@@ -13,7 +13,9 @@ from typing import TYPE_CHECKING
 from dlt.common.destination.client import HasFollowupJobs, RunnableLoadJob
 from dlt.destinations.job_impl import ReferenceFollowupJobRequest
 
+import duckhaven_sql_connector as dbapi
 from dlt_duckhaven import _staging, _telemetry
+from dlt_duckhaven.sql_client import is_session_lost
 
 if TYPE_CHECKING:
     from dlt_duckhaven.client import DuckHavenJobClient
@@ -49,16 +51,24 @@ class DuckHavenCopyJob(RunnableLoadJob, HasFollowupJobs):
             "dlt_duckhaven.load_job",
             {"dlt.table": self.load_table_name, "dlt.load_id": self._load_id},
         ):
-            if ReferenceFollowupJobRequest.is_reference_job(self._file_path):
+            reference = ReferenceFollowupJobRequest.is_reference_job(self._file_path)
+            if reference:
                 # An explicit filesystem staging destination already uploaded the file.
                 remote_uri = ReferenceFollowupJobRequest.resolve_reference(self._file_path)
             else:
                 # Destination-managed staging: upload the local file, then read its
                 # presigned GET URL. The agent fetches it over httpfs — no credential
                 # travels in the load SQL.
-                remote_uri = _staging.stage_file(
-                    self._sql_client.native_connection, self._file_path
-                )
+                try:
+                    remote_uri = _staging.stage_file(
+                        self._sql_client.native_connection, self._file_path
+                    )
+                except dbapi.OperationalError as exc:
+                    # Staging is a job's first call on its session, which a previous job
+                    # may have handed over after the server dropped it while idle.
+                    if not is_session_lost(exc):
+                        raise
+                    remote_uri = _staging.stage_file(self._sql_client.reconnect(), self._file_path)
 
             source_format, options = _reader_for(remote_uri)
             # BY NAME/union_by_name tolerates column evolution across files.
@@ -66,5 +76,8 @@ class DuckHavenCopyJob(RunnableLoadJob, HasFollowupJobs):
             # client retries a losing commit, so nothing extra is needed here.
             self._sql_client.execute_sql(
                 f"INSERT INTO {qualified_table_name} BY NAME"
-                f" SELECT * FROM {source_format}('{remote_uri}'{options})"
+                f" SELECT * FROM {source_format}('{remote_uri}'{options})",
+                # A file this session staged is readable only by this session, so a lost
+                # session fails the job (transient) and dlt re-runs it, staging again.
+                reopen_lost_session=reference,
             )
