@@ -83,8 +83,10 @@ Because Iceberg writes are merge-on-read, a `merge` target must leave `write.upd
 own session (an agent admission slot) and race each other to commit to the same Iceberg
 table. Size `batch_size` so one batch finishes inside the server's 600s per-statement
 limit. Note that each batch leaves a session-local temp table behind for the life of the
-run (dbt-duckdb's incremental materialization only cleans those up on MotherDuck), and a
-session has a fixed 256 MiB budget — so very high batch counts in one run are untested.
+run (dbt-duckdb's incremental materialization only cleans those up on MotherDuck). Because
+a thread keeps one session for the whole run (see [Concurrency](#concurrency)), those temp
+tables add up across every microbatch model the thread runs, and a session has a fixed
+256 MiB budget, so very high batch counts in one run are untested.
 
 ### Not supported (yet)
 
@@ -127,9 +129,26 @@ provide.
 
 ## Concurrency
 
-`threads: N` opens **N** DuckHaven sessions, each holding one agent admission slot for
-the duration of the run. There is no deadlock, but keep `threads ≤` the agent's
-admission capacity to avoid queueing/starvation. `threads: 2–4` is a good default.
+Opening a DuckHaven session is the most expensive thing a small model does, so a run opens
+as few as it can. Each dbt thread opens one session the first time it needs one and keeps
+it for every node it runs after that. dbt's main thread holds one more, for the work it
+does between nodes, such as creating schemas. So `threads: N` holds at most **N + 1**
+sessions, whatever the node count, and closes all of them when the invocation ends. Each
+session holds one agent admission slot for the whole run. There is no deadlock, but keep
+`threads ≤` the agent's admission capacity to avoid queueing/starvation. `threads: 2–4` is
+a good default.
+
+A long run can outlast a session: the server closes sessions that sit idle too long or
+reach their maximum lifetime, and an agent restart ends its sessions. When a statement
+finds its session gone, the adapter opens a new one and sends the statement again, once.
+This is safe because the server refuses a statement for a closed session before running
+any of it. Anything that lived only in the old session is lost, such as a temp table an
+earlier statement of the same model created, so a model caught mid-way like that fails
+and runs cleanly on the next invocation.
+
+Reusing a session also means session-local state outlives the node that created it: a
+`SET` in a hook, or a temp table a failed model left behind, is still there for the next
+node that thread runs.
 
 Cancelling a run (Ctrl-C, or a failure with `--fail-fast`) cancels the in-flight statement
 on each session, so the agent's admission slots are freed promptly instead of running the
