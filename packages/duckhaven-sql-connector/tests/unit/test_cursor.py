@@ -294,7 +294,7 @@ def test_query_id_is_tracked_while_the_statement_is_still_running():
     seen = {}
 
     def _capture(_request):
-        seen["id"] = cur._query_id
+        seen["id"] = cur.query_id
         return httpx.Response(200, json={"id": QUERY_ID, "status": "done", "row_count": 0})
 
     respx.get(QUERY_URL).mock(side_effect=_capture)
