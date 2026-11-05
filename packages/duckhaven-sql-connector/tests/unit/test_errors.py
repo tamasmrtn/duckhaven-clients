@@ -74,6 +74,13 @@ def test_maps_structured_error_codes(status, code, expected):
         (409, "session_not_open", dbapi.OperationalError),
         (409, "catalog_read_only", dbapi.OperationalError),
         (503, "session_open_failed", dbapi.OperationalError),
+        # No compute could take the run; 422 alone would read as a fault in the SQL.
+        (422, "agent_required", dbapi.OperationalError),
+        (422, "default_compute_unavailable", dbapi.OperationalError),
+        (503, "no_compute_available", dbapi.OperationalError),
+        (429, "compute_queue_full", dbapi.OperationalError),
+        # The id a client chose for its run is already taken.
+        (409, "query_id_conflict", dbapi.IntegrityError),
     ],
 )
 def test_maps_structured_error_codes_v2_envelope(status, code, expected):

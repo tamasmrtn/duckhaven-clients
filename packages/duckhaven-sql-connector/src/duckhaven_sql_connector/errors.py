@@ -18,6 +18,7 @@ import httpx
 from .dbapi import (
     DatabaseError,
     Error,
+    IntegrityError,
     InterfaceError,
     InternalError,
     OperationalError,
@@ -51,8 +52,17 @@ _OPERATIONAL_CODES = frozenset(
         "runtime_retired",
         "runtime_unsupported",
         "agent_sandbox_unverified",
+        # No compute could take the run: none is running and none may be started, the
+        # workspace's default compute cannot, or too many runs are waiting. Some arrive
+        # as 422, which alone would read as a fault in the SQL.
+        "agent_required",
+        "no_compute_available",
+        "default_compute_unavailable",
+        "compute_queue_full",
     }
 )
+# A run with the `id` the client chose already exists.
+_INTEGRITY_CODES = frozenset({"query_id_conflict"})
 
 
 def _retry_after_seconds(response: httpx.Response) -> float | None:
@@ -103,7 +113,9 @@ def map_http_error(response: httpx.Response) -> Error:
     code, message = _parse_body(response)
 
     exc_type: type[Error]
-    if code in _PROGRAMMING_CODES:
+    if code in _INTEGRITY_CODES:
+        exc_type = IntegrityError
+    elif code in _PROGRAMMING_CODES:
         exc_type = ProgrammingError
     elif code in _OPERATIONAL_CODES:
         exc_type = OperationalError
