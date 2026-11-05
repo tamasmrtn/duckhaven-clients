@@ -17,8 +17,8 @@ apilevel = "2.0"
 # 1 = threads may share the module but not connections. dbt opens one session
 # (Connection) per thread, so this is the correct, honest value.
 threadsafety = 1
-# The statement API takes no server-side parameters; the connector renders ``?``
-# placeholders into safe SQL literals client-side (see _params.py).
+# ``?`` placeholders. A server with ``api_version`` 3 or later takes the values as typed
+# parameters; for an older one the connector renders them into SQL (see _params.py).
 paramstyle = "qmark"
 
 
@@ -98,17 +98,31 @@ class NotSupportedError(DatabaseError):
 # --- Type objects and constructors (PEP 249) --------------------------------
 
 
+def _base_type(type_code: object) -> object:
+    """A type code's base type: ``DECIMAL`` for ``DECIMAL(18,4)``, ``LIST`` for
+    ``INTEGER[]``. Anything that does not parse is compared as it is."""
+    if not isinstance(type_code, str):
+        return type_code
+    from ._types import parse_type
+
+    try:
+        return parse_type(type_code).name
+    except ValueError:
+        return type_code.upper()
+
+
 class _DBAPITypeObject:
-    """A type-comparison singleton that equals any of the given type-code names."""
+    """A type-comparison singleton that equals any type code whose base type is one of
+    the given names, so ``NUMBER == "DECIMAL(18,4)"`` holds."""
 
     def __init__(self, *values: str) -> None:
         self.values = frozenset(values)
 
     def __eq__(self, other: object) -> bool:
-        return other in self.values
+        return _base_type(other) in self.values
 
     def __ne__(self, other: object) -> bool:
-        return other not in self.values
+        return not self == other
 
     def __hash__(self) -> int:
         return hash(self.values)
@@ -126,13 +140,27 @@ NUMBER = _DBAPITypeObject(
     "USMALLINT",
     "UINTEGER",
     "UBIGINT",
+    "UHUGEINT",
+    "BIGNUM",
+    "VARINT",
     "FLOAT",
     "DOUBLE",
     "REAL",
     "DECIMAL",
     "NUMERIC",
 )
-DATETIME = _DBAPITypeObject("TIMESTAMP", "TIMESTAMPTZ", "DATE", "TIME", "TIMETZ")
+DATETIME = _DBAPITypeObject(
+    "TIMESTAMP",
+    "TIMESTAMPTZ",
+    "TIMESTAMP WITH TIME ZONE",
+    "TIMESTAMP_S",
+    "TIMESTAMP_MS",
+    "TIMESTAMP_NS",
+    "DATE",
+    "TIME",
+    "TIMETZ",
+    "TIME WITH TIME ZONE",
+)
 ROWID = _DBAPITypeObject("ROWID")
 
 Date = _dt.date

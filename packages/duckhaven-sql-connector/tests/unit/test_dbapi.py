@@ -25,6 +25,18 @@ def test_type_objects_compare_by_type_name():
     assert dbapi.ROWID == "ROWID"
 
 
+def test_type_objects_match_a_type_by_its_base_type():
+    """`description` carries DuckDB's full spelling, parameters included."""
+    assert dbapi.NUMBER == "DECIMAL(18,4)"
+    assert dbapi.NUMBER == "BIGNUM"
+    assert dbapi.STRING == "VARCHAR(10)"
+    assert dbapi.DATETIME == "TIMESTAMP WITH TIME ZONE"
+    assert dbapi.NUMBER != "INTEGER[]"  # a list of numbers is not a number
+    assert dbapi.STRING != "STRUCT(a VARCHAR)"
+    assert dbapi.NUMBER != "NOT A TYPE ("
+    assert dbapi.NUMBER != None  # noqa: E711 - PEP 249 type objects compare with ==
+
+
 def test_constructors():
     assert dbapi.Date(2020, 1, 2) == date(2020, 1, 2)
     assert dbapi.Time(3, 4, 5) == time(3, 4, 5)

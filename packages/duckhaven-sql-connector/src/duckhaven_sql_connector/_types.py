@@ -38,6 +38,9 @@ _INTEGERS = frozenset(
         "UINTEGER",
         "UBIGINT",
         "UHUGEINT",
+        # DuckDB's arbitrary-precision integer (VARINT before DuckDB 1.4).
+        "BIGNUM",
+        "VARINT",
     }
 )
 _TIMESTAMPS = frozenset(
@@ -53,14 +56,21 @@ _TIMESTAMPS = frozenset(
 
 @dataclass
 class DuckType:
-    """A parsed DuckDB logical type: its base name, and for containers its members.
+    """A parsed DuckDB logical type: its base name, its parameters, and for containers
+    its members.
 
+    ``name`` is upper case: ``"DECIMAL"``, ``"TIMESTAMP WITH TIME ZONE"``, ``"LIST"``
+    for ``T[]`` and ``"ARRAY"`` for ``T[n]``. ``params`` holds what follows a scalar
+    type in parentheses, as ints and strings: ``(18, 4)`` for ``DECIMAL(18,4)``,
+    ``("a", "b")`` for ``ENUM('a', 'b')``. ``size`` is a fixed array's length.
     ``fields`` holds a struct's or union's ``(name, type)`` members, a map's
     ``("key", …), ("value", …)``, and a list's or array's single ``("", element)``.
     """
 
     name: str
     fields: list[tuple[str, DuckType]] = field(default_factory=list)
+    params: tuple[int | str, ...] = ()
+    size: int | None = None
 
 
 def parse_type(text: str) -> DuckType:
@@ -120,29 +130,36 @@ class _Parser:
             out.append(char)
         raise ValueError(f"unterminated quoted name: {self.text!r}")
 
-    def skip_parameters(self) -> None:
-        """Skip ``(…)`` after a scalar type: ``DECIMAL(18,4)``, ``ENUM('a', 'b')``."""
+    def parameters(self) -> tuple[int | str, ...]:
+        """``(…)`` after a scalar type: ``DECIMAL(18,4)``, ``ENUM('a', 'b')``."""
         if self.peek() != "(":
-            return
-        depth, quoted = 0, False
+            return ()
+        self.pos += 1
+        params: list[int | str] = []
+        while True:
+            if self.peek() == "'":
+                params.append(self.quoted())
+            else:
+                params.append(int(self.word()))
+            if self.peek() != ",":
+                break
+            self.pos += 1
+        self.expect(")")
+        return tuple(params)
+
+    def quoted(self) -> str:
+        """A single-quoted string, ``''`` standing for one quote."""
+        self.expect("'")
+        out: list[str] = []
         while self.pos < len(self.text):
             char = self.text[self.pos]
             self.pos += 1
-            if quoted:
-                if char == "'":
-                    quoted = self.text[self.pos : self.pos + 1] == "'"
-                    if quoted:
-                        self.pos += 1
-                continue
             if char == "'":
-                quoted = True
-            elif char == "(":
-                depth += 1
-            elif char == ")":
-                depth -= 1
-                if depth == 0:
-                    return
-        raise ValueError(f"unbalanced parentheses: {self.text!r}")
+                if self.text[self.pos : self.pos + 1] != "'":
+                    return "".join(out)
+                self.pos += 1
+            out.append(char)
+        raise ValueError(f"unterminated string: {self.text!r}")
 
     def type(self) -> DuckType:
         base = self.word().upper()
@@ -167,14 +184,18 @@ class _Parser:
             ):
                 self.pos += len(" WITH TIME ZONE")
                 base += " WITH TIME ZONE"
-            self.skip_parameters()
-            parsed = DuckType(base)
+            parsed = DuckType(base, params=self.parameters())
         while self.peek() == "[":
             self.pos += 1
+            start = self.pos
             while self.peek().isdigit():
                 self.pos += 1
+            digits = self.text[start : self.pos].strip()
             self.expect("]")
-            parsed = DuckType("LIST", [("", parsed)])
+            if digits:
+                parsed = DuckType("ARRAY", [("", parsed)], size=int(digits))
+            else:
+                parsed = DuckType("LIST", [("", parsed)])
         return parsed
 
     def member(self) -> tuple[str, DuckType]:
@@ -211,7 +232,7 @@ def _converter(t: DuckType, *, nested: bool) -> Converter | None:
         # Hex at the top level. Nested bytes are encoded by the server's JSON
         # serializer, not as hex, and are passed through.
         return bytes.fromhex
-    if t.name == "LIST":
+    if t.name in ("LIST", "ARRAY"):
         element = _converter(t.fields[0][1], nested=True)
         return None if element is None else (lambda v: [_apply(element, x) for x in v])
     if t.name == "STRUCT":
@@ -273,7 +294,7 @@ def arrow_converter_for(type_text: str) -> Converter | None:
 def _arrow_converter(t: DuckType) -> Converter | None:
     if t.name in ("HUGEINT", "UHUGEINT"):
         return _int
-    if t.name == "LIST":
+    if t.name in ("LIST", "ARRAY"):
         element = _arrow_converter(t.fields[0][1])
         return None if element is None else (lambda v: [_apply(element, x) for x in v])
     if t.name == "STRUCT":
