@@ -1,13 +1,14 @@
 # duckhaven-sql-connector
 
 A [PEP 249 (DB-API 2.0)](https://peps.python.org/pep-0249/) Python client for
-[DuckHaven](https://github.com/tamasmrtn/duckhaven-clients)'s SQL **session** API.
+[DuckHaven](https://github.com/tamasmrtn/duckhaven-clients)'s SQL API.
 
 It is a **pure HTTP client of DuckHaven's public REST API**: it authenticates with a
 DuckHaven Personal Access Token (`dh_pat_…`), opens a SQL session bound to one compute
 agent, runs statements against that session's persistent DuckDB connection, and fetches
-results. It never talks to a compute node directly and depends on no DuckHaven server
-internals.
+results. In [`auto` mode](#sessions-or-one-shot-queries) it opens no session and runs each
+statement as a one-shot query instead. It never talks to a compute node directly and depends
+on no DuckHaven server internals.
 
 This connector is the shared transport that `dbt-duckhaven`, the dlt `duckhaven`
 destination, a future CLI, and Airflow operators build on.
@@ -48,7 +49,46 @@ itself, quoted and escaped.
 
 > **Note:** The DuckHaven SQL session surface is disabled unless the operator sets
 > `SQL_SESSIONS_ENABLED=true` on the server. Against a server with it off, opening a
-> session raises an `OperationalError`.
+> session raises an `OperationalError`. Connect with `mode="auto"` to run queries there
+> anyway; see [Sessions or one-shot queries](#sessions-or-one-shot-queries).
+
+## Sessions or one-shot queries
+
+By default a connection is one SQL session: `connect()` opens it, every statement runs on
+it, and state carries from one statement to the next, as in a local DuckDB connection. dbt
+and dlt need exactly that. A session needs the server's SQL session surface switched on, and
+it holds a place on its agent for as long as it is open.
+
+`mode="auto"` opens no session. Each statement runs as a one-shot query, so the connector
+works on a default deployment where sessions are off, and an idle connection holds nothing
+on the server. This suits notebooks, scripts and BI tools that mostly read:
+
+```python
+conn = connect(host=..., workspace="analytics", token=..., catalog="sales", mode="auto")
+```
+
+A statement that sets state for later ones opens a session the first time one is needed,
+and the connection then stays on it. Those statements are `SET`, `RESET`, `USE`, `PRAGMA`,
+`ATTACH`, `DETACH` and `CREATE [OR REPLACE] TEMP …`, and `stage_files()` opens one too.
+The connector recognises them by their first keywords, after any comments. Anything else
+runs one-shot, where the server refuses a statement it cannot run there with a clear
+error. If sessions are off on the server, the statement that needs one raises
+`NotSupportedError` and the connection keeps working for everything else.
+
+`catalog`, `agent`, `timeout` and `use_cache` apply to one-shot queries as they do to a
+session. `schema` does too, but only on a server whose `server_version().features` lists
+`query_schema`: an older server would ignore the field and resolve names in its default
+schema. Against such a server, a connection with `schema` set opens a session for its first
+statement and `USE`s the schema there, as `session` mode does. A one-shot query is held
+on the server until it finishes, up to `statement_wait` seconds, or 30 when that is `None`,
+and never longer than half of `http_timeout`. `first_page_limit` only applies to session
+statements. If compute has to start, a one-shot query waits for it as part of its
+`timeout`.
+
+One-shot queries are slower per statement. Each one opens a new DuckDB connection on the
+agent and attaches the workspace's catalogs. On a 2-vCPU agent we measured about 300 ms
+for `SELECT 1`, against about 100 ms for a session statement. For many small queries in a
+row, a session is faster.
 
 ## Errors
 
@@ -69,6 +109,8 @@ configuration.
   `MaxRetryDurationError` (a subtype) is raised when retries exhaust the configured time
   budget.
 - `InterfaceError` — bad connection configuration or a malformed response.
+- `NotSupportedError` — in `auto` mode, a statement that needs a session on a server with
+  SQL sessions off.
 
 ### Agent access denials
 
@@ -292,14 +334,16 @@ v = conn.server_version()
 if v is None:
     ...  # server predates GET /api/version — assume the oldest supported behaviour
 else:
-    print(v.version, v.api_version)  # e.g. "1.4.0", 1
+    print(v.version, v.api_version, v.features)  # e.g. "1.4.0", 3, {"query_schema"}
 ```
 
 `version` is the build/release version; `api_version` is an integer bumped only on a
-breaking API change. It is a provenance and coarse-compatibility signal, **not** a feature
-list — an additive change (a new field, a newly admitted statement) moves neither — so it
-is for support and diagnostics rather than for gating behaviour. A server too old to expose
-the endpoint returns `None`.
+breaking API change. An additive change (a new field, a newly admitted statement) moves
+neither, so both are for support and diagnostics rather than for gating behaviour.
+`features` is the exception: it names the few additions an older server would ignore
+silently rather than refuse, which a client has to ask about before relying on them. It is
+empty against a server that predates the list. A server too old to expose the endpoint
+returns `None`.
 
 ## Compatibility
 
