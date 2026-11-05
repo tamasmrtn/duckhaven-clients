@@ -112,3 +112,40 @@ def test_the_result_stream_serves_arrow(spec):
 def test_statements_take_typed_parameters(spec):
     assert "parameters" in _props(spec, "SqlStatementCreate")
     assert {"type", "value"} <= _props(spec, "TypedParameter")
+
+
+def test_one_shot_query_path_and_body(spec):
+    # The stateless path: a submit that answers 202 at once, or 200 when it finished
+    # within `wait_timeout_s`.
+    responses = _op(spec, "/workspaces/{workspace}/queries", "post")["responses"]
+    assert {"200", "202"} <= set(responses)
+    assert {
+        "sql",
+        "agent_id",
+        "catalog",
+        "parameters",
+        "tags",
+        "timeout_s",
+        "wait_timeout_s",
+        "use_cache",
+    } <= _props(spec, "QueryCreate")
+    assert {"id", "status", "error", "row_count", "has_result", "column_schema", "tags"} <= _props(
+        spec, "QueryOut"
+    )
+
+
+def test_describe_types_a_statement_without_running_it(spec):
+    assert "200" in _op(spec, "/workspaces/{workspace}/queries/describe", "post")["responses"]
+    assert {"sql", "catalog", "parameters"} <= _props(spec, "DescribeCreate")
+    assert {"columns", "parameter_names", "statement_type"} <= _props(spec, "DescribeOut")
+
+
+def test_metadata_report_is_filterable_and_nested(spec):
+    op = _op(spec, "/workspaces/{workspace}/metadata", "get")
+    assert "200" in op["responses"]
+    assert {"catalog", "schema", "table", "columns"} <= {p["name"] for p in op["parameters"]}
+    assert {"catalogs"} <= _props(spec, "WorkspaceMetadataOut")
+    assert {"name", "access_mode", "schemas"} <= _props(spec, "MetadataCatalogOut")
+    assert {"name", "tables"} <= _props(spec, "MetadataSchemaOut")
+    assert {"name", "table_type", "columns"} <= _props(spec, "MetadataTableOut")
+    assert {"name", "type", "nullable"} <= _props(spec, "MetadataColumnOut")
