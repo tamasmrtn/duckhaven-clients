@@ -17,6 +17,32 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
   a session and `USE`s it. The default `mode="session"` is unchanged.
 - `ServerVersion.features`: the optional additions the server names in `GET /api/version`.
   Empty against a server that predates the list.
+- Every statement gets an id before it is sent: `Cursor.query_id`, or your own through
+  `execute(..., query_id=…)`. `Cursor.cancel()` from another thread now stops a statement while
+  its `execute()` is still blocked, retrying briefly if the server has not recorded the run yet.
+  `Connection.cancel_query(query_id)` cancels any run by id without a session. A server that
+  predates chosen ids picks its own, and `query_id` follows it.
+- `tags` on `connect()` and `execute(..., tags=…)`: labels recorded on each statement and shown
+  in DuckHaven's query History.
+- `Connection.metadata()`: the catalogs, schemas, tables and, with `columns=True`, columns the
+  token may see, in one request to DuckHaven's metadata report.
+- `Connection.ping()`: checks the token and, on a session, that the session is still open,
+  without running a statement.
+- `duckhaven_sql_connector.types.parse_type`, which parses a DuckDB type string and keeps
+  decimal precision and scale, enum values and fixed array sizes. `BIGNUM` values convert to
+  `int`.
+
+### Changed
+
+- A statement that was cancelled, or whose agent disconnected while it ran, raises
+  `OperationalError` instead of `ProgrammingError`; a cancelled one carries
+  `code="cancelled"`. Through `dlt-duckhaven`, a load whose agent disconnected is now retried
+  as a transient failure. `agent_required`, `no_compute_available`,
+  `default_compute_unavailable` and `compute_queue_full` also raise `OperationalError`, and
+  `query_id_conflict` raises `IntegrityError`.
+- The PEP 249 type objects compare by base type: `NUMBER == "DECIMAL(18,4)"` now holds.
+- `parse_type` (formerly internal) reads `T[n]` as an `ARRAY` with its size rather than a
+  `LIST`, and records type parameters.
 
 ## [0.9.0] - 2026-10-25
 

@@ -98,17 +98,23 @@ carrying the server's `code`/`status_code`/`detail`. Both of DuckHaven's error e
 accepted transparently — the connector works against either server generation without
 configuration.
 
-- `ProgrammingError` — a rejected statement (`statement_not_allowed`), a denied grant, or a
-  missing object.
+- `ProgrammingError` — a rejected statement (`statement_not_allowed`), a denied grant, a
+  missing object, or a statement that failed when it ran.
 - `OperationalError` — an unavailable/disconnected agent, a reaped or closed session
   (reconnect), a timeout, or the session surface being disabled. Also an agent the server
   will not use: `runtime_retired` (its DuckDB runtime has been retired), `runtime_unsupported`
   (the runtime is not one the server recognises) and `agent_sandbox_unverified` (the agent
   could not lock its configuration, which a session requires). These describe the
-  deployment rather than your SQL, so naming another agent, or none, can succeed.
+  deployment rather than your SQL, so naming another agent, or none, can succeed. The same
+  goes for compute that cannot take the run: `agent_required`, `no_compute_available`,
+  `default_compute_unavailable` and `compute_queue_full`. A statement that was cancelled
+  (`code="cancelled"`) or whose agent disconnected while it ran is an `OperationalError`
+  too.
   `MaxRetryDurationError` (a subtype) is raised when retries exhaust the configured time
   budget.
-- `InterfaceError` — bad connection configuration or a malformed response.
+- `IntegrityError` — the `query_id` you chose is already taken (`query_id_conflict`).
+- `InterfaceError` — bad connection configuration, a rejected token, or a malformed
+  response.
 - `NotSupportedError` — in `auto` mode, a statement that needs a session on a server with
   SQL sessions off.
 
@@ -249,7 +255,7 @@ type to hand back the Python value PEP 249 callers expect:
 | DuckDB type | Python value |
 |---|---|
 | `DECIMAL(p,s)` | `decimal.Decimal` |
-| every integer type, `HUGEINT` and `UBIGINT` included | `int` |
+| every integer type, `HUGEINT`, `UBIGINT` and `BIGNUM` included | `int` |
 | `DATE`, `TIME`, `TIMESTAMP`, `TIMESTAMP WITH TIME ZONE` | `date`, `time`, `datetime` (aware for `WITH TIME ZONE`) |
 | `UUID` | `uuid.UUID` |
 | `BLOB` | `bytes` |
@@ -264,6 +270,20 @@ encoded it.
 > older server sends them as JSON numbers that have already lost precision past about
 > 16 digits; the connector converts what it gets but cannot restore what is gone. Against a
 > server or agent that sends no `column_schema`, values are passed through unconverted.
+
+To map a type to another type system, parse it with `duckhaven_sql_connector.types.parse_type`.
+It keeps what the string says: a decimal's precision and scale, an enum's values, a fixed
+array's size, and the members of lists, structs, maps and unions:
+
+```python
+from duckhaven_sql_connector.types import parse_type
+
+parse_type("DECIMAL(18,4)")  # DuckType(name='DECIMAL', fields=[], params=(18, 4), size=None)
+parse_type("INTEGER[3]").size  # 3; "INTEGER[]" parses as a LIST instead
+```
+
+The PEP 249 type objects compare by base type, so `NUMBER == "DECIMAL(18,4)"` and
+`DATETIME == "TIMESTAMP WITH TIME ZONE"` both hold.
 
 ## Metadata
 
@@ -295,6 +315,70 @@ Two things are worth knowing about how these work:
   since the engine cannot filter those listings by grant; the REST endpoints can, and
   behave identically on open catalogs. They cost one request per catalog in scope, plus one
   per schema for `tables()`, so pass `catalog=` and `schema_name=` when you can.
+
+`conn.metadata()` returns the same picture in one request: the catalogs, schemas and tables
+the token may see, from DuckHaven's metadata report. With `columns=True` each table also
+lists its columns' `name`, `type` and `nullable`, without running a statement on an agent.
+Narrow it with `catalog=`, `schema=` or `table=`, because the server caps how many tables it
+reports columns for in one call:
+
+```python
+for catalog in conn.metadata(catalog="sales", schema="analytics", columns=True):
+    for schema in catalog["schemas"]:
+        for table in schema["tables"]:
+            print(table["name"], [(c["name"], c["type"]) for c in table["columns"]])
+```
+
+On a scoped catalog it lists the tables you hold any grant on, including those where you
+hold only the metadata tier: you see them, but reading their rows is refused.
+
+## Cancelling and query ids
+
+Every statement gets an id before it is sent, and `cur.query_id` holds it. Pass your own
+with `cur.execute(sql, query_id=…)`. Because the id is known before the server answers,
+another thread can stop a statement while `execute()` is still blocked, either with
+`cur.cancel()` or with `conn.cancel_query(query_id)`, which needs no session:
+
+```python
+import threading
+import uuid
+
+run_id = str(uuid.uuid4())
+cur = conn.cursor()
+worker = threading.Thread(target=cur.execute, args=(long_sql,), kwargs={"query_id": run_id})
+worker.start()
+...  # later, when the user presses stop:
+cur.cancel()  # or conn.cancel_query(run_id); the worker's execute() raises OperationalError
+```
+
+The server records a run a moment after its submit arrives. `cur.cancel()` retries briefly
+if it gets there first; `conn.cancel_query()` raises `ProgrammingError` (404) instead, so
+call it once the run exists. A statement that already finished is left as it is. A server
+that predates chosen ids picks its own; `cur.query_id` switches to that one when the submit
+returns, so cancelling during the submit only takes effect once the submit has returned.
+Reusing an id raises `IntegrityError` (`query_id_conflict`). Any member of the workspace can
+cancel any run in it.
+
+## Tags
+
+Tags are labels recorded on each statement and shown in DuckHaven's query History, to tell
+apart the traffic of different tools, jobs or notebook cells. Set them for the connection,
+and add to them per statement:
+
+```python
+conn = connect(..., tags={"app": "forecast", "env": "prod"})
+conn.cursor().execute("SELECT …", tags={"step": "load"})  # records app, env and step
+```
+
+At most 20 per statement, with keys of letters, digits and `_ . : -`. A server that
+predates tags ignores them.
+
+## Checking a connection
+
+`conn.ping()` checks that the connection can still run statements without running one. It
+asks the server whose token this is, and on a connection with a session, that the session
+is still open. It raises `OperationalError` for a session that ended (and marks the
+connection dead) and `InterfaceError` for a token that was revoked or expired.
 
 ## Arrow results
 
