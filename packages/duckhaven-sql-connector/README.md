@@ -79,11 +79,13 @@ error. If sessions are off on the server, the statement that needs one raises
 session. `schema` does too, but only on a server whose `server_version().features` lists
 `query_schema`: an older server would ignore the field and resolve names in its default
 schema. Against such a server, a connection with `schema` set opens a session for its first
-statement and `USE`s the schema there, as `session` mode does. A one-shot query is held
-on the server until it finishes, up to `statement_wait` seconds, or 30 when that is `None`,
-and never longer than half of `http_timeout`. `first_page_limit` only applies to session
-statements. If compute has to start, a one-shot query waits for it as part of its
-`timeout`.
+statement and `USE`s the schema there, as `session` mode does. The schema is never
+created, so a statement on one that does not exist raises `ProgrammingError`. A one-shot
+query in a scoped catalog also needs a grant on the catalog, the schema or a table in it.
+A one-shot query is held on the server until it finishes, up to `statement_wait` seconds,
+or 30 when that is `None`, and never longer than half of `http_timeout`. `first_page_limit`
+only applies to session statements. If compute has to start, a one-shot query waits for it
+as part of its `timeout`.
 
 One-shot queries are slower per statement. Each one opens a new DuckDB connection on the
 agent and attaches the workspace's catalogs. On a 2-vCPU agent we measured about 300 ms
