@@ -356,8 +356,10 @@ if it gets there first; `conn.cancel_query()` raises `ProgrammingError` (404) in
 call it once the run exists. A statement that already finished is left as it is. A server
 that predates chosen ids picks its own; `cur.query_id` switches to that one when the submit
 returns, so cancelling during the submit only takes effect once the submit has returned.
-Reusing an id raises `IntegrityError` (`query_id_conflict`). Any member of the workspace can
-cancel any run in it.
+Ids are unique across the whole server, so choose a random one (`uuid.uuid4()`) for each
+statement. Reusing an id raises `IntegrityError` (`query_id_conflict`), and that includes the
+id of a submit the server refused, for example with a 503: retry with a new id. Any member of
+the workspace can cancel any run in it.
 
 ## Tags
 
