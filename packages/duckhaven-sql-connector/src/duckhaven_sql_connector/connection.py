@@ -239,6 +239,18 @@ class Connection:
         self._cursors.add(cursor)
         return cursor
 
+    def cancel_query(self, query_id: str) -> None:
+        """Cancel a run by its id (``DELETE /queries/{id}``), from any thread.
+
+        Needs no session, and works for any run in the workspace, so a tool can stop a
+        statement it started on another connection, or one whose ``execute`` is still
+        blocked, by the :attr:`Cursor.query_id` it recorded. A run that already finished
+        is left as it is. An unknown id raises ``ProgrammingError``.
+        """
+        if self._closed:
+            raise ProgrammingError("connection is closed")
+        self._transport.delete(f"/queries/{query_id}")
+
     def cancel(self) -> None:
         """Best-effort cancel of the in-flight statement on this session.
 
@@ -251,6 +263,60 @@ class Connection:
             cursor.cancel()
 
     # -- Server introspection -----------------------------------------------
+
+    def ping(self) -> None:
+        """Check the connection can still run statements, without running one.
+
+        Asks the server who the token belongs to, which fails on a wrong, expired or
+        revoked token, and on a connection with a session, that the session is still
+        open. Raises ``OperationalError`` (and marks the connection dead) when it is not,
+        ``InterfaceError`` for a rejected token, and whatever reaching the server raised.
+        """
+        self._ensure_usable()
+        if self._session_id is None:
+            self._transport.get("/me")
+            return
+        try:
+            session = self._transport.get(f"/sql/sessions/{self._session_id}").json()
+        except ProgrammingError as exc:
+            if exc.status_code != 404:
+                raise
+            session = {"status": "gone"}
+        if session.get("status") != "open":
+            self._mark_dead()
+            raise OperationalError(
+                f"session is {session.get('status')}; open a new connection",
+                code=session.get("error"),
+            )
+
+    def metadata(
+        self,
+        *,
+        catalog: str | None = None,
+        schema: str | None = None,
+        table: str | None = None,
+        columns: bool = False,
+    ) -> list[dict[str, Any]]:
+        """The workspace's catalogs, schemas and tables that this token may see
+        (``GET /workspaces/{workspace}/metadata``), filtered by the given names.
+
+        Returns the server's ``catalogs`` list: each catalog has ``name``, ``kind``,
+        ``access_mode`` and ``schemas``; each schema ``name`` and ``tables``; each table
+        ``name``, ``table_type`` and, with ``columns=True``, ``columns`` of ``name``,
+        ``type`` and ``nullable``. ``type`` is DuckDB's spelling; parse it with
+        :func:`duckhaven_sql_connector.types.parse_type`. Listing reads no data and
+        runs nothing on an agent. A server caps how many tables it reports columns for
+        in one call, so narrow ``columns=True`` with ``catalog``, ``schema`` or ``table``.
+        """
+        self._ensure_usable()
+        params: dict[str, Any] = {"columns": "true" if columns else "false"}
+        for key, value in (("catalog", catalog), ("schema", schema), ("table", table)):
+            if value is not None:
+                params[key] = value
+        response = self._transport.get(
+            f"/workspaces/{self._config.workspace}/metadata", params=params
+        )
+        return response.json()["catalogs"]
 
     def server_version(self) -> ServerVersion | None:
         """The server's release and API-contract version (``GET /api/version``).
@@ -436,6 +502,7 @@ def connect(
     use_cache: bool | None = None,
     application: str | None = None,
     mode: str = "session",
+    tags: dict[str, str] | None = None,
     hooks: Hooks | None = None,
 ) -> Connection:
     """Open a DB-API 2.0 Connection to DuckHaven.
@@ -461,6 +528,9 @@ def connect(
     cache. ``None`` takes the server's default (on); ``False`` always executes, which is
     what a benchmark needs.
 
+    ``tags`` are labels recorded on every statement this connection runs, shown in
+    DuckHaven's query History; ``Cursor.execute(tags=…)`` adds to them.
+
     ``statement_wait`` and ``first_page_limit`` apply to session statements. A one-shot
     query in ``auto`` mode waits ``statement_wait`` too, or 30 seconds when it is ``None``.
     """
@@ -481,5 +551,6 @@ def connect(
         use_cache=use_cache,
         application=application,
         mode=mode,
+        tags=tags,
     )
     return Connection.open(config, hooks=hooks)

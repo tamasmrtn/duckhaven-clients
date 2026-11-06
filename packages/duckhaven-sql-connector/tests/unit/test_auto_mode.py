@@ -1,6 +1,7 @@
 """``mode="auto"``: one-shot queries by default, a session only once a statement needs one."""
 
 import json
+import uuid
 
 import httpx
 import pytest
@@ -88,7 +89,9 @@ def test_a_select_runs_as_a_one_shot_query():
     cur.execute("SELECT 1 AS n")
     assert cur.fetchall() == [(1,)]
     assert cur.rowcount == 1
-    assert _body(submit) == {
+    body = _body(submit)
+    assert uuid.UUID(body.pop("id"))  # chosen by the client; see test_query_ids.py
+    assert body == {
         "sql": "SELECT 1 AS n",
         "timeout_s": 42.0,
         "catalog": "sales",

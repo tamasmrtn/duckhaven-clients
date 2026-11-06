@@ -84,6 +84,10 @@ class ClientConfig:
     # a one-shot query, which works where SQL sessions are disabled, and a session opens
     # only once a statement needs one (see Connection._routes_to_session).
     mode: str = "session"
+    # Labels recorded on every statement this connection runs, shown in DuckHaven's query
+    # History: at most 20, keys of letters, digits and `_ . : -`. `execute(tags=…)` adds
+    # to them for one statement. A server that predates tags ignores them.
+    tags: dict[str, str] | None = None
 
     def __post_init__(self) -> None:
         if not self.host or not isinstance(self.host, str):

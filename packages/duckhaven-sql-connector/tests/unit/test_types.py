@@ -22,20 +22,25 @@ from .dh_support import QUERY_ID, ROWS_URL, STATEMENTS_URL, open_conn
     ("text", "expected"),
     [
         ("BIGINT", DuckType("BIGINT")),
-        ("DECIMAL(18,4)", DuckType("DECIMAL")),
+        ("DECIMAL(18,4)", DuckType("DECIMAL", params=(18, 4))),
+        ("VARCHAR(10)", DuckType("VARCHAR", params=(10,))),
+        ("BIGNUM", DuckType("BIGNUM")),
         ("TIMESTAMP WITH TIME ZONE", DuckType("TIMESTAMP WITH TIME ZONE")),
-        ("ENUM('a', 'it''s', 'b,c')", DuckType("ENUM")),
+        ("ENUM('a', 'it''s', 'b,c')", DuckType("ENUM", params=("a", "it's", "b,c"))),
         ("INTEGER[]", DuckType("LIST", [("", DuckType("INTEGER"))])),
         (
             "DECIMAL(38,0)[2][]",
-            DuckType("LIST", [("", DuckType("LIST", [("", DuckType("DECIMAL"))]))]),
+            DuckType(
+                "LIST",
+                [("", DuckType("ARRAY", [("", DuckType("DECIMAL", params=(38, 0)))], size=2))],
+            ),
         ),
         (
             'STRUCT(x DECIMAL(38,0), HUGEINT VARCHAR, "we""ird" DATE)',
             DuckType(
                 "STRUCT",
                 [
-                    ("x", DuckType("DECIMAL")),
+                    ("x", DuckType("DECIMAL", params=(38, 0))),
                     ("HUGEINT", DuckType("VARCHAR")),
                     ('we"ird', DuckType("DATE")),
                 ],
@@ -172,3 +177,27 @@ def test_a_value_of_the_wrong_shape_is_an_interface_error():
     }
     with pytest.raises(InterfaceError, match="could not decode"):
         _query(page)
+
+
+def test_parse_type_is_public():
+    from duckhaven_sql_connector import types
+
+    assert types.parse_type("DECIMAL(9,2)") == types.DuckType("DECIMAL", params=(9, 2))
+
+
+@pytest.mark.parametrize(
+    "text", ["DECIMAL(18", "ENUM('a)", "DECIMAL(x y)", "INTEGER[3", "VARCHAR) trailing"]
+)
+def test_malformed_types_are_refused(text):
+    with pytest.raises(ValueError):
+        parse_type(text)
+
+
+def test_a_fixed_array_keeps_its_size_and_converts_like_a_list():
+    assert parse_type("INTEGER[3]") == DuckType("ARRAY", [("", DuckType("INTEGER"))], size=3)
+    assert converter_for("DECIMAL(4,1)[2]")(["1.5", None]) == [Decimal("1.5"), None]
+
+
+@pytest.mark.parametrize("text", ["BIGNUM", "VARINT"])
+def test_an_arbitrary_precision_integer_is_an_int(text):
+    assert converter_for(text)("123456789012345678901234567890") == 123456789012345678901234567890

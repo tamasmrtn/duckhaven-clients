@@ -3,10 +3,9 @@
 A DuckHaven with ``api_version`` 3 or later takes the values as typed JSON next to the
 SQL (:func:`server_parameter`) and renders them itself. Against an older server, whose
 statement API takes no parameters, the connector renders them into the SQL text. This is
-done safely:
-values are turned into typed SQL literals with proper quoting/escaping — never string
-interpolation — and ``?`` placeholders are only substituted when they appear at the top
-level, not inside string literals, quoted identifiers, or comments.
+done safely: values are turned into typed SQL literals with proper quoting/escaping —
+never string interpolation — and ``?`` placeholders are only substituted when they appear
+at the top level, not inside string literals, quoted identifiers, or comments.
 
 Named/`$name` binding is intentionally out of scope for v1; ``paramstyle`` is ``qmark``.
 """
