@@ -1,10 +1,16 @@
-"""The DB-API ``Connection`` — one DuckHaven SQL session — and the ``connect`` entry.
+"""The DB-API ``Connection`` and the ``connect`` entry.
 
-``connect`` opens a session (``POST …/sql/sessions``, which blocks server-side until the
-agent has attached a DuckDB connection) and returns a Connection pinned to that session
-and its agent. ``close`` deletes the session. If the session is reaped, hits its
-max-lifetime, or its agent disconnects, the next statement gets a 409 → OperationalError
-and the connection is marked dead; the caller opens a new one.
+In the default ``session`` mode a Connection is one DuckHaven SQL session: ``connect``
+opens it (``POST …/sql/sessions``, which blocks server-side until the agent has attached a
+DuckDB connection) and pins the Connection to it and its agent. ``close`` deletes the
+session. If the session is reaped, hits its max-lifetime, or its agent disconnects, the
+next statement gets a 409 → OperationalError and the connection is marked dead; the caller
+opens a new one.
+
+In ``auto`` mode ``connect`` opens nothing. Each statement runs as a one-shot query
+(``POST …/queries``), which needs no session and so works where SQL sessions are disabled.
+The first statement that needs session state opens a session, and the connection stays on
+it from then on — see ``_routes_to_session``.
 
 A deployment running elastic compute can legitimately have nothing running when a client
 connects. The server then parks the session and starts an agent, and ``Connection.open``
@@ -22,8 +28,8 @@ from ._params import quote_identifier
 from ._telemetry import Hooks
 from .client import Transport
 from .config import ClientConfig, RetryPolicy
-from .cursor import Cursor
-from .dbapi import MaxRetryDurationError, OperationalError, ProgrammingError
+from .cursor import Cursor, _needs_session
+from .dbapi import MaxRetryDurationError, NotSupportedError, OperationalError, ProgrammingError
 
 # The server-side wait we ask for on session open. Deliberately small and chosen by us:
 # the server's own budget is operator-tunable (up to 120s), and a block longer than
@@ -44,6 +50,10 @@ _COMPUTE_RETRY_DELAY_S = 5.0
 # terminal: the session will never open, so waiting on it is pointless.
 _SESSION_NOT_READY = ("pending", "opening")
 
+# The `features` entry that says one-shot queries honour `schema`. A server without it
+# ignores the field and resolves names in its default schema instead.
+_QUERY_SCHEMA = "query_schema"
+
 
 @dataclass(frozen=True)
 class ServerVersion:
@@ -51,12 +61,15 @@ class ServerVersion:
 
     ``version`` is the release/build version (the git tag the image was built from);
     ``api_version`` is the API contract version, an integer bumped only on a breaking
-    change. Additive changes (a new field, a newly admitted statement) move neither, so
-    this is provenance and a coarse compatibility signal — not a feature list.
+    change. Additive changes (a new field, a newly admitted statement) move neither.
+    ``features`` names the few additions an older server would ignore silently rather
+    than refuse, so they cannot be relied on without asking; it is empty against a
+    server that predates the list.
     """
 
     version: str
     api_version: int
+    features: frozenset[str] = frozenset()
 
 
 @dataclass(frozen=True)
@@ -86,7 +99,7 @@ class Connection:
         transport: Transport,
         config: ClientConfig,
         *,
-        session_id: str,
+        session_id: str | None,
         agent_id: str | None = None,
         staging_uri: str | None = None,
         active_catalog: str | None = None,
@@ -102,8 +115,8 @@ class Connection:
         # Live cursors, so a connection-scoped cancel() can reach the in-flight
         # statement. Weak so a finished cursor is not kept alive by this set.
         self._cursors: weakref.WeakSet[Cursor] = weakref.WeakSet()
-        # The server's api_version, learned on first need; see `_api_version`.
-        self._server_api_version: int | None | bool = False
+        # What GET /version said, learned on first need; see `_server`.
+        self._server_info: ServerVersion | None | bool = False
 
     @classmethod
     def open(
@@ -114,6 +127,9 @@ class Connection:
         hooks: Hooks | None = None,
     ) -> Connection:
         transport = transport or Transport(config, hooks=hooks)
+        if config.mode == "auto":
+            # Nothing to open: the first statement is the first request.
+            return cls(transport, config, session_id=None)
         try:
             data = cls._open_session(transport, config)
         except Exception:
@@ -253,15 +269,66 @@ class Connection:
                 return None
             raise
         data = response.json()
-        return ServerVersion(version=data["version"], api_version=data["api_version"])
+        return ServerVersion(
+            version=data["version"],
+            api_version=data["api_version"],
+            features=frozenset(data.get("features") or ()),
+        )
+
+    def _server(self) -> ServerVersion | None:
+        """What the server reports about itself, asked once per connection. ``None``
+        for a server too old to say, which is the oldest supported contract."""
+        if self._server_info is False:
+            self._server_info = self.server_version()
+        return self._server_info  # type: ignore[return-value]
 
     def _api_version(self) -> int | None:
-        """The server's API contract version, asked once per connection. ``None``
-        for a server too old to say, which is the oldest supported contract."""
-        if self._server_api_version is False:
-            version = self.server_version()
-            self._server_api_version = None if version is None else version.api_version
-        return self._server_api_version  # type: ignore[return-value]
+        """The server's API contract version; ``None`` for a server too old to say."""
+        server = self._server()
+        return None if server is None else server.api_version
+
+    # -- Sessions -----------------------------------------------------------
+
+    def _routes_to_session(self, sql: str) -> bool:
+        """Whether ``sql`` runs on the session rather than as a one-shot query.
+
+        Always in ``session`` mode, and in ``auto`` mode once a session is open, so
+        state a statement set (a ``USE``, a temp table) is there for the next one.
+        Otherwise only a statement that needs session state, and every statement of a
+        connection with a ``schema`` the server cannot apply to a one-shot query: sent
+        anyway, it would be ignored and names would resolve in the default schema.
+        """
+        if self._config.mode == "session" or self._session_id is not None:
+            return True
+        if _needs_session(sql):
+            return True
+        if self._config.schema:
+            server = self._server()
+            return server is None or _QUERY_SCHEMA not in server.features
+        return False
+
+    def _session(self) -> str:
+        """The session's id, opening it first if this connection has none yet."""
+        if self._session_id is None:
+            try:
+                data = self._open_session(self._transport, self._config)
+            except OperationalError as exc:
+                if exc.status_code == 404:
+                    raise NotSupportedError(
+                        "this statement needs a SQL session, and SQL sessions are not "
+                        "enabled on this server; run it without session state, or ask "
+                        "an administrator to set SQL_SESSIONS_ENABLED=true",
+                        code=exc.code,
+                        status_code=exc.status_code,
+                        detail=exc.detail,
+                    ) from exc
+                raise
+            self._session_id = data["id"]
+            self.agent_id = data.get("agent_id")
+            self.staging_uri = data.get("staging_uri")
+            self.active_catalog = data.get("active_catalog")
+            self._apply_defaults()
+        return self._session_id
 
     def _arrow_results(self) -> bool:
         """Whether results are read as Arrow: pyarrow is installed and the server
@@ -283,9 +350,10 @@ class Connection:
         409 → the connection is marked dead (open a new one), mirroring statement execution.
         """
         self._ensure_usable()
+        session_id = self._session()
         try:
             response = self._transport.post(
-                f"/sql/sessions/{self._session_id}/staging-files",
+                f"/sql/sessions/{session_id}/staging-files",
                 json={"files": list(names)},
             )
         except OperationalError as exc:
@@ -316,7 +384,7 @@ class Connection:
             return
         self._closed = True
         try:
-            if not self._dead:
+            if self._session_id is not None and not self._dead:
                 self._transport.delete(f"/sql/sessions/{self._session_id}")
         finally:
             self._transport.close()
@@ -367,9 +435,16 @@ def connect(
     first_page_limit: int = 200,
     use_cache: bool | None = None,
     application: str | None = None,
+    mode: str = "session",
     hooks: Hooks | None = None,
 ) -> Connection:
-    """Open a DuckHaven SQL session and return a DB-API 2.0 Connection.
+    """Open a DB-API 2.0 Connection to DuckHaven.
+
+    ``mode`` is ``"session"`` (the default), which opens a SQL session now and runs
+    every statement on it, or ``"auto"``, which opens none: each statement runs as a
+    one-shot query, and a session opens only for the first statement that needs one
+    (``SET``, ``USE``, a temp table, staging files). ``auto`` works where SQL sessions
+    are disabled, as long as no statement needs one.
 
     ``compute_wait`` is how long to wait if the server has to start elastic compute
     before it can open the session; 0 fails immediately instead.
@@ -385,6 +460,9 @@ def connect(
     ``use_cache`` says whether the server may answer a repeated read from its result
     cache. ``None`` takes the server's default (on); ``False`` always executes, which is
     what a benchmark needs.
+
+    ``statement_wait`` and ``first_page_limit`` apply to session statements. A one-shot
+    query in ``auto`` mode waits ``statement_wait`` too, or 30 seconds when it is ``None``.
     """
     config = ClientConfig(
         host=host,
@@ -402,5 +480,6 @@ def connect(
         first_page_limit=first_page_limit,
         use_cache=use_cache,
         application=application,
+        mode=mode,
     )
     return Connection.open(config, hooks=hooks)

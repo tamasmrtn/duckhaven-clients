@@ -79,6 +79,11 @@ class ClientConfig:
     # Optional client identifier appended to the User-Agent, so the server can attribute
     # traffic to the calling application (e.g. "dbt-duckhaven/1.2.3"). Free text.
     application: str | None = None
+    # How statements reach the server. "session" (the default) opens a SQL session on
+    # connect and sends every statement to it. "auto" opens none: each statement runs as
+    # a one-shot query, which works where SQL sessions are disabled, and a session opens
+    # only once a statement needs one (see Connection._routes_to_session).
+    mode: str = "session"
 
     def __post_init__(self) -> None:
         if not self.host or not isinstance(self.host, str):
@@ -91,6 +96,8 @@ class ClientConfig:
             raise InterfaceError("token is required")
         if self.timeout <= 0 or self.http_timeout <= 0:
             raise InterfaceError("timeout and http_timeout must be positive")
+        if self.mode not in ("session", "auto"):
+            raise InterfaceError("mode must be 'session' or 'auto'")
         if self.fetch_size <= 0:
             raise InterfaceError("fetch_size must be positive")
         if self.compute_wait < 0:

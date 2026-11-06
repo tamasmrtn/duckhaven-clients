@@ -31,13 +31,46 @@ if not (HOST and WORKSPACE and TOKEN):
     )
 
 
-@pytest.fixture
-def conn():
-    connection = connect(host=HOST, workspace=WORKSPACE, token=TOKEN, agent=AGENT, catalog=CATALOG)
+@pytest.fixture(params=["session", "auto"])
+def conn(request):
+    connection = connect(
+        host=HOST,
+        workspace=WORKSPACE,
+        token=TOKEN,
+        agent=AGENT,
+        catalog=CATALOG,
+        mode=request.param,
+    )
     try:
         yield connection
     finally:
         connection.close()
+
+
+@pytest.fixture
+def auto_conn():
+    connection = connect(
+        host=HOST, workspace=WORKSPACE, token=TOKEN, agent=AGENT, catalog=CATALOG, mode="auto"
+    )
+    try:
+        yield connection
+    finally:
+        connection.close()
+
+
+def test_auto_mode_reads_without_a_session(auto_conn):
+    cur = auto_conn.cursor()
+    cur.execute("SELECT 41 + ? AS n", [1])
+    assert cur.fetchall() == [(42,)]
+    assert auto_conn._session_id is None
+
+
+def test_auto_mode_opens_a_session_for_state_and_keeps_it(auto_conn):
+    cur = auto_conn.cursor()
+    cur.execute("SET TimeZone = 'Europe/Budapest'")
+    cur.execute("SELECT current_setting('TimeZone')")
+    assert cur.fetchall() == [("Europe/Budapest",)]
+    assert auto_conn._session_id is not None
 
 
 def test_select_one(conn):
