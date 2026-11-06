@@ -78,7 +78,16 @@ FIELDS = {
         "cache_detail",
         "result_source_query_id",
     },
-    "QueryCreate": {"sql", "agent_id", "catalog", "timeout_s", "saved_query_id", "use_cache"},
+    # `wait_timeout_s` lets a short query come back finished on the submit itself.
+    "QueryCreate": {
+        "sql",
+        "wait_timeout_s",
+        "agent_id",
+        "catalog",
+        "timeout_s",
+        "saved_query_id",
+        "use_cache",
+    },
     "RowsPageOut": {"rows", "columns", "cursor", "total"},
     "PatTokenOut": {"id", "token", "expires_at"},
     "WorkspaceOut": {"slug", "default_catalog", "result_cache_enabled"},
