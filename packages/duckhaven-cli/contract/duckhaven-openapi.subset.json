@@ -85,6 +85,14 @@
             "title": "Agent Id",
             "type": "string"
           },
+          "default_for_workspaces": {
+            "default": [],
+            "items": {
+              "$ref": "#/components/schemas/AgentDefaultWorkspaceOut"
+            },
+            "title": "Default For Workspaces",
+            "type": "array"
+          },
           "grants": {
             "items": {
               "$ref": "#/components/schemas/AgentGrantOut"
@@ -250,6 +258,31 @@
           "cores"
         ],
         "title": "AgentCapabilitiesOut",
+        "type": "object"
+      },
+      "AgentDefaultWorkspaceOut": {
+        "description": "A workspace that runs on an agent by default.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "slug": {
+            "title": "Slug",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name"
+        ],
+        "title": "AgentDefaultWorkspaceOut",
         "type": "object"
       },
       "AgentGrantOut": {
@@ -1670,6 +1703,53 @@
           "validation_state"
         ],
         "title": "DatasetOut",
+        "type": "object"
+      },
+      "DefaultAgentOut": {
+        "description": "The agent a workspace runs on when a caller names none.\n\nVisible to every member, whether or not their own agent grants reach it: the\nworkspace default is usable by all of them, so they need its name to see it.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lifecycle": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lifecycle"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "status"
+        ],
+        "title": "DefaultAgentOut",
         "type": "object"
       },
       "DeploymentHealthOut": {
@@ -4025,6 +4105,7 @@
           "catalog": {
             "anyOf": [
               {
+                "pattern": "^[^\\x00-\\x1f\\x7f]*$",
                 "type": "string"
               },
               {
@@ -4032,6 +4113,78 @@
               }
             ],
             "title": "Catalog"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A UUID you choose for the run, so you know its id before this call returns and can cancel or read it while the call is still waiting. Omitted, the server picks one. Ids are unique across the server, so send a random (version 4) UUID; an attempt the server refuses still spends its id. An id already used answers 409 `query_id_conflict`.",
+            "title": "Id"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Values for the placeholders in `sql`, rendered into it as typed literals before it runs: a list for `?`, `?1` or `$1`, an object for `$name`.",
+            "title": "Parameters"
           },
           "saved_query_id": {
             "anyOf": [
@@ -4045,9 +4198,47 @@
             ],
             "title": "Saved Query Id"
           },
+          "scale_out": {
+            "default": true,
+            "title": "Scale Out",
+            "type": "boolean"
+          },
+          "schema": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The schema unqualified table names resolve in, within `catalog`. Omitted, they resolve in `analytics`.",
+            "title": "Schema"
+          },
           "sql": {
             "title": "Sql",
             "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "patternProperties": {
+                  "^[A-Za-z0-9_.:-]{1,64}$": {
+                    "maxLength": 256,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Free-form labels for the run, recorded on it and shown in History: at most 20, keys of letters, digits and `_ . : -` (up to 64), values up to 256 characters.",
+            "title": "Tags"
           },
           "timeout_s": {
             "default": 600.0,
@@ -4058,6 +4249,18 @@
             "default": true,
             "title": "Use Cache",
             "type": "boolean"
+          },
+          "wait_timeout_s": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Timeout S"
           }
         },
         "required": [
@@ -4101,6 +4304,28 @@
               }
             ],
             "title": "Cache Status"
+          },
+          "client_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Name"
+          },
+          "client_version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Client Version"
           },
           "column_schema": {
             "anyOf": [
@@ -4160,10 +4385,32 @@
               }
             ]
           },
+          "has_result": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Has Result"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "inline_arrow": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inline Arrow"
           },
           "origin": {
             "anyOf": [
@@ -4292,6 +4539,20 @@
           "status": {
             "title": "Status",
             "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
           },
           "user_id": {
             "anyOf": [
@@ -5983,9 +6244,108 @@
             ],
             "title": "First Page Limit"
           },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A UUID you choose for the run, so you know its id before this call returns and can cancel or read it while the call is still waiting. Omitted, the server picks one. Ids are unique across the server, so send a random (version 4) UUID; an attempt the server refuses still spends its id. An id already used answers 409 `query_id_conflict`.",
+            "title": "Id"
+          },
+          "inline_format": {
+            "default": "json",
+            "enum": [
+              "json",
+              "arrow"
+            ],
+            "title": "Inline Format",
+            "type": "string"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Values for the placeholders in `sql`, rendered into it as typed literals before it runs: a list for `?`, `?1` or `$1`, an object for `$name`.",
+            "title": "Parameters"
+          },
           "sql": {
             "title": "Sql",
             "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "patternProperties": {
+                  "^[A-Za-z0-9_.:-]{1,64}$": {
+                    "maxLength": 256,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Free-form labels for the run, recorded on it and shown in History: at most 20, keys of letters, digits and `_ . : -` (up to 64), values up to 256 characters.",
+            "title": "Tags"
           },
           "timeout_s": {
             "default": 600.0,
@@ -6542,6 +6902,27 @@
         "title": "TableOut",
         "type": "object"
       },
+      "TypedParameter": {
+        "additionalProperties": false,
+        "description": "A parameter value with the DuckDB type to read it as, for values JSON cannot\nsay on its own: a DECIMAL, a DATE, a UUID, a list.",
+        "properties": {
+          "type": {
+            "description": "A DuckDB type: BOOLEAN, an integer type, FLOAT, DOUBLE, DECIMAL(p,s), VARCHAR, BLOB (value base64-encoded), DATE, TIME, TIMESTAMP, TIMESTAMPTZ, INTERVAL, UUID or JSON, optionally followed by [] for a list.",
+            "title": "Type",
+            "type": "string"
+          },
+          "value": {
+            "description": "The value, as a string, number, boolean, null or array.",
+            "title": "Value"
+          }
+        },
+        "required": [
+          "type",
+          "value"
+        ],
+        "title": "TypedParameter",
+        "type": "object"
+      },
       "UpdateServiceAccountRequest": {
         "properties": {
           "is_active": {
@@ -6724,6 +7105,13 @@
             "title": "Api Version",
             "type": "integer"
           },
+          "features": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Features",
+            "type": "array"
+          },
           "version": {
             "title": "Version",
             "type": "string"
@@ -6731,7 +7119,8 @@
         },
         "required": [
           "version",
-          "api_version"
+          "api_version",
+          "features"
         ],
         "title": "VersionOut",
         "type": "object"
@@ -7139,6 +7528,28 @@
             "title": "Created At",
             "type": "string"
           },
+          "default_agent": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DefaultAgentOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "default_agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Agent Id"
+          },
           "default_catalog": {
             "anyOf": [
               {
@@ -7214,6 +7625,18 @@
       },
       "WorkspaceUpdate": {
         "properties": {
+          "default_agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Agent Id"
+          },
           "description": {
             "anyOf": [
               {
@@ -11882,7 +12305,7 @@
     },
     "/sql/sessions/{session_id}": {
       "delete": {
-        "description": "Close a session and release its connection and any elastic compute.\n\nIdempotent: closing an already-closed, expired or failed session succeeds.\nEverything session-local -- temp tables, `SET`s -- is gone afterwards.",
+        "description": "Close a session and release its connection and any elastic compute.\n\nIdempotent: closing an already-closed, expired or failed session succeeds.\nEverything session-local -- temp tables, `SET`s -- is gone afterwards. Another\nmember's session can be force-closed only with `queries:admin`.",
         "operationId": "close_session",
         "parameters": [
           {
@@ -12257,7 +12680,7 @@
     },
     "/version": {
       "get": {
-        "description": "The running build and the API contract version. Unauthenticated.\n\n`version` moves with every release and identifies the build; `api_version` is\na single integer bumped only when a change breaks the contract on the wire.\nA server old enough to lack this endpoint returns 404 -- treat that as the\noldest supported version.",
+        "description": "The running build and the API contract version. Unauthenticated.\n\n`version` moves with every release and identifies the build; `api_version` is\na single integer bumped only when a change breaks the contract on the wire.\nA server old enough to lack this endpoint returns 404 -- treat that as the\noldest supported version.\n\n`features` names the optional additions an older server would silently ignore,\nso a client checks for one before relying on it. `query_schema`: one-shot\nqueries honour `schema`.",
         "operationId": "version",
         "responses": {
           "200": {
@@ -12572,7 +12995,7 @@
         ]
       },
       "patch": {
-        "description": "Rename a workspace, change its description, or turn its result cache on or\noff.\n\nA partial update: an omitted field is left alone, and an explicit ``null``\ndescription clears it. The slug is immutable -- it addresses the workspace.",
+        "description": "Rename a workspace, change its description, turn its result cache on or off, or\nset its default compute.\n\nA partial update: an omitted field is left alone, and an explicit ``null``\ndescription clears it. The slug is immutable -- it addresses the workspace.",
         "operationId": "update_workspace",
         "parameters": [
           {
@@ -13495,16 +13918,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "A dependency the request needs is not available right now."
           }
         },
         "security": [
@@ -14646,16 +15059,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "A dependency the request needs is not available right now."
           }
         },
         "security": [
@@ -14764,16 +15167,6 @@
               }
             },
             "description": "Validation Error"
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "A dependency the request needs is not available right now."
           }
         },
         "security": [
@@ -15783,7 +16176,7 @@
         ]
       },
       "post": {
-        "description": "Submit SQL for execution. Accepted, not completed: 202 with a query id.\n\nDispatch picks a connected agent the caller may use, so 503 means no\ncompatible compute is available rather than that the SQL was wrong. Poll\n`GET /queries/{query_id}` for status and read results from\n`GET /queries/{query_id}/rows`.\n\nA read whose tables are unchanged since an identical query ran is answered\nfrom the result cache instead: the 202 then carries a query that is already\n`done`, with `cache_status` \"hit\". Send `use_cache: false` to always run.",
+        "description": "Submit SQL for execution. Accepted, not completed: 202 with a query id.\n\nDispatch picks a connected agent the caller may use, so 503 means no\ncompatible compute is available rather than that the SQL was wrong. Poll\n`GET /queries/{query_id}` for status and read results from\n`GET /queries/{query_id}/rows`.\n\nA read whose tables are unchanged since an identical query ran is answered\nfrom the result cache instead: the 202 then carries a query that is already\n`done`, with `cache_status` \"hit\". Send `use_cache: false` to always run.\n\nSend `wait_timeout_s` to block until the run finishes, up to that many seconds:\nthe answer is then 200 with the finished query, or 202 if it is still going.",
         "operationId": "create_query",
         "parameters": [
           {
@@ -15807,6 +16200,16 @@
           "required": true
         },
         "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryOut"
+                }
+              }
+            },
+            "description": "Finished within `wait_timeout_s`."
+          },
           "202": {
             "content": {
               "application/json": {
@@ -15846,16 +16249,6 @@
               }
             },
             "description": "No such resource, or the caller may not know it exists."
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorOut"
-                }
-              }
-            },
-            "description": "The request conflicts with the resource's current state."
           },
           "422": {
             "content": {
