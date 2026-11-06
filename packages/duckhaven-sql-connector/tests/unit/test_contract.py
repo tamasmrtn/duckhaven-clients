@@ -50,8 +50,8 @@ def test_request_bodies_match_what_the_connector_sends(spec):
     assert {"agent_id", "catalog", "wait_timeout_s", "on_wait_timeout", "use_cache"} <= _props(
         spec, "SqlSessionCreate"
     )
-    # run_statement body
-    assert {"sql", "timeout_s", "wait_timeout_s", "first_page_limit", "use_cache"} <= _props(
+    # run_statement body; `id` is the query id the client chooses before submitting
+    assert {"sql", "id", "timeout_s", "wait_timeout_s", "first_page_limit", "use_cache"} <= _props(
         spec, "SqlStatementCreate"
     )
     # stage_files body
@@ -128,6 +128,9 @@ def test_one_shot_query_path_and_body(spec):
         "timeout_s",
         "wait_timeout_s",
         "use_cache",
+        # The query id the client chooses, and the schema bare names resolve in.
+        "id",
+        "schema",
     } <= _props(spec, "QueryCreate")
     assert {"id", "status", "error", "row_count", "has_result", "column_schema", "tags"} <= _props(
         spec, "QueryOut"
