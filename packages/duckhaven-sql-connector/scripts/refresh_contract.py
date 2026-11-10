@@ -30,6 +30,11 @@ WANT: dict[str, set[str]] = {
     "/queries/{query_id}/rows": {"get"},
     # The Arrow result stream, read when pyarrow is installed (api_version >= 3).
     "/queries/{query_id}/result": {"get"},
+    # The stateless path: one-shot runs, typing a statement without running it, and the
+    # grant-filtered metadata report.
+    "/workspaces/{workspace}/queries": {"post"},
+    "/workspaces/{workspace}/queries/describe": {"post"},
+    "/workspaces/{workspace}/metadata": {"get"},
 }
 SCHEMAS = (
     "SqlSessionCreate",
@@ -45,6 +50,14 @@ SCHEMAS = (
     "ColumnSchemaOut",
     # Referenced by SqlStatementCreate.parameters (typed values, api_version >= 3).
     "TypedParameter",
+    "QueryCreate",
+    "DescribeCreate",
+    "DescribeOut",
+    "WorkspaceMetadataOut",
+    "MetadataCatalogOut",
+    "MetadataSchemaOut",
+    "MetadataTableOut",
+    "MetadataColumnOut",
 )
 DEST = Path(__file__).resolve().parents[1] / "contract" / "duckhaven-openapi.subset.json"
 
