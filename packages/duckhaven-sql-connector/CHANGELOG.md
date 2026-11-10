@@ -6,6 +6,18 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+### Added
+
+- `mode="auto"` on `connect()` (and `ClientConfig.mode`) opens no SQL session. Each statement
+  runs as a one-shot query (`POST …/queries`), so the connector works on deployments where SQL
+  sessions are off. The first `SET`, `RESET`, `USE`, `PRAGMA`, `ATTACH`, `DETACH`, `CREATE
+  TEMP …` or `stage_files()` call opens a session, and the connection stays on it; with
+  sessions off that statement raises `NotSupportedError`. A `schema` is sent on one-shot
+  queries only to a server whose `features` list `query_schema`; otherwise the connection opens
+  a session and `USE`s it. The default `mode="session"` is unchanged.
+- `ServerVersion.features`: the optional additions the server names in `GET /api/version`.
+  Empty against a server that predates the list.
+
 ## [0.9.0] - 2026-10-25
 
 ### Added

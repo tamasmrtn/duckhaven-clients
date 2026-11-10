@@ -1,13 +1,15 @@
 """The DB-API ``Cursor``: submit a statement, poll it to completion, page its rows.
 
-A statement is submitted to the session (``POST …/statements`` → 202), then polled via
-``GET /queries/{id}`` until it finishes, then its rows are paged lazily through
+A statement is submitted to the session (``POST …/statements``) or, in ``auto`` mode, as
+a one-shot query (``POST …/queries``). Either way it is then polled via
+``GET /queries/{id}`` until it finishes, and its rows are paged lazily through
 :class:`~duckhaven_sql_connector.result.ResultSet`.
 """
 
 from __future__ import annotations
 
 import base64
+import re
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -27,6 +29,11 @@ _POLL_MAX = 2.0
 _POLL_GRACE = 30.0
 
 _PENDING = ("queued", "running")
+
+# How long a one-shot query is held server-side when the caller set no
+# `statement_wait`. Sending none would answer 202 at once and leave the result to the
+# poll loop's sleeps; the server caps it at 60.
+_ONE_SHOT_WAIT_S = 30.0
 
 
 def _describe(columns: list[str], schema: list[tuple[str, str]] | None) -> list[tuple[Any, ...]]:
@@ -71,6 +78,30 @@ def _is_txn_control_noop(sql: str) -> bool:
     """True if ``sql`` is a standalone BEGIN/COMMIT/ROLLBACK-style statement."""
     normalized = " ".join(sql.strip().rstrip(";").split()).upper()
     return normalized in _TXN_CONTROL_NOOPS
+
+
+# Statements whose effect outlives them on the connection, so they need a session to
+# live in: `auto` mode opens one for the first of these. Anything else, an unknown
+# leading keyword included, runs as a one-shot query, where the server refuses what it
+# cannot run with a clear error rather than this guess changing where it ran.
+_SESSION_KEYWORDS = frozenset({"SET", "RESET", "USE", "PRAGMA", "ATTACH", "DETACH"})
+_LEADING_NOISE = re.compile(r"(?:\s+|--[^\n]*|/\*.*?\*/)*", re.DOTALL)
+
+
+def _needs_session(sql: str) -> bool:
+    """True if ``sql`` sets state a later statement may rely on (``SET``, ``USE``,
+    ``CREATE TEMP TABLE``, ...), reading past leading comments."""
+    words = sql[_LEADING_NOISE.match(sql).end() :].split(None, 4)
+    head = [w.upper() for w in words[:4]]
+    if not head:
+        return False
+    if head[0] in _SESSION_KEYWORDS:
+        return True
+    # CREATE [OR REPLACE] TEMP|TEMPORARY TABLE|VIEW|MACRO|SEQUENCE ...
+    if head[0] != "CREATE":
+        return False
+    rest = head[3:] if head[1:3] == ["OR", "REPLACE"] else head[1:]
+    return bool(rest) and rest[0] in ("TEMP", "TEMPORARY")
 
 
 class Cursor:
@@ -126,34 +157,51 @@ class Cursor:
 
         transport = self._connection._transport
         config = self._connection._config
-        session_id = self._connection._session_id
+        on_session = self._connection._routes_to_session(sql)
+        arrow = self._connection._arrow_results()
 
         body: dict[str, Any] = {"sql": sql, "timeout_s": config.timeout}
         if server_side:
             body["parameters"] = [server_parameter(v) for v in parameters]
-        if config.statement_wait is not None:
-            body["wait_timeout_s"] = config.statement_wait
-        # Always sent, 0 included: the server returns a first page by default, so
-        # omitting the field asks for one. 0 has to travel to mean "don't".
-        # Never more than the caller will buffer anyway. Reading the result as Arrow
-        # takes no JSON page at all: the rows come from the Arrow stream instead.
-        arrow = self._connection._arrow_results()
-        body["first_page_limit"] = 0 if arrow else min(config.first_page_limit, config.fetch_size)
-        if arrow:
-            # A server that can carries a small result whole on this response, so it
-            # costs no second call. Older servers ignore the field.
-            body["inline_format"] = "arrow"
         if config.use_cache is not None:
             body["use_cache"] = config.use_cache
+        if on_session:
+            path = f"/sql/sessions/{self._connection._session()}/statements"
+            wait = config.statement_wait
+            # Always sent, 0 included: the server returns a first page by default, so
+            # omitting the field asks for one. 0 has to travel to mean "don't".
+            # Never more than the caller will buffer anyway. Reading the result as Arrow
+            # takes no JSON page at all: the rows come from the Arrow stream instead.
+            body["first_page_limit"] = (
+                0 if arrow else min(config.first_page_limit, config.fetch_size)
+            )
+            if arrow:
+                # A server that can carries a small result whole on this response, so
+                # it costs no second call. Older servers ignore the field.
+                body["inline_format"] = "arrow"
+        else:
+            path = f"/workspaces/{config.workspace}/queries"
+            wait = (
+                config.statement_wait
+                if config.statement_wait is not None
+                else min(_ONE_SHOT_WAIT_S, config.http_timeout / 2)
+            )
+            for key, value in (
+                ("catalog", config.catalog),
+                ("agent_id", config.agent),
+                # Only reached when the server applies it (see _routes_to_session).
+                ("schema", config.schema),
+            ):
+                if value:
+                    body[key] = value
+        if wait is not None:
+            body["wait_timeout_s"] = wait
 
         try:
-            response = transport.post(
-                f"/sql/sessions/{session_id}/statements",
-                json=body,
-            )
+            response = transport.post(path, json=body)
         except OperationalError as exc:
             # A reaped/closed/agent-lost session answers 409; the connection is dead.
-            if exc.status_code == 409:
+            if on_session and exc.status_code == 409:
                 self._connection._mark_dead()
             raise
 
@@ -162,7 +210,7 @@ class Cursor:
         # another thread) can reach the statement while it is still running, not only
         # after it finishes.
         self._query_id = query["id"]
-        query = self._poll_to_completion(query)
+        query = self._poll_to_completion(query, wait)
 
         row_count = query.get("row_count")
         self._rowcount = row_count if isinstance(row_count, int) else -1
@@ -220,7 +268,7 @@ class Cursor:
         self._rowcount = total if known else -1
         return self
 
-    def _poll_to_completion(self, query: dict[str, Any]) -> dict[str, Any]:
+    def _poll_to_completion(self, query: dict[str, Any], wait: float | None) -> dict[str, Any]:
         """Follow a statement to a terminal state, starting from the submit response.
 
         Normally never loops: the server holds the submit response until the
@@ -246,9 +294,7 @@ class Cursor:
         query_id = query["id"]
         status = query.get("status", "queued")
         deadline = transport._monotonic() + config.timeout + _POLL_GRACE
-        params = (
-            None if config.statement_wait is None else {"wait_timeout_s": config.statement_wait}
-        )
+        params = None if wait is None else {"wait_timeout_s": wait}
         interval = _POLL_START
         while status in _PENDING:
             if transport._monotonic() > deadline:
