@@ -20,6 +20,448 @@
         "title": "ColumnSchemaOut",
         "type": "object"
       },
+      "DescribeCreate": {
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "catalog": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Values for the placeholders in `sql`, rendered into it as typed literals before it runs: a list for `?`, `?1` or `$1`, an object for `$name`. Placeholders without a value are described as NULL, which DuckDB types as INTEGER where nothing else decides it.",
+            "title": "Parameters"
+          },
+          "sql": {
+            "title": "Sql",
+            "type": "string"
+          },
+          "wait_timeout_s": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Timeout S"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "title": "DescribeCreate",
+        "type": "object"
+      },
+      "DescribeOut": {
+        "properties": {
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ColumnSchemaOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columns"
+          },
+          "parameter_names": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Parameter Names",
+            "type": "array"
+          },
+          "statement_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Statement Type"
+          }
+        },
+        "required": [
+          "statement_type",
+          "columns",
+          "parameter_names"
+        ],
+        "title": "DescribeOut",
+        "type": "object"
+      },
+      "MetadataCatalogOut": {
+        "properties": {
+          "access_mode": {
+            "enum": [
+              "open",
+              "scoped"
+            ],
+            "title": "Access Mode",
+            "type": "string"
+          },
+          "kind": {
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "schemas": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataSchemaOut"
+            },
+            "title": "Schemas",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "kind",
+          "access_mode",
+          "schemas"
+        ],
+        "title": "MetadataCatalogOut",
+        "type": "object"
+      },
+      "MetadataColumnOut": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nullable": {
+            "title": "Nullable",
+            "type": "boolean"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "type",
+          "nullable"
+        ],
+        "title": "MetadataColumnOut",
+        "type": "object"
+      },
+      "MetadataSchemaOut": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "tables": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataTableOut"
+            },
+            "title": "Tables",
+            "type": "array"
+          }
+        },
+        "required": [
+          "name",
+          "tables"
+        ],
+        "title": "MetadataSchemaOut",
+        "type": "object"
+      },
+      "MetadataTableOut": {
+        "properties": {
+          "columns": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/MetadataColumnOut"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Columns"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "table_type": {
+            "title": "Table Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "table_type"
+        ],
+        "title": "MetadataTableOut",
+        "type": "object"
+      },
+      "QueryCreate": {
+        "properties": {
+          "agent_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Agent Id"
+          },
+          "catalog": {
+            "anyOf": [
+              {
+                "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Catalog"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A UUID you choose for the run, so you know its id before this call returns and can cancel or read it while the call is still waiting. Omitted, the server picks one. Ids are unique across the server, so send a random (version 4) UUID; an attempt the server refuses still spends its id. An id already used answers 409 `query_id_conflict`.",
+            "title": "Id"
+          },
+          "parameters": {
+            "anyOf": [
+              {
+                "items": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "array"
+              },
+              {
+                "additionalProperties": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/TypedParameter"
+                    },
+                    {
+                      "type": "boolean"
+                    },
+                    {
+                      "type": "integer"
+                    },
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Values for the placeholders in `sql`, rendered into it as typed literals before it runs: a list for `?`, `?1` or `$1`, an object for `$name`.",
+            "title": "Parameters"
+          },
+          "saved_query_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Saved Query Id"
+          },
+          "scale_out": {
+            "default": true,
+            "title": "Scale Out",
+            "type": "boolean"
+          },
+          "schema": {
+            "anyOf": [
+              {
+                "maxLength": 255,
+                "minLength": 1,
+                "pattern": "^[^\\x00-\\x1f\\x7f]*$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The schema unqualified table names resolve in, within `catalog`. Omitted, they resolve in `analytics`.",
+            "title": "Schema"
+          },
+          "sql": {
+            "title": "Sql",
+            "type": "string"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "patternProperties": {
+                  "^[A-Za-z0-9_.:-]{1,64}$": {
+                    "maxLength": 256,
+                    "type": "string"
+                  }
+                },
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Free-form labels for the run, recorded on it and shown in History: at most 20, keys of letters, digits and `_ . : -` (up to 64), values up to 256 characters.",
+            "title": "Tags"
+          },
+          "timeout_s": {
+            "default": 600.0,
+            "title": "Timeout S",
+            "type": "number"
+          },
+          "use_cache": {
+            "default": true,
+            "title": "Use Cache",
+            "type": "boolean"
+          },
+          "wait_timeout_s": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Wait Timeout S"
+          }
+        },
+        "required": [
+          "sql"
+        ],
+        "title": "QueryCreate",
+        "type": "object"
+      },
       "QueryOut": {
         "properties": {
           "agent_id": {
@@ -646,6 +1088,19 @@
             ],
             "title": "First Page Limit"
           },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A UUID you choose for the run, so you know its id before this call returns and can cancel or read it while the call is still waiting. Omitted, the server picks one. Ids are unique across the server, so send a random (version 4) UUID; an attempt the server refuses still spends its id. An id already used answers 409 `query_id_conflict`.",
+            "title": "Id"
+          },
           "inline_format": {
             "default": "json",
             "enum": [
@@ -850,6 +1305,23 @@
           "value"
         ],
         "title": "TypedParameter",
+        "type": "object"
+      },
+      "WorkspaceMetadataOut": {
+        "description": "What a caller may see in a workspace, as one report: the shape a driver's\ncatalog, schema, table and column listings are answered from.",
+        "properties": {
+          "catalogs": {
+            "items": {
+              "$ref": "#/components/schemas/MetadataCatalogOut"
+            },
+            "title": "Catalogs",
+            "type": "array"
+          }
+        },
+        "required": [
+          "catalogs"
+        ],
+        "title": "WorkspaceMetadataOut",
         "type": "object"
       }
     }
@@ -1296,7 +1768,7 @@
     },
     "/sql/sessions/{session_id}": {
       "delete": {
-        "description": "Close a session and release its connection and any elastic compute.\n\nIdempotent: closing an already-closed, expired or failed session succeeds.\nEverything session-local -- temp tables, `SET`s -- is gone afterwards.",
+        "description": "Close a session and release its connection and any elastic compute.\n\nIdempotent: closing an already-closed, expired or failed session succeeds.\nEverything session-local -- temp tables, `SET`s -- is gone afterwards. Another\nmember's session can be force-closed only with `queries:admin`.",
         "operationId": "close_session",
         "parameters": [
           {
@@ -1660,6 +2132,375 @@
         "summary": "Run Statement",
         "tags": [
           "sql-sessions"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/metadata": {
+      "get": {
+        "description": "Every catalog, schema and table the caller may see in the workspace, with\neach table's columns in DuckDB types when `columns=true`.\n\nFiltered by grant: an object the caller holds no tier on is left out, as in\nthe catalog tree. Names need no compute. Columns are described by an agent;\nwith none connected and elastic compute on, compute is started and the call\nwaits, answering 503 `compute_starting` if it is not up in time. At most\n`METADATA_COLUMNS_MAX_TABLES` tables are described per request.",
+        "operationId": "get_workspace_metadata",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Only this catalog.",
+            "in": "query",
+            "name": "catalog",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this catalog.",
+              "title": "Catalog"
+            }
+          },
+          {
+            "description": "Only this schema.",
+            "in": "query",
+            "name": "schema",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this schema.",
+              "title": "Schema"
+            }
+          },
+          {
+            "description": "Only this table.",
+            "in": "query",
+            "name": "table",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only this table.",
+              "title": "Table"
+            }
+          },
+          {
+            "description": "Describe each table's columns, which needs an agent.",
+            "in": "query",
+            "name": "columns",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Describe each table's columns, which needs an agent.",
+              "title": "Columns",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WorkspaceMetadataOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "More tables than one request may describe; narrow the filter."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The agent describing the tables did not answer in time."
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Workspace Metadata",
+        "tags": [
+          "catalog"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/queries": {
+      "post": {
+        "description": "Submit SQL for execution. Accepted, not completed: 202 with a query id.\n\nDispatch picks a connected agent the caller may use, so 503 means no\ncompatible compute is available rather than that the SQL was wrong. Poll\n`GET /queries/{query_id}` for status and read results from\n`GET /queries/{query_id}/rows`.\n\nA read whose tables are unchanged since an identical query ran is answered\nfrom the result cache instead: the 202 then carries a query that is already\n`done`, with `cache_status` \"hit\". Send `use_cache: false` to always run.\n\nSend `wait_timeout_s` to block until the run finishes, up to that many seconds:\nthe answer is then 200 with the finished query, or 202 if it is still going.",
+        "operationId": "create_query",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/QueryCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryOut"
+                }
+              }
+            },
+            "description": "Finished within `wait_timeout_s`."
+          },
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create Query",
+        "tags": [
+          "queries"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/queries/describe": {
+      "post": {
+        "description": "A query's result columns and their DuckDB types, without running it.\n\nThe statement is bound by an agent (`DESCRIBE`), never executed, so it reads\nno rows, and the caller needs only the `metadata` tier on the tables it names.\nWith no agent connected and elastic compute on, compute is started and the\ncall waits for it, answering 503 `compute_starting` if it is not up in time.\nStatements that return no grid (DML, DDL) answer with `columns: null` without\ntouching an agent.",
+        "operationId": "describe_query",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DescribeCreate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DescribeOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Not one describable statement, or it does not bind."
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "A dependency the request needs is not available right now."
+          },
+          "504": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The agent did not answer within the wait."
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Describe Query",
+        "tags": [
+          "queries"
         ]
       }
     },
