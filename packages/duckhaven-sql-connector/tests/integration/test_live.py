@@ -222,7 +222,7 @@ def test_the_first_page_arrives_on_the_submit_response():
 def _cache_status_of(connection, cursor):
     """What the result cache did with the cursor's last statement, as the server
     reports it on the query row; None against a server that predates the cache."""
-    return connection._transport.get(f"/queries/{cursor._query_id}").json().get("cache_status")
+    return connection._transport.get(f"/queries/{cursor.query_id}").json().get("cache_status")
 
 
 def test_a_repeated_read_is_served_from_the_result_cache_unless_opted_out():
@@ -258,3 +258,57 @@ def test_a_repeated_read_is_served_from_the_result_cache_unless_opted_out():
         pytest.skip("server does not report a result cache status")
     assert statuses["repeat"] == "hit", statuses
     assert statuses["opted_out"] != "hit", statuses
+
+
+def test_tags_and_the_query_id_are_recorded_on_the_run(conn):
+    cur = conn.cursor()
+    cur.execute("SELECT 1", tags={"suite": "connector-live"})
+    run = conn._transport.get(f"/queries/{cur.query_id}").json()
+    assert run["tags"] == {"suite": "connector-live"}
+
+
+def test_metadata_lists_what_the_token_may_see(conn):
+    catalogs = conn.metadata()
+    assert catalogs and all({"name", "schemas"} <= set(c) for c in catalogs)
+    if CATALOG:
+        assert CATALOG in {c["name"] for c in catalogs}
+
+
+def test_ping(conn):
+    conn.ping()
+
+
+def test_a_long_statement_can_be_cancelled_from_another_thread():
+    import threading
+    import time
+
+    from duckhaven_sql_connector import OperationalError
+
+    connection = connect(
+        host=HOST,
+        workspace=WORKSPACE,
+        token=TOKEN,
+        agent=AGENT,
+        catalog=CATALOG,
+        mode="auto",
+        use_cache=False,
+        # A server without chosen ids can only be reached once the submit returns.
+        statement_wait=2.0,
+    )
+    cur = connection.cursor()
+    outcome = {}
+
+    def run():
+        try:
+            cur.execute("SELECT count(*) FROM range(100000000000) t(i) WHERE i % 7 = 3")
+        except OperationalError as exc:
+            outcome["error"] = exc
+
+    worker = threading.Thread(target=run)
+    worker.start()
+    time.sleep(1.0)
+    cur.cancel()
+    worker.join(timeout=60)
+    connection.close()
+    assert not worker.is_alive()
+    assert outcome["error"].code == "cancelled"

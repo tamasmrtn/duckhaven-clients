@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import re
+import uuid
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 
@@ -34,6 +35,14 @@ _PENDING = ("queued", "running")
 # `statement_wait`. Sending none would answer 202 at once and leave the result to the
 # poll loop's sleeps; the server caps it at 60.
 _ONE_SHOT_WAIT_S = 30.0
+
+# A cancel sent while the submit is still in flight can reach the server before the run
+# is recorded, and answer 404. It is retried this often, for this long.
+_CANCEL_RETRY_S = 0.1
+_CANCEL_RETRY_FOR_S = 2.0
+
+# What a run ends with when its agent went away mid-statement.
+_AGENT_LOST = "agent disconnected"
 
 
 def _describe(columns: list[str], schema: list[tuple[str, str]] | None) -> list[tuple[Any, ...]]:
@@ -109,7 +118,11 @@ class Cursor:
         self._connection = connection
         self.arraysize = 1
         self._closed = False
-        self._query_id: str | None = None
+        # The id of the statement in flight or last run, chosen here before it is sent,
+        # so another thread can cancel it while execute() is still blocked.
+        self.query_id: str | None = None
+        self._submitting = False
+        self._cancel_requested = False
         self._result: ResultSet | None = None
         self._description: list[tuple[Any, ...]] | None = None
         self._rowcount = -1
@@ -138,7 +151,22 @@ class Cursor:
 
     # -- Execution ----------------------------------------------------------
 
-    def execute(self, operation: str, parameters: Sequence[Any] | None = None) -> Cursor:
+    def execute(
+        self,
+        operation: str,
+        parameters: Sequence[Any] | None = None,
+        *,
+        query_id: str | None = None,
+        tags: dict[str, str] | None = None,
+    ) -> Cursor:
+        """Run one statement.
+
+        ``query_id`` names the run (a UUID string); one is chosen when omitted. It is
+        set on :attr:`query_id` before the statement is sent, so another thread can
+        cancel the run by it at once. ``tags`` add to the connection's ``tags`` for this
+        statement. A server too old to take a chosen id picks its own, and
+        :attr:`query_id` becomes that once the submit returns.
+        """
         self._ensure_open()
         # A current server renders the values itself, typed; an older one cannot.
         server_side = bool(parameters) and (self._connection._api_version() or 0) >= 3
@@ -149,7 +177,7 @@ class Cursor:
 
         if _is_txn_control_noop(sql):
             # Autocommit session: nothing to submit. Reset to a clean, result-less state.
-            self._query_id = None
+            self.query_id = None
             self._result = None
             self._description = None
             self._rowcount = -1
@@ -160,7 +188,11 @@ class Cursor:
         on_session = self._connection._routes_to_session(sql)
         arrow = self._connection._arrow_results()
 
-        body: dict[str, Any] = {"sql": sql, "timeout_s": config.timeout}
+        chosen = str(query_id) if query_id is not None else str(uuid.uuid4())
+        body: dict[str, Any] = {"id": chosen, "sql": sql, "timeout_s": config.timeout}
+        merged_tags = {**(config.tags or {}), **(tags or {})}
+        if merged_tags:
+            body["tags"] = merged_tags
         if server_side:
             body["parameters"] = [server_parameter(v) for v in parameters]
         if config.use_cache is not None:
@@ -197,6 +229,11 @@ class Cursor:
         if wait is not None:
             body["wait_timeout_s"] = wait
 
+        # Set before the submit, so a concurrent cancel() (dbt aborting from another
+        # thread, a BI tool's stop button) can reach the run while the server holds it.
+        self.query_id = chosen
+        self._cancel_requested = False
+        self._submitting = True
         try:
             response = transport.post(path, json=body)
         except OperationalError as exc:
@@ -204,12 +241,15 @@ class Cursor:
             if on_session and exc.status_code == 409:
                 self._connection._mark_dead()
             raise
+        finally:
+            self._submitting = False
 
         query = response.json()
-        # Record the id before polling so a concurrent cancel() (e.g. dbt aborting from
-        # another thread) can reach the statement while it is still running, not only
-        # after it finishes.
-        self._query_id = query["id"]
+        # An older server ignores the chosen id and picks its own.
+        self.query_id = query["id"]
+        if self._cancel_requested and self.query_id != chosen:
+            # The cancel went to an id the server never used.
+            self._try_cancel(self.query_id)
         query = self._poll_to_completion(query, wait)
 
         row_count = query.get("row_count")
@@ -227,7 +267,7 @@ class Cursor:
             inline = query.get("inline_arrow")
             self._result = ArrowResultSet(
                 transport,
-                self._query_id,
+                self.query_id,
                 [(c["name"], c["type"]) for c in schema] if schema else None,
                 total=row_count if isinstance(row_count, int) else 0,
                 hooks=transport._hooks,
@@ -241,7 +281,7 @@ class Cursor:
             return self
 
         self._result = ResultSet(
-            transport, self._query_id, config.fetch_size, hooks=transport._hooks
+            transport, self.query_id, config.fetch_size, hooks=transport._hooks
         )
         # The server can return the first page on the submit response. When it does,
         # this whole statement cost one HTTP call; `ensure_started` would otherwise
@@ -304,13 +344,17 @@ class Cursor:
             interval = min(_POLL_MAX, interval * 1.5)
             query = transport.get(f"/queries/{query_id}", params=params).json()
             status = query.get("status", "running")
-        if status != "done":
-            raise ProgrammingError(
-                query.get("error") or f"statement failed ({status})",
-                status_code=None,
-                detail=query.get("error"),
-            )
-        return query
+        if status == "done":
+            return query
+        error = query.get("error")
+        if status == "cancelled":
+            # Stopped from outside the statement: nothing wrong with the SQL.
+            raise OperationalError(f"statement {query_id} was cancelled", code="cancelled")
+        if error and error.startswith(_AGENT_LOST):
+            raise OperationalError(error, detail=error)
+        raise ProgrammingError(
+            error or f"statement failed ({status})", status_code=None, detail=error
+        )
 
     def _try_cancel(self, query_id: str) -> None:
         try:
@@ -319,9 +363,31 @@ class Cursor:
             pass
 
     def cancel(self) -> None:
-        """Cancel the in-flight (or most recent) statement via the query API."""
-        if self._query_id is not None:
-            self._try_cancel(self._query_id)
+        """Cancel the in-flight (or most recent) statement via the query API.
+
+        Safe to call from another thread while :meth:`execute` is blocked: the run's id
+        is known before it is sent. The server records the run a moment after the
+        request arrives, so a 404 while the submit is still in flight is retried
+        briefly. A run that already finished is left as it is.
+        """
+        self._cancel_requested = True
+        query_id = self.query_id
+        if query_id is None:
+            return
+        transport = self._connection._transport
+        deadline = transport._monotonic() + _CANCEL_RETRY_FOR_S
+        while True:
+            try:
+                transport.delete(f"/queries/{query_id}")
+                return
+            except ProgrammingError as exc:
+                if exc.status_code != 404 or not self._submitting:
+                    return
+            except Exception:  # noqa: BLE001 - best-effort cancel; never mask the real error
+                return
+            if transport._monotonic() > deadline:
+                return
+            transport._sleep(_CANCEL_RETRY_S)
 
     # -- Fetching -----------------------------------------------------------
 
@@ -380,7 +446,7 @@ class Cursor:
     def _local_metadata(self, listing: tuple[list[str], list[tuple[Any, ...]]]) -> Cursor:
         """Present a client-assembled listing as an ordinary finished result set."""
         columns, rows = listing
-        self._query_id = None
+        self.query_id = None
         self._result = ResultSet.from_rows(columns, rows)
         self._description = _describe(columns, None)
         self._rowcount = len(rows)
