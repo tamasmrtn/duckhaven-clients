@@ -6,6 +6,8 @@ All notable changes to `duckhaven-sql-connector` are documented here. The format
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-11
+
 ### Added
 
 - `mode="auto"` on `connect()` (and `ClientConfig.mode`) opens no SQL session. Each statement
