@@ -11,19 +11,26 @@ The flow these replace, which the server docs show as a `curl` loop:
     dh dashboard apply dashboards/ --dry-run --publish        # on a pull request
     dh dashboard apply dashboards/ --publish --prune --yes \\   # on main
         --source-id "$GITHUB_REPOSITORY" --source-ref "$GITHUB_SHA"
+
+And while writing one, `dh dashboard preview sales.dashboard.yml` shows it in
+DuckHaven as it is saved, and `dh dashboard test dashboards/` runs every widget.
 """
 
 from __future__ import annotations
 
 import json
 import sys
+import time
+import webbrowser
+from collections.abc import Iterator
+from contextlib import closing
 from pathlib import Path
 from typing import Any
 
 import typer
 
 from dh import context
-from dh.errors import ConflictError, DhError
+from dh.errors import ConflictError, DhError, NotFoundError, QueryFailed, UnavailableError
 
 app = typer.Typer(name="dashboard", help="Dashboards as files: check, apply and export them.")
 
@@ -39,11 +46,22 @@ _SOURCE_ID = typer.Option(
 _SOURCE_REF = typer.Option(None, "--source-ref", help="The commit the files come from.")
 _DRY_RUN = typer.Option(False, "--dry-run", help="Make every check, and change nothing.")
 _DRAFT = typer.Option(False, "--draft", help="The draft, not the published file. Needs writer.")
+_NO_CACHE = typer.Option(
+    False, "--no-cache", help="Run every query, answering none from the result cache."
+)
+
+#: How often `preview` looks at its file for a save.
+_POLL_S = 0.5
 
 
 def _dashboards(cli) -> tuple[Any, str]:
     settings = cli.settings()
     return settings, f"workspaces/{settings.require('workspace')}/dashboards"
+
+
+def _previews(cli) -> tuple[Any, str]:
+    settings = cli.settings()
+    return settings, f"workspaces/{settings.require('workspace')}/dashboard-previews"
 
 
 # --- Files -----------------------------------------------------------------
@@ -79,6 +97,14 @@ def _files(paths: list[Path]) -> list[tuple[Path, str]]:
                 f"{first} and {file} name the same dashboard. Rename one of them.",
             )
     return [(file, file.name.removesuffix(SUFFIX)) for file in by_name.values()]
+
+
+def _text(file: Path, body: bytes) -> str:
+    """A file's text, which a preview or a validation takes as a JSON string."""
+    try:
+        return body.decode("utf-8")
+    except UnicodeDecodeError as exc:
+        raise ConflictError("invalid_dashboard", f"{file} is not UTF-8.") from exc
 
 
 def _write(cli, data: bytes) -> None:
@@ -143,6 +169,18 @@ def _put(cli, client, url: str, file: Path, body: bytes, params: dict, *, many=F
     return answer
 
 
+def _refused(cli, file: Path, exc: DhError, *, message: bool) -> None:
+    """A refused file's problems at their lines; failing those, its ``message``.
+
+    The message is left out when the refusal is about to surface as the error.
+    """
+    diagnostics = (exc.details or {}).get("diagnostics")
+    if diagnostics:
+        _problems(cli, file, diagnostics, "error")
+    elif message:
+        cli.note(exc.message if str(file) in exc.message else f"{file}: {exc.message}")
+
+
 def _settle(failed: list[tuple[dict, DhError]], total: int, verb: str) -> None:
     """Exit with the first failure's status once every file has had its turn.
 
@@ -190,6 +228,34 @@ def get_dashboard(ctx: typer.Context, name: str, draft: bool = _DRAFT) -> None:
     settings, url = _dashboards(cli)
     with cli.client(settings) as client:
         cli.emit(client.get(f"{url}/{name}", params={"draft": draft or None}))
+
+
+@app.command("impact")
+def impact(
+    ctx: typer.Context,
+    ref: str = typer.Argument(
+        ..., help="A semantic model, or one of its metrics or dimensions: orders.revenue."
+    ),
+) -> None:
+    """The dashboards that read a model, metric or dimension: what changing it touches.
+
+    Run it before renaming or removing one. Readers see the published
+    dashboards that read it; a writer also sees those whose draft does, and
+    those never published. `dh semantic import --dry-run` lists the published
+    dashboards an import would break.
+    """
+    cli = context.of(ctx)
+    settings, url = _dashboards(cli)
+    with cli.client(settings) as client:
+        found = list(client.walk(url, params={"uses": ref}))
+    keys = ("name", "title", "status", "has_draft", "source", "source_id")
+    rows = [{key: row.get(key) for key in keys} for row in found]
+    count = len(rows)
+    if rows:
+        cli.note(f"{count} dashboard{' reads' if count == 1 else 's read'} {ref}.")
+    else:
+        cli.note(f"No dashboard reads {ref}.")
+    cli.emit(rows)
 
 
 @app.command("export")
@@ -240,11 +306,7 @@ def validate(ctx: typer.Context, paths: list[Path] = _PATHS) -> None:
         for file, name in files:
             row: dict[str, Any] = {"file": str(file), "name": name}
             try:
-                try:
-                    text = file.read_text(encoding="utf-8")
-                except UnicodeDecodeError as exc:
-                    raise ConflictError("invalid_dashboard", f"{file} is not UTF-8.") from exc
-                found = client.post(url, json={"source_text": text})
+                found = client.post(url, json={"source_text": _text(file, file.read_bytes())})
             except DhError as exc:
                 if len(files) > 1:
                     cli.note(f"{file}: {exc.message}")
@@ -262,6 +324,261 @@ def validate(ctx: typer.Context, paths: list[Path] = _PATHS) -> None:
                 failed.append((row, ConflictError("invalid_dashboard", message)))
     cli.emit(rows)
     _settle(failed, len(files), "are not valid")
+
+
+# --- Running files without saving them -------------------------------------
+
+
+def _hold(cli, client, url: str, file: Path, body: bytes) -> dict:
+    """A new preview holding ``file``: only you can see it, and it is not saved."""
+    held = client.post(url, json={"source_text": _text(file, body)})
+    _problems(cli, file, held.get("warnings"), "warning")
+    return held
+
+
+def _page(settings, held: dict) -> str:
+    """Where the web app shows a preview."""
+    host = settings.require("host").rstrip("/")
+    return f"{host}/{settings.require('workspace')}/dashboard-previews/{held['id']}"
+
+
+def _run(cli, client, url: str, *, use_cache: bool) -> tuple[list[dict], dict]:
+    """Run a preview as you: each widget's event as it arrives, then the run's summary."""
+    widgets: list[dict] = []
+    events = client.stream("POST", f"{url}/run", json={"use_cache": use_cache})
+    with closing(events):
+        for event in events:
+            kind = event.pop("type", None)
+            if kind == "widget":
+                widgets.append(event)
+            elif kind == "compute":
+                # The wait every widget's time then includes.
+                cli.note(f"Starting compute for {', '.join(event.get('widgets') or [])}.")
+            elif kind == "error":
+                raise DhError("run_failed", event.get("message") or "The run could not go on.")
+            elif kind == "done":
+                return widgets, event
+    raise UnavailableError("run_cut_short", "The run's stream ended before the run finished.")
+
+
+def _seconds(ms: int | None) -> str:
+    return f"{(ms or 0) / 1000:.1f} s"
+
+
+def _slow(widget: dict, slow_s: float | None) -> bool:
+    """Whether a widget that answered took longer than ``slow_s`` to arrive."""
+    took = (widget.get("timing") or {}).get("elapsed_ms") or 0
+    return slow_s is not None and widget["state"] in ("ok", "empty") and took > slow_s * 1000
+
+
+def _widgets(cli, file: Path, widgets: list[dict], done: dict, *, slow_s: float | None) -> list:
+    """Note each widget's state and how long it took to arrive; return the widgets that failed.
+
+    A widget fails when its query did, or when you may not read what it reads:
+    either way the run proves nothing about it.
+    """
+    failed = []
+    for widget in widgets:
+        timing = widget.get("timing") or {}
+        what = [widget["state"]] + (["slow"] if _slow(widget, slow_s) else [])
+        if widget["state"] in ("error", "no_access"):
+            failed.append(widget)
+            cli.note(f"{file}: {widget['id']}: {', '.join(what)}: {widget.get('error')}")
+            continue
+        cache = f", cache {widget['cache']}" if widget.get("cache") else ""
+        took = _seconds(timing.get("elapsed_ms"))
+        cli.note(f"{file}: {widget['id']}: {', '.join(what)} in {took}{cache}")
+    states = ", ".join(f"{n} {state}" for state, n in sorted((done.get("widgets") or {}).items()))
+    count = len(widgets)
+    summary = f"{count} widget{'' if count == 1 else 's'}" + (f", {states}" if states else "")
+    cli.note(f"{file}: {summary}, in {_seconds(done.get('elapsed_ms'))}.")
+    return failed
+
+
+def _failure(file: Path, widgets: list[dict], failed: list[dict]) -> QueryFailed:
+    ids = ", ".join(w["id"] for w in failed)
+    states = [{"widget": w["id"], "state": w["state"], "error": w.get("error")} for w in failed]
+    return QueryFailed(
+        "widget_failed",
+        f"{len(failed)} of {len(widgets)} widgets in {file} failed: {ids}",
+        {"widgets": states},
+    )
+
+
+@app.command("test")
+def smoke_test(
+    ctx: typer.Context,
+    paths: list[Path] = _PATHS,
+    no_cache: bool = _NO_CACHE,
+    slow: float = typer.Option(
+        5.0, "--slow", help="Seconds after which a widget that answered is marked slow."
+    ),
+) -> None:
+    """Run dashboard files as you, without saving them, and report every widget.
+
+    Each file is held as a preview and run once, its queries with your grants,
+    as a dashboard's run would be. Each widget is reported as ok, empty (no
+    rows), error, or no_access (you may not read what it reads), with how long
+    it took to arrive from the start of the run. One that took longer than
+    `--slow` is marked slow. That time includes starting compute, when it has
+    to start.
+
+    Every file is run. Exits 5 when a file is not valid, and 6 when a widget
+    failed or could not be read as you; empty and slow widgets do not fail.
+    Needs writer.
+    """
+    cli = context.of(ctx)
+    files = _files(paths)
+    settings, url = _previews(cli)
+    rows: list[dict] = []
+    failed: list[tuple[dict, DhError]] = []
+    with cli.client(settings) as client:
+        for file, name in files:
+            row: dict[str, Any] = {"file": str(file), "name": name}
+            try:
+                held = _hold(cli, client, url, file, file.read_bytes())
+                widgets, done = _run(cli, client, f"{url}/{held['id']}", use_cache=not no_cache)
+            except DhError as exc:
+                _refused(cli, file, exc, message=len(files) > 1)
+                rows.append({**row, "widget": None, "state": None, "error": exc.envelope()})
+                failed.append((row, exc))
+                continue
+            broken = _widgets(cli, file, widgets, done, slow_s=slow)
+            for widget in widgets:
+                timing = widget.get("timing") or {}
+                rows.append(
+                    {
+                        **row,
+                        "widget": widget["id"],
+                        "state": widget["state"],
+                        "slow": _slow(widget, slow),
+                        "elapsed_ms": timing.get("elapsed_ms"),
+                        "query_ms": timing.get("query_ms"),
+                        "cache": widget.get("cache"),
+                        "error": widget.get("error"),
+                    }
+                )
+            if broken:
+                failed.append((row, _failure(file, widgets, broken)))
+    cli.emit(rows)
+    _settle(failed, len(files), "failed")
+
+
+@app.command("preview")
+def preview(
+    ctx: typer.Context,
+    file: Path = typer.Argument(
+        ..., exists=True, dir_okay=False, help=f"A dashboard file, <name>{SUFFIX}."
+    ),
+    once: bool = typer.Option(
+        False, "--once", help="Run the file here, once, and print each widget's rows."
+    ),
+    open_page: bool = typer.Option(False, "--open", help="Open the preview's page in a browser."),
+    no_cache: bool = _NO_CACHE,
+) -> None:
+    """Show a dashboard file in DuckHaven as you edit it, without saving it.
+
+    The file is held as a preview, which only you can see, and the address of
+    its page is printed: open it beside your editor. Each time the file is
+    saved, the preview takes the new file and the page runs it again, as you.
+    A file with a problem is reported at its line, and the page keeps the last
+    file that loaded. Stop with Ctrl+C.
+
+    A preview ends two hours after its file last changed or it last ran. A
+    save after that starts a new preview, at a new address.
+
+    With `--once`, the file is run here instead, once. Each widget is printed
+    with its state, rows and SQL, and the exit status is `test`'s. This suits
+    an AI agent checking its own work. Needs writer.
+    """
+    cli = context.of(ctx)
+    [(file, _)] = _files([file])
+    settings, url = _previews(cli)
+    with cli.client(settings) as client:
+        if not once:
+            _follow(cli, client, settings, url, file, open_page=open_page)
+            return
+        try:
+            held = _hold(cli, client, url, file, file.read_bytes())
+        except DhError as exc:
+            _refused(cli, file, exc, message=False)
+            raise
+        page = _page(settings, held)
+        if open_page:
+            webbrowser.open(page)
+        widgets, done = _run(cli, client, f"{url}/{held['id']}", use_cache=not no_cache)
+    broken = _widgets(cli, file, widgets, done, slow_s=None)
+    cli.emit(
+        {
+            "file": str(file),
+            "id": held["id"],
+            "url": page,
+            "expires_at": held.get("expires_at"),
+            "warnings": held.get("warnings"),
+            "widgets": widgets,
+            "done": done,
+        }
+    )
+    if broken:
+        raise _failure(file, widgets, broken)
+
+
+def _follow(cli, client, settings, url: str, file: Path, *, open_page: bool) -> None:
+    """Send the file to its preview at each save, until interrupted.
+
+    Each new preview's address is printed as it is made: the first, and one
+    made after the last ended. A file with a problem changes nothing.
+    """
+    held: dict | None = None
+    cli.note(f"Watching {file}. Stop with Ctrl+C.")
+    for body in _saves(file):
+        try:
+            if held is not None:
+                try:
+                    held = client.put(
+                        f"{url}/{held['id']}", json={"source_text": _text(file, body)}
+                    )
+                except NotFoundError:
+                    cli.note("The preview ended, so this save starts a new one.")
+                    held = None
+                else:
+                    cli.note(f"{file}: sent")
+                    _problems(cli, file, held.get("warnings"), "warning")
+                    continue
+            held = _hold(cli, client, url, file, body)
+        except ConflictError as exc:
+            _refused(cli, file, exc, message=True)
+            if held is None:
+                cli.note("Nothing to show until the file loads. Save it again once fixed.")
+            else:
+                cli.note("The page keeps showing the last file that loaded.")
+            continue
+        page = _page(settings, held)
+        cli.emit({"file": str(file), "id": held["id"], "url": page})
+        if open_page:
+            webbrowser.open(page)
+
+
+def _saves(file: Path) -> Iterator[bytes]:
+    """The file as it is, then again each time it is saved with new contents. Never ends.
+
+    It looks at the file every half second rather than asking the system to
+    watch it, which needs no dependency and works the same everywhere. A file
+    missing for a moment, as when an editor saves by replacing it, is waited out.
+    """
+    stamp: int | None = None
+    sent: bytes | None = None
+    while True:
+        try:
+            now = file.stat().st_mtime_ns
+            if now != stamp:
+                stamp, body = now, file.read_bytes()
+                if body != sent:
+                    sent = body
+                    yield body
+        except FileNotFoundError:
+            pass
+        time.sleep(_POLL_S)
 
 
 # --- Applying from git -----------------------------------------------------
