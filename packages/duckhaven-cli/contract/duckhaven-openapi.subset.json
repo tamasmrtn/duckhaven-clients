@@ -2066,6 +2066,124 @@
         "title": "DashboardOut",
         "type": "object"
       },
+      "DashboardPreviewOut": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "expires_at": {
+            "description": "Two hours after the last change.",
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "source_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The YAML as written, when it was sent as YAML.",
+            "title": "Source Text"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          },
+          "spec_hash": {
+            "description": "sha256 of `spec` as canonical JSON; it changes with the file.",
+            "title": "Spec Hash",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticOut"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "spec",
+          "source_text",
+          "spec_hash",
+          "created_at",
+          "updated_at",
+          "expires_at",
+          "warnings"
+        ],
+        "title": "DashboardPreviewOut",
+        "type": "object"
+      },
+      "DashboardPreviewRunIn": {
+        "additionalProperties": false,
+        "description": "One view of a preview: the parameter values to run it with.",
+        "properties": {
+          "compare": {
+            "anyOf": [
+              {
+                "enum": [
+                  "previous_period",
+                  "previous_year"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The comparison every `kpi` widget with a time window makes, in place of the one its file sets. Other widgets are unchanged.",
+            "title": "Compare"
+          },
+          "params": {
+            "additionalProperties": true,
+            "description": "Values by parameter name; one left out takes its default. A `time_range` takes a preset name such as `last_30_days` or a window; a `dimension` takes one value, or null for every value.",
+            "title": "Params",
+            "type": "object"
+          },
+          "use_cache": {
+            "default": true,
+            "description": "Answer from the result cache when it can.",
+            "title": "Use Cache",
+            "type": "boolean"
+          },
+          "widgets": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "maxItems": 40,
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Run only these widgets, by id; every data widget when left out.",
+            "title": "Widgets"
+          }
+        },
+        "title": "DashboardPreviewRunIn",
+        "type": "object"
+      },
       "DashboardPublish": {
         "properties": {
           "base_version": {
@@ -16252,6 +16370,299 @@
         "summary": "List Snapshots",
         "tags": [
           "catalog"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/dashboard-previews": {
+      "post": {
+        "description": "Hold a dashboard file to try out, without saving it as a dashboard.\n\nOnly you can read or run a preview, and it runs as you. Replace its file\nwith `PUT` as you edit it. It expires two hours after it was last changed\nor run. An invalid file is a 422 `invalid_dashboard`, as when saving one.",
+        "operationId": "create_dashboard_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Create Dashboard Preview",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/dashboard-previews/{dashboard_preview_id}": {
+      "put": {
+        "description": "Replace your preview's file. An invalid file is a 422 `invalid_dashboard`,\nand the preview keeps the file it had.",
+        "operationId": "replace_dashboard_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_preview_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Preview Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardPreviewOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Replace Dashboard Preview",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/dashboard-previews/{dashboard_preview_id}/run": {
+      "post": {
+        "description": "Run your preview as you, and stream each widget's data as it arrives.\n\nIt runs as a dashboard does, with your grants, and its queries are recorded\nin History under the file's name with the tag `dashboard.preview`. The\npreview lasts another two hours.",
+        "operationId": "run_dashboard_preview",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard_preview_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Dashboard Preview Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardPreviewRunIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The same server-sent event stream as running a dashboard."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Run Dashboard Preview",
+        "tags": [
+          "dashboards"
         ]
       }
     },

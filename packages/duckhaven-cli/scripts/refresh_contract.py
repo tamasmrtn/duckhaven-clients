@@ -110,6 +110,9 @@ WANT: dict[str, set[str]] = {
     "/workspaces/{workspace}/dashboards/{dashboard}/publish": {"post"},
     "/workspaces/{workspace}/dashboards/{dashboard}/source": {"get", "put", "delete"},
     "/workspaces/{workspace}/dashboard-validations": {"post"},
+    "/workspaces/{workspace}/dashboard-previews": {"post"},
+    "/workspaces/{workspace}/dashboard-previews/{dashboard_preview_id}": {"put"},
+    "/workspaces/{workspace}/dashboard-previews/{dashboard_preview_id}/run": {"post"},
     # Admin
     "/admin/service-accounts": {"get", "post"},
     "/admin/service-accounts/{service_account_id}": {"patch", "delete"},
