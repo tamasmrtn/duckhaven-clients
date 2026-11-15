@@ -366,6 +366,12 @@ dh dashboard export
     . <name>
     . --draft
 
+dh dashboard exposures
+    Print dbt exposures for the published dashboards that read a dbt project's tables.
+    . <manifest>
+    . --owner-name
+    . --owner-email
+
 dh dashboard get
     One dashboard, its file as JSON, and what it reads.
     . <name>

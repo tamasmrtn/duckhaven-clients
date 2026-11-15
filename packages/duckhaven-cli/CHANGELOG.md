@@ -27,6 +27,9 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
   rows and SQL instead, which suits a coding agent checking its work.
 - `dh dashboard impact REF` lists the dashboards that read a semantic model, metric or
   dimension.
+- `dh dashboard exposures MANIFEST` prints dbt exposures for the published dashboards that
+  read a dbt project's models, seeds, snapshots and sources, with `--owner-name` and
+  `--owner-email` for the owner dbt requires.
 - `dh semantic import --dry-run` reports what an import would create, update and remove, and
   the published dashboards it would break. `--allow-breaking` on `dh semantic import`,
   `purge` and `deprecate` makes a change that breaks published dashboards; without it, the

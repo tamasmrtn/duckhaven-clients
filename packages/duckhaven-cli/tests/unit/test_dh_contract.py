@@ -147,7 +147,13 @@ FIELDS = {
         "managed",
         "version",
     },
-    "DashboardOut": {"name", "managed", "source_id", "version"},
+    "DashboardOut": {"name", "managed", "source_id", "version", "title", "description", "refs"},
+    # `exposures` reads what a dashboard reads, down to its semantic datasets' tables.
+    "RefOut": {"kind", "model", "name"},
+    "ModelOut": {"datasets", "metrics", "dimensions"},
+    "DatasetOut": {"name", "catalog", "schema_name", "table_name"},
+    "MetricOut": {"name", "dataset"},
+    "DimensionOut": {"name", "dataset"},
     "DashboardIn": {"source_text"},
     "DashboardPublish": {"base_version", "message"},
     # Apply drops `dashboard` from each answer and reports the rest.

@@ -89,6 +89,16 @@ The other commands:
   query rather than answering from the result cache.
 - `impact REF` lists the dashboards that read a model, or a metric or dimension of one
   (`orders.revenue`): what renaming or removing it would touch.
+- `exposures MANIFEST` prints [dbt exposures](https://docs.getdbt.com/docs/build/exposures)
+  for the published dashboards that read your dbt project's tables, so dbt's lineage shows
+  which dashboards read each model. Keep the file in the project and write it again when
+  dashboards change:
+  `dh --output models/duckhaven_exposures.yml dashboard exposures target/manifest.json`. Each
+  exposure has the dashboard's title, description and link, and depends on the models, seeds,
+  snapshots and sources it reads, through its semantic models' datasets or its SQL. A table
+  matches a dbt relation when its catalog, schema and name are the relation's database,
+  schema and alias, as when DuckHaven imports from dbt. dbt requires an owner:
+  `--owner-name` (DuckHaven by default) and `--owner-email`.
 - `rename OLD FILE` renames a dashboard whose file you renamed. Run it once before merging:
   applying a renamed file as usual creates a second dashboard. The old name keeps working in
   links.
