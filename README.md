@@ -12,7 +12,7 @@ own project under **Apache-2.0**.
 | [`duckhaven-sql-connector`](packages/duckhaven-sql-connector) | [published](https://pypi.org/project/duckhaven-sql-connector/) | DB-API 2.0 (PEP 249) client for DuckHaven's SQL session/statement API — the shared transport for the members below. |
 | [`dbt-duckhaven`](packages/dbt-duckhaven) | [published](https://pypi.org/project/dbt-duckhaven/) | dbt-duckdb adapter that routes every statement through the connector. |
 | [`dlt-duckhaven`](packages/dlt-duckhaven) | [published](https://pypi.org/project/dlt-duckhaven/) | dlt destination that stages Parquet and loads through the connector. |
-| [`duckhaven-cli`](packages/duckhaven-cli) | [published](https://pypi.org/project/duckhaven-cli/) | `dh`, the command-line interface — SQL, catalog, dbt lineage, grants and admin over the REST API. |
+| [`duckhaven-cli`](packages/duckhaven-cli) | [published](https://pypi.org/project/duckhaven-cli/) | `dh`, the command-line interface — SQL, catalog, dbt lineage, dashboards, grants and admin over the REST API. |
 
 `dbt-duckhaven`, `dlt-duckhaven` and `duckhaven-cli` depend on `duckhaven-sql-connector` and
 pin a minimum version of it. During co-development that dependency resolves to the local

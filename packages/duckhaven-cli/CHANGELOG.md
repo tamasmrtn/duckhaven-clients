@@ -6,6 +6,23 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- **Dashboards in git.** `dh dashboard apply` applies `<name>.dashboard.yml` files, or every
+  one under a directory, to the dashboards they are named after, byte for byte. It takes
+  `--publish`, `--dry-run`, `--source-id`, `--source-ref`, `--expected-hash` and `--force`,
+  applies every file and reports each problem as `file:line:col`, and exits with the first
+  failure's status. `--prune` detaches and deletes the dashboards applied from
+  `--source-id` whose files are gone, after asking (or with `--yes`), and only when every
+  file applied.
+- `dh dashboard validate`, `rename`, `adopt`, `detach`, `publish`, `delete`, `list` and
+  `get`. `dh dashboard export` prints a dashboard's YAML and `dh dashboard schema` its JSON
+  Schema, each as the file itself rather than the JSON envelope.
+
+### Changed
+
+- The pinned API contract is refreshed and covers the dashboard endpoints.
+
 ## [0.4.0] - 2026-10-15
 
 ### Changed
