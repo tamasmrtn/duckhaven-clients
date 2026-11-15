@@ -89,6 +89,37 @@ class RestClient:
         body raw so a hand-written YAML document arrives exactly as published, and
         re-encoding it through ``json=`` would defeat that.
         """
+        response = self._send(
+            method, path, params=params, json=json, content=content, headers=headers
+        )
+        if response.status_code == 204 or not response.content:
+            return None
+        try:
+            return response.json()
+        except ValueError:
+            # `/metrics` is Prometheus text and the assistant route streams SSE.
+            # Both are reachable only through `dh api`, so hand the body back
+            # rather than failing outside the error taxonomy it advertises.
+            return response.text
+
+    def get_bytes(self, path: str, *, params: dict[str, Any] | None = None) -> bytes:
+        """A GET whose body is a file to keep exactly as sent, such as a dashboard's YAML.
+
+        Never decoded: YAML may be written as JSON, and :meth:`request` would hand
+        that back as a dict rather than the file.
+        """
+        return self._send("GET", path, params=params).content
+
+    def _send(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: Any = None,
+        content: bytes | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> httpx.Response:
         url = f"{self.base_url}/{path.lstrip('/')}"
         try:
             response = self._client.request(
@@ -105,18 +136,9 @@ class RestClient:
             raise UnavailableError(
                 "transport_error", f"Could not reach {self.base_url}: {exc}"
             ) from exc
-
         if response.status_code >= 400:
             raise from_status(response.status_code, _body(response))
-        if response.status_code == 204 or not response.content:
-            return None
-        try:
-            return response.json()
-        except ValueError:
-            # `/metrics` is Prometheus text and the assistant route streams SSE.
-            # Both are reachable only through `dh api`, so hand the body back
-            # rather than failing outside the error taxonomy it advertises.
-            return response.text
+        return response
 
     def get(self, path: str, **kwargs: Any) -> Any:
         return self.request("GET", path, **kwargs)
