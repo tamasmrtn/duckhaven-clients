@@ -18,10 +18,25 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 - `dh dashboard validate`, `rename`, `adopt`, `detach`, `publish`, `delete`, `list` and
   `get`. `dh dashboard export` prints a dashboard's YAML and `dh dashboard schema` its JSON
   Schema, each as the file itself rather than the JSON envelope.
+- `dh dashboard test` runs dashboard files without saving them and reports every widget as
+  `ok`, `empty`, `error` or `no_access`, with its time. It exits `6` when a widget fails or
+  cannot be read, and marks widgets slower than `--slow` seconds. It takes `--no-cache`.
+- `dh dashboard preview FILE` holds a file as a preview, prints its page's address, and
+  sends the file again each time it is saved, starting a new preview when the last one has
+  ended. `--open` opens the page. `--once` runs the file once and prints each widget's state,
+  rows and SQL instead, which suits a coding agent checking its work.
+- `dh dashboard impact REF` lists the dashboards that read a semantic model, metric or
+  dimension.
+- `dh semantic import --dry-run` reports what an import would create, update and remove, and
+  the published dashboards it would break. `--allow-breaking` on `dh semantic import`,
+  `purge` and `deprecate` makes a change that breaks published dashboards; without it, the
+  change is refused and every dashboard it breaks is listed.
+- The README has an `AGENTS.md` snippet for coding agents that write dashboard files.
 
 ### Changed
 
-- The pinned API contract is refreshed and covers the dashboard endpoints.
+- The pinned API contract is refreshed and covers the dashboard endpoints, including
+  previews and their runs.
 
 ## [0.4.0] - 2026-10-15
 
