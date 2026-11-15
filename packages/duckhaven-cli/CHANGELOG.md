@@ -6,6 +6,8 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-11-15
+
 ### Added
 
 - **Dashboards in git.** `dh dashboard apply` applies `<name>.dashboard.yml` files, or every
