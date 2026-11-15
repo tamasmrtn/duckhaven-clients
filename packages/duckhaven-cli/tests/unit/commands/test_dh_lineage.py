@@ -146,6 +146,106 @@ def test_semantic_purge_requires_and_sends_a_provider(logged_in):
     assert route.calls[0].request.url.params["provider"] == "dbt"
 
 
+SALES = {"name": "sales", "title": "Sales", "reads": ["orders.revenue"]}
+OPS = {"name": "ops", "title": "Ops", "reads": ["orders"]}
+
+
+def _breaks(*dashboards: dict) -> httpx.Response:
+    """The server's refusal, which names the first few and details them all."""
+    body = {
+        "error": "breaking_dashboards",
+        "message": "This import breaks 2 published dashboards: sales, ops.",
+        "details": {"affected_dashboards": list(dashboards)},
+    }
+    return httpx.Response(409, json=body)
+
+
+@respx.mock
+def test_semantic_import_dry_run_reports_what_it_would_remove_and_break(logged_in, manifest):
+    route = respx.post(f"{WS}/semantic/imports/dbt").mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "dry_run": True,
+                "created": 1,
+                "updated": 2,
+                "removed": 1,
+                "removed_models": ["legacy"],
+                "removed_metrics": ["orders.revenue"],
+                "removed_dimensions": [],
+                "affected_dashboards": [SALES],
+            },
+        )
+    )
+    result = runner.invoke(app, ["semantic", "import", "dbt", str(manifest), "--dry-run"])
+    assert result.exit_code == 0, result.output
+    params = route.calls[0].request.url.params
+    assert params["dry_run"] == "true"
+    assert "allow_breaking" not in params
+    assert "create 1 model, update 2 and remove 1" in result.stderr
+    assert "would remove legacy, orders.revenue" in result.stderr
+    assert "would break sales (Sales): reads orders.revenue" in result.stderr
+    assert "drafts" not in result.stderr
+
+
+@respx.mock
+def test_semantic_import_refused_for_breaking_names_every_dashboard(logged_in, manifest):
+    respx.post(f"{WS}/semantic/imports/dbt").mock(return_value=_breaks(SALES, OPS))
+    result = runner.invoke(app, ["semantic", "import", "dbt", str(manifest)])
+    assert result.exit_code == ExitCode.CONFLICT
+    assert "breaks sales (Sales): reads orders.revenue" in result.stderr
+    assert "breaks ops (Ops): reads orders" in result.stderr
+    assert "--allow-breaking" in result.stderr
+
+
+@respx.mock
+def test_semantic_import_allow_breaking_names_what_it_broke(logged_in, manifest):
+    route = respx.post(f"{WS}/semantic/imports/dbt").mock(
+        return_value=httpx.Response(200, json={"affected_dashboards": [SALES]})
+    )
+    result = runner.invoke(app, ["semantic", "import", "dbt", str(manifest), "--allow-breaking"])
+    assert result.exit_code == 0, result.output
+    assert route.calls[0].request.url.params["allow_breaking"] == "true"
+    assert "broke sales (Sales)" in result.stderr
+
+
+@respx.mock
+def test_semantic_purge_and_deprecate_send_allow_breaking_only_when_given(logged_in):
+    purge = respx.delete(f"{WS}/semantic/imports").mock(return_value=httpx.Response(204))
+    deprecate = respx.post(f"{WS}/semantic/models/orders/deprecate").mock(
+        return_value=httpx.Response(200, json={"status": "deprecated"})
+    )
+    base = ["semantic", "purge", "--provider", "dbt", "--yes"]
+    assert runner.invoke(app, base).exit_code == 0
+    assert runner.invoke(app, [*base, "--allow-breaking"]).exit_code == 0
+    assert runner.invoke(app, ["semantic", "deprecate", "orders"]).exit_code == 0
+    assert (
+        runner.invoke(app, ["semantic", "deprecate", "orders", "--allow-breaking"]).exit_code == 0
+    )
+    sent = [call.request.url.params.get("allow_breaking") for call in purge.calls]
+    assert sent == [None, "true"]
+    sent = [call.request.url.params.get("allow_breaking") for call in deprecate.calls]
+    assert sent == [None, "true"]
+
+
+@respx.mock
+def test_semantic_deprecate_passes_other_errors_through(logged_in):
+    respx.post(f"{WS}/semantic/models/nope/deprecate").mock(
+        return_value=httpx.Response(404, json={"error": "not_found", "message": "No model nope."})
+    )
+    result = runner.invoke(app, ["semantic", "deprecate", "nope"])
+    assert result.exit_code == ExitCode.NOT_FOUND
+    assert "--allow-breaking" not in result.stderr
+
+
+@respx.mock
+def test_semantic_deprecate_refused_for_breaking_names_the_dashboards(logged_in):
+    respx.post(f"{WS}/semantic/models/orders/deprecate").mock(return_value=_breaks(OPS))
+    result = runner.invoke(app, ["semantic", "deprecate", "orders"])
+    assert result.exit_code == ExitCode.CONFLICT
+    assert "breaks ops (Ops): reads orders" in result.stderr
+
+
 @respx.mock
 @pytest.mark.parametrize("action", ["validate", "publish", "deprecate"])
 def test_the_model_state_transitions(logged_in, action):

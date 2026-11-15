@@ -610,12 +610,15 @@ dh semantic
 dh semantic deprecate
     Retire a published model without deleting it.
     . <model>
+    . --allow-breaking
 
 dh semantic import
     Publish semantic definitions from an external producer.
     . <provider>
     . <artifact>
     . --reconcile
+    . --dry-run
+    . --allow-breaking
 
 dh semantic model
     Semantic models.
@@ -634,6 +637,7 @@ dh semantic publish
 dh semantic purge
     Remove everything one provider published. Requires workspace owner.
     . --provider
+    . --allow-breaking
     . --yes/-y
 
 dh semantic relationship

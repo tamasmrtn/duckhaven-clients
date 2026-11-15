@@ -18,12 +18,14 @@ The end-to-end flow these replace:
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import typer
 
 from dh import context
-from dh.errors import ConflictError
+from dh.errors import ConflictError, DhError
 
 lineage_app = typer.Typer(name="lineage", help="Publish and retire lineage from other producers.")
 semantic_app = typer.Typer(name="semantic", help="Publish and manage semantic models.")
@@ -33,6 +35,34 @@ _RECONCILE = typer.Option(
     "--reconcile",
     help="provider_run (default) retires what the artifact no longer declares; none does not.",
 )
+
+
+_ALLOW_BREAKING = typer.Option(
+    False,
+    "--allow-breaking",
+    help="Make the change even though published dashboards read what it removes.",
+)
+
+
+@contextmanager
+def _breaking(cli) -> Iterator[None]:
+    """Name every dashboard a refused change would break, and how to go ahead.
+
+    The server's message names the first few; its details carry them all.
+    """
+    try:
+        yield
+    except DhError as exc:
+        if exc.code == "breaking_dashboards":
+            _broken(cli, (exc.details or {}).get("affected_dashboards"), "breaks")
+            cli.note("Pass --allow-breaking to make the change anyway.")
+        raise
+
+
+def _broken(cli, dashboards: list[dict] | None, verb: str) -> None:
+    for dashboard in dashboards or []:
+        reads = ", ".join(dashboard.get("reads") or [])
+        cli.note(f"  {verb} {dashboard['name']} ({dashboard.get('title')}): reads {reads}")
 
 
 def _load_json(path: Path) -> dict:
@@ -134,6 +164,12 @@ def import_semantics(
     provider: str = typer.Argument(..., help="Producer name, e.g. dbt."),
     artifact: Path = typer.Argument(..., exists=True, help="Manifest or YAML document."),
     reconcile: str = _RECONCILE,
+    dry_run: bool = typer.Option(
+        False,
+        "--dry-run",
+        help="Report what the import would change, and the dashboards it would break.",
+    ),
+    allow_breaking: bool = _ALLOW_BREAKING,
 ) -> None:
     """Publish semantic definitions from an external producer.
 
@@ -144,18 +180,45 @@ def import_semantics(
     Imported models arrive as **drafts**: an import is a pipeline publishing, not
     a person deciding. Promote them with `dh semantic validate` then
     `dh semantic publish`.
+
+    An import that removes a model, metric or dimension a published dashboard
+    reads is refused, naming the dashboards, unless `--allow-breaking`.
+    `--dry-run` reports what the import would remove and break, and changes
+    nothing.
     """
     cli = context.of(ctx)
     settings = cli.settings()
     path = f"workspaces/{settings.require('workspace')}/semantic/imports/{provider}"
-    with cli.client(settings) as client:
+    params = {
+        "reconcile": reconcile,
+        "dry_run": dry_run or None,
+        "allow_breaking": allow_breaking or None,
+    }
+    with cli.client(settings) as client, _breaking(cli):
         result = client.post(
             path,
             content=artifact.read_bytes(),
             headers={"Content-Type": "text/plain; charset=utf-8"},
-            params={"reconcile": reconcile},
+            params=params,
         )
-    cli.note("Imported as drafts. Promote with `dh semantic validate` then `publish`.")
+    removed = [
+        *result.get("removed_models", []),
+        *result.get("removed_metrics", []),
+        *result.get("removed_dimensions", []),
+    ]
+    if dry_run:
+        created = result.get("created", 0)
+        cli.note(
+            f"Dry run, nothing changed: it would create {created} "
+            f"model{'' if created == 1 else 's'}, update {result.get('updated', 0)} "
+            f"and remove {result.get('removed', 0)}."
+        )
+        if removed:
+            cli.note(f"It would remove {', '.join(removed)}.")
+        _broken(cli, result.get("affected_dashboards"), "would break")
+    else:
+        _broken(cli, result.get("affected_dashboards"), "broke")
+        cli.note("Imported as drafts. Promote with `dh semantic validate` then `publish`.")
     cli.emit(result)
 
 
@@ -163,15 +226,21 @@ def import_semantics(
 def purge_semantics(
     ctx: typer.Context,
     provider: str = typer.Option(..., "--provider"),
+    allow_breaking: bool = _ALLOW_BREAKING,
     yes: bool = context.YES,
 ) -> None:
-    """Remove everything one provider published. Requires workspace owner."""
+    """Remove everything one provider published. Requires workspace owner.
+
+    Refused while a published dashboard reads any of it, naming the
+    dashboards, unless `--allow-breaking`.
+    """
     cli = context.of(ctx)
     cli.confirm("Purge all semantics published by", provider, yes=yes)
     settings = cli.settings()
     path = f"workspaces/{settings.require('workspace')}/semantic/imports"
-    with cli.client(settings) as client:
-        client.delete(path, params={"provider": provider})
+    params = {"provider": provider, "allow_breaking": allow_breaking or None}
+    with cli.client(settings) as client, _breaking(cli):
+        client.delete(path, params=params)
     cli.note(f"Purged everything published by {provider!r}.")
 
 
@@ -198,7 +267,7 @@ def get_model(ctx: typer.Context, model: str) -> None:
 
 
 def _transition(action: str, doc: str):
-    """The three model state changes, which differ only in their path segment."""
+    """The model state changes that take only the model, differing in their path segment."""
 
     def command(ctx: typer.Context, model: str) -> None:
         cli = context.of(ctx)
@@ -217,9 +286,23 @@ semantic_app.command("validate")(
 semantic_app.command("publish")(
     _transition("publish", "Make a model authoritative to the assistant. Validates first.")
 )
-semantic_app.command("deprecate")(
-    _transition("deprecate", "Retire a published model without deleting it.")
-)
+
+
+@semantic_app.command("deprecate")
+def deprecate_model(ctx: typer.Context, model: str, allow_breaking: bool = _ALLOW_BREAKING) -> None:
+    """Retire a published model without deleting it.
+
+    Dashboards read published models only, so this is refused while a
+    published dashboard reads the model, naming the dashboards, unless
+    `--allow-breaking`.
+    """
+    cli = context.of(ctx)
+    settings = cli.settings()
+    base = f"workspaces/{settings.require('workspace')}/semantic/models/{model}"
+    with cli.client(settings) as client, _breaking(cli):
+        cli.emit(
+            client.post(f"{base}/deprecate", params={"allow_breaking": allow_breaking or None})
+        )
 
 
 relationship_app = typer.Typer(name="relationship", help="Joins between a model's datasets.")
