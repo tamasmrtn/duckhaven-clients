@@ -371,6 +371,10 @@ dh dashboard get
     . <name>
     . --draft
 
+dh dashboard impact
+    The dashboards that read a model, metric or dimension: what changing it touches.
+    . <ref>
+
 dh dashboard list
     The workspace's dashboards, by name. Writers also see those never published.
     . --status
@@ -380,6 +384,13 @@ dh dashboard list
     . --search/-q
     . --limit
     . --all
+
+dh dashboard preview
+    Show a dashboard file in DuckHaven as you edit it, without saving it.
+    . <file>
+    . --once
+    . --open
+    . --no-cache
 
 dh dashboard publish
     Publish a dashboard's draft as it stands, so readers see it. Needs owner.
@@ -397,6 +408,12 @@ dh dashboard rename
 dh dashboard schema
     Print the JSON Schema of a dashboard file, for an editor's YAML language server.
     . --spec-version
+
+dh dashboard test
+    Run dashboard files as you, without saving them, and report every widget.
+    . <paths>
+    . --no-cache
+    . --slow
 
 dh dashboard validate
     Check dashboard files the way publishing does, without storing anything.
@@ -610,12 +627,15 @@ dh semantic
 dh semantic deprecate
     Retire a published model without deleting it.
     . <model>
+    . --allow-breaking
 
 dh semantic import
     Publish semantic definitions from an external producer.
     . <provider>
     . <artifact>
     . --reconcile
+    . --dry-run
+    . --allow-breaking
 
 dh semantic model
     Semantic models.
@@ -634,6 +654,7 @@ dh semantic publish
 dh semantic purge
     Remove everything one provider published. Requires workspace owner.
     . --provider
+    . --allow-breaking
     . --yes/-y
 
 dh semantic relationship

@@ -81,6 +81,14 @@ The other commands:
 
 - `validate` checks files against the workspace without storing anything: a metric that
   does not exist, or a model that is not published.
+- `test PATH...` runs each file once without saving it, with your grants, and reports every
+  widget: `ok`, `empty`, `error`, or `no_access` when you may not read what it reads, with
+  how long it took to arrive. It exits `6` when a widget fails or cannot be read, so a pull
+  request catches a query that checks out but does not run. A widget slower than `--slow`
+  seconds (5 by default) is marked slow, which does not fail the run. `--no-cache` runs every
+  query rather than answering from the result cache.
+- `impact REF` lists the dashboards that read a model, or a metric or dimension of one
+  (`orders.revenue`): what renaming or removing it would touch.
 - `rename OLD FILE` renames a dashboard whose file you renamed. Run it once before merging:
   applying a renamed file as usual creates a second dashboard. The old name keeps working in
   links.
@@ -93,6 +101,52 @@ The other commands:
 
 `dh` does not read or rewrite the files; there is no formatter yet. These commands need a
 DuckHaven that offers dashboards; an older one answers with its own not-found error.
+
+Changes to the semantic layer are checked against dashboards too. An import,
+`dh semantic purge` or `dh semantic deprecate` that removes something a published dashboard
+reads is refused with exit `5`, listing every dashboard and what it reads, unless you pass
+`--allow-breaking`. `dh semantic import --dry-run` reports what an import would create,
+update and remove, and the dashboards it would break, and changes nothing.
+
+## Writing a dashboard
+
+`dh dashboard preview FILE` shows a file in DuckHaven while you edit it, without saving it.
+It prints the address of a page that only you can see; open it beside your editor, or pass
+`--open`. Each time you save the file, `dh` sends it, and the page runs it again, with your
+grants. A file that does not load is reported at its line, and the page keeps showing the
+last file that did. A metric that does not exist shows on the page as that widget's error.
+Stop with Ctrl+C.
+
+A preview ends two hours after its file last changed or it last ran. A save after that
+starts a new preview, at a new address, which `dh` prints. The page is new in DuckHaven:
+against a server without it, use `--once`. If your browser is signed out, sign in, then open
+the address again, as signing in does not bring you back to it.
+
+`--once` runs the file in the terminal instead, once, and prints each widget with its state,
+rows and SQL. It exits as `test` does.
+
+### For coding agents
+
+An AI coding agent that writes dashboard files can check its own work the same way. Put
+something like this in the repository's `AGENTS.md`, and give the agent a token with the
+`writer` role, which `validate` and `preview` need:
+
+```markdown
+## Dashboards
+
+Dashboards live in `dashboards/`, one `<name>.dashboard.yml` file each, named after the
+`name` inside it. To write or change one:
+
+1. Read the file format: `dh dashboard schema`.
+2. Read what a widget can use: `dh semantic model get <model>` lists its metrics and
+   dimensions.
+3. Edit the file.
+4. `dh --format json dashboard validate <file>`, and fix every error at its line.
+5. `dh --format json dashboard preview --once <file>`, and fix every widget whose state is
+   `error`. Check that the rows answer what the widget's title says.
+6. Never run `dh dashboard apply` without `--dry-run`, and never publish. CI applies the
+   files once a person has reviewed them.
+```
 
 ## Exact numbers
 

@@ -135,8 +135,18 @@ FIELDS = {
     "SelfPatOut": {"id", "created_at", "expires_at", "current"},
     "RelationshipIn": {"name", "left_dataset", "right_dataset", "join_columns"},
     "JoinColumn": {"left", "right"},
-    # `dh dashboard`: prune reads names and sources, publish the version it publishes.
-    "DashboardSummary": {"name", "source", "source_id", "managed", "version"},
+    # `dh dashboard`: prune reads names and sources, publish the version it publishes,
+    # and impact what it lists.
+    "DashboardSummary": {
+        "name",
+        "title",
+        "status",
+        "has_draft",
+        "source",
+        "source_id",
+        "managed",
+        "version",
+    },
     "DashboardOut": {"name", "managed", "source_id", "version"},
     "DashboardIn": {"source_text"},
     "DashboardPublish": {"base_version", "message"},
@@ -155,6 +165,21 @@ FIELDS = {
     "DashboardChangeOut": {"path", "change"},
     "DashboardValidationOut": {"valid", "errors", "warnings"},
     "DiagnosticOut": {"path", "line", "col", "message", "hint"},
+    # `test` and `preview` hold a file as a preview and run it.
+    "DashboardPreviewOut": {"id", "expires_at", "warnings"},
+    "DashboardPreviewRunIn": {"use_cache"},
+    # `semantic import --dry-run` reports what it would remove and break.
+    "SemanticImportOut": {
+        "dry_run",
+        "created",
+        "updated",
+        "removed",
+        "removed_models",
+        "removed_metrics",
+        "removed_dimensions",
+        "affected_dashboards",
+    },
+    "AffectedDashboardOut": {"name", "title", "reads"},
 }
 
 
@@ -254,6 +279,13 @@ PARAMS = {
         "force",
         "dry_run",
     },
+    ("/workspaces/{workspace}/semantic/imports/{provider}", "post"): {
+        "reconcile",
+        "dry_run",
+        "allow_breaking",
+    },
+    ("/workspaces/{workspace}/semantic/imports", "delete"): {"provider", "allow_breaking"},
+    ("/workspaces/{workspace}/semantic/models/{model}/deprecate", "post"): {"allow_breaking"},
 }
 
 
@@ -275,3 +307,17 @@ def test_a_dashboard_file_is_applied_as_yaml_and_exported_as_yaml(contract):
     source = contract["paths"]["/workspaces/{workspace}/dashboards/{dashboard}/source"]
     assert "application/yaml" in source["put"]["requestBody"]["content"]
     assert "application/yaml" in source["get"]["responses"]["200"]["content"]
+
+
+def test_a_preview_takes_the_file_as_text_and_runs_as_a_stream(contract):
+    """`test` and `preview` read a run's events from a server-sent event stream.
+
+    The events themselves are not in the schema, which describes the stream as
+    a string; the unit tests hold their shape.
+    """
+    previews = "/workspaces/{workspace}/dashboard-previews"
+    for path, method in ((previews, "post"), (previews + "/{dashboard_preview_id}", "put")):
+        body = contract["paths"][path][method]["requestBody"]["content"]["application/json"]
+        assert body["schema"]["$ref"].endswith("/DashboardIn"), (method, path)
+    run = contract["paths"][previews + "/{dashboard_preview_id}/run"]["post"]
+    assert "text/event-stream" in run["responses"]["200"]["content"]

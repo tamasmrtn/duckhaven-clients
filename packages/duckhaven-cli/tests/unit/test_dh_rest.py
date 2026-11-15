@@ -11,7 +11,7 @@ import httpx
 import pytest
 import respx
 
-from dh.errors import AuthError, NotFoundError, TimeoutError, UnavailableError
+from dh.errors import AuthError, ConflictError, NotFoundError, TimeoutError, UnavailableError
 from dh.rest import RestClient
 
 HOST = "https://duckhaven.test"
@@ -95,6 +95,49 @@ def test_get_bytes_raises_the_error_a_request_would(client):
     )
     with pytest.raises(NotFoundError):
         client.get_bytes("workspaces/w/dashboards/nope/source")
+
+
+RUN = f"{API}/workspaces/w/dashboard-previews/p1/run"
+
+
+@respx.mock
+def test_stream_yields_each_event_and_skips_the_keep_alive(client):
+    """A `data:` frame may span lines; `: ping` is a comment, not an event."""
+    body = (
+        b'data: {"type": "start"}\n\n'
+        b": ping\n\n"
+        b'data: {"type": "widget",\ndata:  "id": "revenue"}\n\n'
+        b'data: {"type": "done"}\n\n'
+    )
+    route = respx.post(RUN).mock(
+        return_value=httpx.Response(
+            200, content=body, headers={"content-type": "text/event-stream"}
+        )
+    )
+    events = list(client.stream("POST", "workspaces/w/dashboard-previews/p1/run", json={"a": 1}))
+    assert events == [{"type": "start"}, {"type": "widget", "id": "revenue"}, {"type": "done"}]
+    request = route.calls.last.request
+    assert request.headers["Accept"] == "text/event-stream"
+    assert request.content == b'{"a":1}'
+
+
+@respx.mock
+def test_stream_raises_a_refusal_before_any_event(client):
+    respx.post(RUN).mock(
+        return_value=httpx.Response(
+            422, json={"error": "invalid_parameters", "message": "No such period"}
+        )
+    )
+    with pytest.raises(ConflictError) as exc:
+        list(client.stream("POST", "workspaces/w/dashboard-previews/p1/run"))
+    assert exc.value.code == "invalid_parameters"
+
+
+@respx.mock
+def test_stream_reports_a_timeout_as_one(client):
+    respx.post(RUN).mock(side_effect=httpx.ReadTimeout("too slow"))
+    with pytest.raises(TimeoutError):
+        list(client.stream("POST", "workspaces/w/dashboard-previews/p1/run"))
 
 
 @respx.mock
