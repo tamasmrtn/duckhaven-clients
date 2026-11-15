@@ -13,6 +13,8 @@ collection instead of silently returning the first hundred rows.
 from __future__ import annotations
 
 from collections.abc import Iterator
+from contextlib import contextmanager
+from json import loads
 from typing import Any
 
 import httpx
@@ -121,7 +123,7 @@ class RestClient:
         headers: dict[str, str] | None = None,
     ) -> httpx.Response:
         url = f"{self.base_url}/{path.lstrip('/')}"
-        try:
+        with self._reaching(method, path):
             response = self._client.request(
                 method,
                 url,
@@ -130,15 +132,48 @@ class RestClient:
                 content=content,
                 headers=headers,
             )
+        if response.status_code >= 400:
+            raise from_status(response.status_code, _body(response))
+        return response
+
+    def stream(self, method: str, path: str, *, json: Any = None) -> Iterator[Any]:
+        """The events of a server-sent event stream, each ``data:`` frame decoded as JSON.
+
+        A refusal comes before the stream starts, as the same error :meth:`request`
+        raises. Comments, such as the keep-alive ``: ping``, are skipped. Closing
+        the iterator early closes the stream, which the server takes as a cancel.
+        """
+        url = f"{self.base_url}/{path.lstrip('/')}"
+        request = self._client.build_request(
+            method, url, json=json, headers={"Accept": "text/event-stream"}
+        )
+        with self._reaching(method, path):
+            response = self._client.send(request, stream=True)
+            try:
+                if response.status_code >= 400:
+                    response.read()
+                    raise from_status(response.status_code, _body(response))
+                data: list[str] = []
+                for line in response.iter_lines():
+                    if line.startswith("data:"):
+                        data.append(line.removeprefix("data:").removeprefix(" "))
+                    elif not line and data:
+                        yield loads("\n".join(data))
+                        data = []
+            finally:
+                response.close()
+
+    @contextmanager
+    def _reaching(self, method: str, path: str) -> Iterator[None]:
+        """A failure to reach the server, as the error with the right exit status."""
+        try:
+            yield
         except httpx.TimeoutException as exc:
             raise DhTimeoutError("client_timeout", f"{method} {path} timed out: {exc}") from exc
         except httpx.TransportError as exc:
             raise UnavailableError(
                 "transport_error", f"Could not reach {self.base_url}: {exc}"
             ) from exc
-        if response.status_code >= 400:
-            raise from_status(response.status_code, _body(response))
-        return response
 
     def get(self, path: str, **kwargs: Any) -> Any:
         return self.request("GET", path, **kwargs)
