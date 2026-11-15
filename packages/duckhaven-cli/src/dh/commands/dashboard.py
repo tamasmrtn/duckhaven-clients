@@ -29,7 +29,8 @@ from typing import Any
 
 import typer
 
-from dh import context
+from dh import context, exposures
+from dh.commands.dbt import _load_json
 from dh.errors import ConflictError, DhError, NotFoundError, QueryFailed, UnavailableError
 
 app = typer.Typer(name="dashboard", help="Dashboards as files: check, apply and export them.")
@@ -256,6 +257,88 @@ def impact(
     else:
         cli.note(f"No dashboard reads {ref}.")
     cli.emit(rows)
+
+
+@app.command("exposures")
+def write_exposures(
+    ctx: typer.Context,
+    manifest: Path = typer.Argument(
+        ..., exists=True, dir_okay=False, help="The dbt project's target/manifest.json."
+    ),
+    owner_name: str = typer.Option(
+        "DuckHaven", "--owner-name", help="Who owns the exposures, which dbt requires."
+    ),
+    owner_email: str = typer.Option(None, "--owner-email", help="Their email, as well."),
+) -> None:
+    """Print dbt exposures for the published dashboards that read a dbt project's tables.
+
+    Each published dashboard that reads a model, seed, snapshot or source in
+    the manifest becomes an exposure of type `dashboard`, with its title,
+    description and link, depending on what it reads. A query widget reads
+    its metrics' and dimensions' tables; an SQL widget the tables in its SQL.
+    Keep the file in the dbt project, so its lineage shows which dashboards
+    read each model: `dh --output models/duckhaven_exposures.yml dashboard
+    exposures target/manifest.json`. Write it again rather than editing it.
+
+    A table matches a dbt relation when its catalog, schema and name are the
+    relation's database, schema and alias, as when DuckHaven imports from dbt.
+    """
+    cli = context.of(ctx)
+    known = exposures.relations(_load_json(manifest))
+    settings, url = _dashboards(cli)
+    host = settings.require("host").rstrip("/")
+    page = f"{host}/{settings.require('workspace')}/dashboards"
+    models: dict[str, dict | None] = {}
+    found: list[dict] = []
+    unrelated: list[str] = []
+    with cli.client(settings) as client:
+
+        def model(slug: str) -> dict | None:
+            if slug not in models:
+                try:
+                    models[slug] = client.get(f"{_semantic(settings)}/{slug}")
+                except NotFoundError:
+                    cli.note(f"Semantic model {slug!r} is not there to read; skipping it.")
+                    models[slug] = None
+            return models[slug]
+
+        for summary in client.walk(url, params={"status": "published"}):
+            dashboard = client.get(f"{url}/{summary['name']}")
+            entries, missing = exposures.depends_on(exposures.tables(dashboard, model), known)
+            if not entries:
+                unrelated.append(dashboard["name"])
+                continue
+            if missing:
+                cli.note(
+                    f"{dashboard['name']} also reads {', '.join(missing)}: not in the manifest."
+                )
+            found.append(
+                {
+                    "name": exposures.name_of(dashboard["name"]),
+                    "label": dashboard["title"],
+                    "type": "dashboard",
+                    "url": f"{page}/{dashboard['name']}",
+                    "description": dashboard.get("description"),
+                    "owner": {"name": owner_name, "email": owner_email},
+                    "depends_on": entries,
+                }
+            )
+    names = [e["name"] for e in found]
+    taken = sorted({n for n in names if names.count(n) > 1})
+    if taken:
+        raise ConflictError(
+            "duplicate_exposure",
+            f"Two dashboards would be the exposure {', '.join(taken)}. Rename one of them.",
+        )
+    count = len(found)
+    cli.note(f"{count} dashboard{'' if count == 1 else 's'} as exposures.")
+    if unrelated:
+        cli.note(f"Left out, reading nothing in the manifest: {', '.join(unrelated)}.")
+    _write(cli, exposures.render(found).encode())
+
+
+def _semantic(settings) -> str:
+    return f"workspaces/{settings.require('workspace')}/semantic/models"
 
 
 @app.command("export")
