@@ -67,6 +67,11 @@ ROUTES = [
         "DELETE",
         f"{WS}/semantic/models/m/relationships/r",
     ),
+    # dashboards
+    (["dashboard", "list"], "GET", f"{WS}/dashboards"),
+    (["dashboard", "get", "sales"], "GET", f"{WS}/dashboards/sales"),
+    (["dashboard", "detach", "sales"], "DELETE", f"{WS}/dashboards/sales/source"),
+    (["dashboard", "delete", "sales", "--yes"], "DELETE", f"{WS}/dashboards/sales"),
     # admin: service accounts and tokens
     (["admin", "service-account", "list"], "GET", f"{API}/admin/service-accounts"),
     (["admin", "service-account", "delete", ID], "DELETE", f"{API}/admin/service-accounts/{ID}"),

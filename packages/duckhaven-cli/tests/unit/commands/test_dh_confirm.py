@@ -36,6 +36,7 @@ GUARDED = [
     pytest.param(["table", "drop", "sales.orders"], id="table-drop"),
     pytest.param(["lineage", "purge", "--provider", "dbt"], id="lineage-purge"),
     pytest.param(["semantic", "purge", "--provider", "dbt"], id="semantic-purge"),
+    pytest.param(["dashboard", "delete", "sales"], id="dashboard-delete"),
 ]
 
 

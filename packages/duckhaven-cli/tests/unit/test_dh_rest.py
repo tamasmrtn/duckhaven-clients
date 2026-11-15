@@ -79,6 +79,25 @@ def test_a_204_decodes_to_none(client):
 
 
 @respx.mock
+def test_get_bytes_hands_back_a_file_undecoded(client):
+    """A dashboard file may be YAML written as JSON; it must not come back as a dict."""
+    raw = b'{"version": 1, "name": "sales"}\n'
+    respx.get(f"{API}/workspaces/w/dashboards/sales/source").mock(
+        return_value=httpx.Response(200, content=raw)
+    )
+    assert client.get_bytes("workspaces/w/dashboards/sales/source") == raw
+
+
+@respx.mock
+def test_get_bytes_raises_the_error_a_request_would(client):
+    respx.get(f"{API}/workspaces/w/dashboards/nope/source").mock(
+        return_value=httpx.Response(404, json={"error": "not_found", "message": "No dashboard"})
+    )
+    with pytest.raises(NotFoundError):
+        client.get_bytes("workspaces/w/dashboards/nope/source")
+
+
+@respx.mock
 def test_an_error_response_becomes_the_matching_dh_error(client):
     respx.get(f"{API}/workspaces/nope").mock(
         return_value=httpx.Response(404, json={"error": "not_found", "message": "No workspace"})

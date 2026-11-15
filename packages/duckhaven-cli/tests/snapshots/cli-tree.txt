@@ -331,6 +331,77 @@ dh catalog rotate-role
     . <catalog_id>
     . --yes/-y
 
+dh dashboard
+    Dashboards as files: check, apply and export them.
+
+dh dashboard adopt
+    Take over a dashboard made in DuckHaven, to manage it in git from now on.
+    . <name>
+    . <directory>
+    . --source-id
+
+dh dashboard apply
+    Apply dashboard files: create each dashboard, or replace its file.
+    . <paths>
+    . --publish
+    . --dry-run
+    . --source-id
+    . --source-ref
+    . --expected-hash
+    . --force
+    . --prune
+    . --yes/-y
+
+dh dashboard delete
+    Delete a dashboard, its draft and its revisions. Needs owner.
+    . <name>
+    . --yes/-y
+
+dh dashboard detach
+    Stop managing a dashboard in git, so it is edited in DuckHaven again. Needs owner.
+    . <name>
+
+dh dashboard export
+    Print a dashboard's file as YAML, as written, comments included.
+    . <name>
+    . --draft
+
+dh dashboard get
+    One dashboard, its file as JSON, and what it reads.
+    . <name>
+    . --draft
+
+dh dashboard list
+    The workspace's dashboards, by name. Writers also see those never published.
+    . --status
+    . --source
+    . --source-id
+    . --uses
+    . --search/-q
+    . --limit
+    . --all
+
+dh dashboard publish
+    Publish a dashboard's draft as it stands, so readers see it. Needs owner.
+    . <name>
+    . --message/-m
+
+dh dashboard rename
+    Rename a dashboard managed in git, keeping its revisions and links.
+    . <old>
+    . <file>
+    . --source-id
+    . --source-ref
+    . --dry-run
+
+dh dashboard schema
+    Print the JSON Schema of a dashboard file, for an editor's YAML language server.
+    . --spec-version
+
+dh dashboard validate
+    Check dashboard files the way publishing does, without storing anything.
+    . <paths>
+
 dh grant
     Catalog access control.
 
