@@ -103,6 +103,13 @@ WANT: dict[str, set[str]] = {
     "/workspaces/{workspace}/semantic/models/{model}/deprecate": {"post"},
     "/workspaces/{workspace}/semantic/models/{model}/relationships": {"post"},
     "/workspaces/{workspace}/semantic/models/{model}/relationships/{relationship}": {"delete"},
+    # Dashboards
+    "/dashboard-schema": {"get"},
+    "/workspaces/{workspace}/dashboards": {"get"},
+    "/workspaces/{workspace}/dashboards/{dashboard}": {"get", "delete"},
+    "/workspaces/{workspace}/dashboards/{dashboard}/publish": {"post"},
+    "/workspaces/{workspace}/dashboards/{dashboard}/source": {"get", "put", "delete"},
+    "/workspaces/{workspace}/dashboard-validations": {"post"},
     # Admin
     "/admin/service-accounts": {"get", "post"},
     "/admin/service-accounts/{service_account_id}": {"patch", "delete"},

@@ -18,7 +18,17 @@ from pathlib import Path
 
 import pytest
 
-from dh.commands import admin, api, catalog, dbt, grant, query, saved, session  # noqa: F401
+from dh.commands import (  # noqa: F401
+    admin,
+    api,
+    catalog,
+    dashboard,
+    dbt,
+    grant,
+    query,
+    saved,
+    session,
+)
 
 #: tests/unit/ -> tests/ -> the package root, which is where contract/ and scripts/ live.
 _PACKAGE = Path(__file__).resolve().parents[2]
@@ -125,6 +135,26 @@ FIELDS = {
     "SelfPatOut": {"id", "created_at", "expires_at", "current"},
     "RelationshipIn": {"name", "left_dataset", "right_dataset", "join_columns"},
     "JoinColumn": {"left", "right"},
+    # `dh dashboard`: prune reads names and sources, publish the version it publishes.
+    "DashboardSummary": {"name", "source", "source_id", "managed", "version"},
+    "DashboardOut": {"name", "managed", "source_id", "version"},
+    "DashboardIn": {"source_text"},
+    "DashboardPublish": {"base_version", "message"},
+    # Apply drops `dashboard` from each answer and reports the rest.
+    "DashboardApplyOut": {
+        "dry_run",
+        "action",
+        "name",
+        "renamed_from",
+        "adopted",
+        "published",
+        "changes",
+        "warnings",
+        "dashboard",
+    },
+    "DashboardChangeOut": {"path", "change"},
+    "DashboardValidationOut": {"valid", "errors", "warnings"},
+    "DiagnosticOut": {"path", "line", "col", "message", "hint"},
 }
 
 
@@ -203,6 +233,27 @@ PARAMS = {
         "limit",
         "cursor",
     },
+    ("/dashboard-schema", "get"): {"version"},
+    ("/workspaces/{workspace}/dashboards", "get"): {
+        "status",
+        "source",
+        "source_id",
+        "uses",
+        "q",
+        "limit",
+        "cursor",
+    },
+    ("/workspaces/{workspace}/dashboards/{dashboard}", "get"): {"draft"},
+    ("/workspaces/{workspace}/dashboards/{dashboard}/source", "get"): {"draft"},
+    ("/workspaces/{workspace}/dashboards/{dashboard}/source", "put"): {
+        "source_id",
+        "source_ref",
+        "expected_hash",
+        "publish",
+        "adopt",
+        "force",
+        "dry_run",
+    },
 }
 
 
@@ -213,3 +264,14 @@ def test_the_query_parameters_the_cli_sends_still_exist(contract, endpoint, para
     assert not params - offered, (
         f"{method.upper()} {path} no longer takes: {sorted(params - offered)}"
     )
+
+
+def test_a_dashboard_file_is_applied_as_yaml_and_exported_as_yaml(contract):
+    """`dh dashboard apply` sends the file's bytes, and `export` keeps the bytes it gets.
+
+    Either side moving to JSON would turn a file kept byte for byte into one
+    re-encoded, losing its comments and the lines its problems are reported at.
+    """
+    source = contract["paths"]["/workspaces/{workspace}/dashboards/{dashboard}/source"]
+    assert "application/yaml" in source["put"]["requestBody"]["content"]
+    assert "application/yaml" in source["get"]["responses"]["200"]["content"]

@@ -73,6 +73,34 @@
         "title": "AdminUserWorkspace",
         "type": "object"
       },
+      "AffectedDashboardOut": {
+        "description": "A published dashboard that reads something a change removes.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reads": {
+            "description": "What it reads of the change: a model's slug, or `model.metric` and `model.dimension`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Reads",
+            "type": "array"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "title",
+          "reads"
+        ],
+        "title": "AffectedDashboardOut",
+        "type": "object"
+      },
       "AgentAccessOut": {
         "description": "Everything the agent's Access tab renders, in one response.\n\n``principals`` ships the candidate list alongside the grants so the grant picker\nneeds no second call (the ``catalog_grants`` payload does the same).",
         "properties": {
@@ -1618,6 +1646,634 @@
         "title": "CreateUserRequest",
         "type": "object"
       },
+      "DashboardApplyOut": {
+        "description": "What applying a file from git does, or would do on a dry run.",
+        "properties": {
+          "action": {
+            "enum": [
+              "create",
+              "update",
+              "unchanged"
+            ],
+            "title": "Action",
+            "type": "string"
+          },
+          "adopted": {
+            "description": "A dashboard made in DuckHaven becomes managed in git.",
+            "title": "Adopted",
+            "type": "boolean"
+          },
+          "changes": {
+            "description": "Against the published file when publishing, otherwise the newest file.",
+            "items": {
+              "$ref": "#/components/schemas/DashboardChangeOut"
+            },
+            "title": "Changes",
+            "type": "array"
+          },
+          "current_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "`spec_hash` of the newest file before the apply: the draft, or the published file when there is no draft. Null when the dashboard is created.",
+            "title": "Current Hash"
+          },
+          "dashboard": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DashboardOut"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The dashboard once applied; null on a dry run."
+          },
+          "dry_run": {
+            "title": "Dry Run",
+            "type": "boolean"
+          },
+          "name": {
+            "description": "The dashboard's name once the file is applied.",
+            "title": "Name",
+            "type": "string"
+          },
+          "published": {
+            "description": "The file is published, so readers see it.",
+            "title": "Published",
+            "type": "boolean"
+          },
+          "renamed_from": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its old name, when this apply renames it.",
+            "title": "Renamed From"
+          },
+          "spec_hash": {
+            "description": "`spec_hash` of the applied file.",
+            "title": "Spec Hash",
+            "type": "string"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticOut"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "dry_run",
+          "action",
+          "name",
+          "renamed_from",
+          "adopted",
+          "published",
+          "current_hash",
+          "spec_hash",
+          "changes",
+          "warnings",
+          "dashboard"
+        ],
+        "title": "DashboardApplyOut",
+        "type": "object"
+      },
+      "DashboardChangeOut": {
+        "properties": {
+          "change": {
+            "enum": [
+              "added",
+              "removed",
+              "changed"
+            ],
+            "title": "Change",
+            "type": "string"
+          },
+          "path": {
+            "description": "What changes: a top-level key such as `title`, `parameters.<name>`, `widgets.<id>`, `layout` when widgets move within or between rows, or `source_text` when only the YAML's text changes, such as a comment.",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "change"
+        ],
+        "title": "DashboardChangeOut",
+        "type": "object"
+      },
+      "DashboardIn": {
+        "description": "A dashboard file, as JSON in `spec` or as YAML in `source_text`. Exactly one.\n\nYAML is kept as written, comments included, and is what `GET .../source`\nreturns. A `spec` is stored as JSON and exported as canonical YAML.",
+        "properties": {
+          "source_text": {
+            "anyOf": [
+              {
+                "maxLength": 262144,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The file as YAML text.",
+            "title": "Source Text"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The file, already parsed.",
+            "title": "Spec"
+          }
+        },
+        "title": "DashboardIn",
+        "type": "object"
+      },
+      "DashboardOut": {
+        "properties": {
+          "client": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The client of the last change, from its User-Agent.",
+            "title": "Client"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "created_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created By"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "draft": {
+            "description": "Whether `spec` is the draft rather than the published file.",
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "has_draft": {
+            "description": "Whether there are unpublished changes.",
+            "title": "Has Draft",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "managed": {
+            "description": "Managed in git: changed only by applying its file.",
+            "title": "Managed",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "published_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published By"
+          },
+          "refs": {
+            "description": "The models, metrics, dimensions and tables it reads.",
+            "items": {
+              "$ref": "#/components/schemas/RefOut"
+            },
+            "title": "Refs",
+            "type": "array"
+          },
+          "source": {
+            "enum": [
+              "ui",
+              "git"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "source_hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "sha256 of the file's bytes as last applied from git, as `sha256sum` prints it.",
+            "title": "Source Hash"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The commit the applied file came from.",
+            "title": "Source Ref"
+          },
+          "source_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The YAML as written, when it was sent as YAML.",
+            "title": "Source Text"
+          },
+          "spec": {
+            "additionalProperties": true,
+            "title": "Spec",
+            "type": "object"
+          },
+          "spec_hash": {
+            "description": "sha256 of `spec` as canonical JSON.",
+            "title": "Spec Hash",
+            "type": "string"
+          },
+          "spec_version": {
+            "title": "Spec Version",
+            "type": "integer"
+          },
+          "status": {
+            "description": "`draft` until the first publish.",
+            "enum": [
+              "draft",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "updated_via": {
+            "enum": [
+              "ui",
+              "rest",
+              "cli",
+              "assistant",
+              "mcp"
+            ],
+            "title": "Updated Via",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticOut"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "title",
+          "description",
+          "labels",
+          "status",
+          "has_draft",
+          "source",
+          "source_id",
+          "managed",
+          "version",
+          "created_at",
+          "updated_at",
+          "updated_by",
+          "updated_via",
+          "published_at",
+          "draft",
+          "spec",
+          "source_text",
+          "spec_hash",
+          "spec_version",
+          "source_ref",
+          "source_hash",
+          "client",
+          "created_by",
+          "published_by",
+          "refs",
+          "warnings"
+        ],
+        "title": "DashboardOut",
+        "type": "object"
+      },
+      "DashboardPublish": {
+        "properties": {
+          "base_version": {
+            "description": "The `version` of the draft being published.",
+            "minimum": 1.0,
+            "title": "Base Version",
+            "type": "integer"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "maxLength": 500,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What changed.",
+            "title": "Message"
+          }
+        },
+        "required": [
+          "base_version"
+        ],
+        "title": "DashboardPublish",
+        "type": "object"
+      },
+      "DashboardSummary": {
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "has_draft": {
+            "description": "Whether there are unpublished changes.",
+            "title": "Has Draft",
+            "type": "boolean"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "labels": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Labels",
+            "type": "array"
+          },
+          "managed": {
+            "description": "Managed in git: changed only by applying its file.",
+            "title": "Managed",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "source": {
+            "enum": [
+              "ui",
+              "git"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "source_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Id"
+          },
+          "status": {
+            "description": "`draft` until the first publish.",
+            "enum": [
+              "draft",
+              "published"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "updated_by": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated By"
+          },
+          "updated_via": {
+            "enum": [
+              "ui",
+              "rest",
+              "cli",
+              "assistant",
+              "mcp"
+            ],
+            "title": "Updated Via",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "title",
+          "description",
+          "labels",
+          "status",
+          "has_draft",
+          "source",
+          "source_id",
+          "managed",
+          "version",
+          "created_at",
+          "updated_at",
+          "updated_by",
+          "updated_via",
+          "published_at"
+        ],
+        "title": "DashboardSummary",
+        "type": "object"
+      },
+      "DashboardValidationOut": {
+        "properties": {
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticOut"
+            },
+            "title": "Errors",
+            "type": "array"
+          },
+          "refs": {
+            "items": {
+              "$ref": "#/components/schemas/RefOut"
+            },
+            "title": "Refs",
+            "type": "array"
+          },
+          "valid": {
+            "description": "Whether it can be published as it stands.",
+            "title": "Valid",
+            "type": "boolean"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/DiagnosticOut"
+            },
+            "title": "Warnings",
+            "type": "array"
+          }
+        },
+        "required": [
+          "valid",
+          "errors",
+          "warnings",
+          "refs"
+        ],
+        "title": "DashboardValidationOut",
+        "type": "object"
+      },
       "DatasetOut": {
         "properties": {
           "catalog": {
@@ -1770,6 +2426,61 @@
           "workspaces"
         ],
         "title": "DeploymentHealthOut",
+        "type": "object"
+      },
+      "DiagnosticOut": {
+        "properties": {
+          "col": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Col"
+          },
+          "hint": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Hint"
+          },
+          "line": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "1-based; null when the file was sent as JSON.",
+            "title": "Line"
+          },
+          "message": {
+            "title": "Message",
+            "type": "string"
+          },
+          "path": {
+            "description": "Where in the file, such as `rows[0].widgets[1].query`.",
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "line",
+          "col",
+          "message"
+        ],
+        "title": "DiagnosticOut",
         "type": "object"
       },
       "DimensionOut": {
@@ -2833,6 +3544,17 @@
             ],
             "title": "Caveat"
           },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Currency"
+          },
           "dataset": {
             "anyOf": [
               {
@@ -2899,6 +3621,24 @@
             ],
             "title": "Filter"
           },
+          "format": {
+            "anyOf": [
+              {
+                "enum": [
+                  "number",
+                  "percent",
+                  "currency",
+                  "duration",
+                  "bytes"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Format"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -2907,6 +3647,22 @@
           "name": {
             "title": "Name",
             "type": "string"
+          },
+          "polarity": {
+            "anyOf": [
+              {
+                "enum": [
+                  "up_good",
+                  "down_good",
+                  "neutral"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Polarity"
           },
           "status": {
             "enum": [
@@ -2934,6 +3690,17 @@
               }
             ],
             "title": "Time Dimension"
+          },
+          "unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unit"
           },
           "validation_detail": {
             "anyOf": [
@@ -3707,6 +4474,40 @@
         "title": "Page[CatalogExportOut]",
         "type": "object"
       },
+      "Page_DashboardSummary_": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque; feed back as `cursor` for the next page. Null on the last page.",
+            "title": "Cursor"
+          },
+          "has_more": {
+            "default": false,
+            "description": "Whether another page follows.",
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/DashboardSummary"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[DashboardSummary]",
+        "type": "object"
+      },
       "Page_QueryOut_": {
         "properties": {
           "cursor": {
@@ -4412,6 +5213,29 @@
             ],
             "title": "Inline Arrow"
           },
+          "on_behalf_of_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Behalf Of Id"
+          },
+          "on_behalf_of_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Behalf Of Name"
+          },
           "origin": {
             "anyOf": [
               {
@@ -4751,6 +5575,43 @@
           "created_at"
         ],
         "title": "RecommendationOut",
+        "type": "object"
+      },
+      "RefOut": {
+        "properties": {
+          "kind": {
+            "enum": [
+              "model",
+              "metric",
+              "dimension",
+              "table"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model a metric or dimension belongs to.",
+            "title": "Model"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "model",
+          "name"
+        ],
+        "title": "RefOut",
         "type": "object"
       },
       "RelationshipIn": {
@@ -5560,10 +6421,24 @@
       },
       "SemanticImportOut": {
         "properties": {
+          "affected_dashboards": {
+            "description": "The published dashboards that read what the import removes. Without `allow_breaking` a real import with any is refused; a dry run lists them.",
+            "items": {
+              "$ref": "#/components/schemas/AffectedDashboardOut"
+            },
+            "title": "Affected Dashboards",
+            "type": "array"
+          },
           "created": {
             "default": 0,
             "title": "Created",
             "type": "integer"
+          },
+          "dry_run": {
+            "default": false,
+            "description": "Nothing was changed.",
+            "title": "Dry Run",
+            "type": "boolean"
           },
           "provider": {
             "title": "Provider",
@@ -5573,6 +6448,30 @@
             "default": 0,
             "title": "Removed",
             "type": "integer"
+          },
+          "removed_dimensions": {
+            "description": "Dimensions gone from models the import keeps, as `model.dimension`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed Dimensions",
+            "type": "array"
+          },
+          "removed_metrics": {
+            "description": "Published metrics gone from models the import keeps, as `model.metric`.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed Metrics",
+            "type": "array"
+          },
+          "removed_models": {
+            "description": "By slug.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Removed Models",
+            "type": "array"
           },
           "run_id": {
             "title": "Run Id",
@@ -7612,6 +8511,11 @@
               }
             ],
             "title": "Storage Backend Kind"
+          },
+          "timezone": {
+            "default": "UTC",
+            "title": "Timezone",
+            "type": "string"
           }
         },
         "required": [
@@ -7669,6 +8573,18 @@
               }
             ],
             "title": "Result Cache Enabled"
+          },
+          "timezone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An IANA time zone name.",
+            "title": "Timezone"
           }
         },
         "title": "WorkspaceUpdate",
@@ -11246,6 +12162,50 @@
         ]
       }
     },
+    "/dashboard-schema": {
+      "get": {
+        "description": "The JSON Schema of a dashboard file. Unauthenticated.\n\nPoint an editor's YAML language server at it for completion and inline\nerrors. It covers each file's shape; references between parts of the file,\nsuch as a `$name` naming a declared parameter, are checked when the\ndashboard is validated. A version this server does not read is a 422\n`unsupported_spec_version`.",
+        "operationId": "get_dashboard_schema",
+        "parameters": [
+          {
+            "description": "The format version to describe.",
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "description": "The format version to describe.",
+              "title": "Version",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Dashboard Schema",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
     "/healthz": {
       "get": {
         "description": "Liveness: is this process up and can it reach its database?\n\n503 when the database is unreachable. Does not check Polaris -- an upstream\noutage should not make an otherwise healthy replica get restarted.",
@@ -12995,7 +13955,7 @@
         ]
       },
       "patch": {
-        "description": "Rename a workspace, change its description, turn its result cache on or off, or\nset its default compute.\n\nA partial update: an omitted field is left alone, and an explicit ``null``\ndescription clears it. The slug is immutable -- it addresses the workspace.",
+        "description": "Rename a workspace, change its description, turn its result cache on or off,\nset its default compute, or set the time zone its relative time windows use.\n\nA partial update: an omitted field is left alone, and an explicit ``null``\ndescription clears it. The slug is immutable -- it addresses the workspace.",
         "operationId": "update_workspace",
         "parameters": [
           {
@@ -15295,6 +16255,993 @@
         ]
       }
     },
+    "/workspaces/{workspace}/dashboard-validations": {
+      "post": {
+        "description": "Check a dashboard file the way publishing does, without storing anything.\n\n`valid` says whether it could be published as it stands. `errors` and\n`warnings` each have a path into the file, and a line and column when it\nwas sent as YAML.",
+        "operationId": "validate_dashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardIn"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardValidationOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Validate Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/dashboards": {
+      "get": {
+        "description": "The workspace's dashboards, by name.\n\nReaders see published dashboards; writers also see those never published.",
+        "operationId": "list_dashboards",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "`draft` lists those never published.",
+            "in": "query",
+            "name": "status",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "draft",
+                    "published"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "`draft` lists those never published.",
+              "title": "Status"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "ui",
+                    "git"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source"
+            }
+          },
+          {
+            "in": "query",
+            "name": "source_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Source Id"
+            }
+          },
+          {
+            "description": "Part of a name or title.",
+            "in": "query",
+            "name": "q",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 200,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Part of a name or title.",
+              "title": "Q"
+            }
+          },
+          {
+            "description": "Dashboards that read a model (`orders`) or one of its metrics or dimensions (`orders.revenue`).",
+            "in": "query",
+            "name": "uses",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 511,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Dashboards that read a model (`orders`) or one of its metrics or dimensions (`orders.revenue`).",
+              "title": "Uses"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_DashboardSummary_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Dashboards",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/dashboards/{dashboard}": {
+      "delete": {
+        "description": "Delete a dashboard, its draft and its revisions.",
+        "operationId": "delete_dashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard",
+            "required": true,
+            "schema": {
+              "title": "Dashboard",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Delete Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      },
+      "get": {
+        "description": "One dashboard and its file: the published one, or with `draft=true` the draft.\n\nA dashboard never published shows its draft. `refs` lists what the file\nreads, and `managed` says whether it is managed in git.",
+        "operationId": "get_dashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard",
+            "required": true,
+            "schema": {
+              "title": "Dashboard",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Show the draft, when there is one. Needs the writer role.",
+            "in": "query",
+            "name": "draft",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Show the draft, when there is one. Needs the writer role.",
+              "title": "Draft",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/dashboards/{dashboard}/publish": {
+      "post": {
+        "description": "Publish the draft, so readers see it, and record it as a revision.\n\nThe draft is checked against the workspace as the publisher: every model\nis published and visible, every query compiles and every SQL widget is one\n`SELECT`. Any problem is a 422 `invalid_dashboard`. With no draft, nothing\nchanges.",
+        "operationId": "publish_dashboard",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard",
+            "required": true,
+            "schema": {
+              "title": "Dashboard",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardPublish"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Publish Dashboard",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
+    "/workspaces/{workspace}/dashboards/{dashboard}/source": {
+      "delete": {
+        "description": "Stop managing a dashboard in git, so it is edited in DuckHaven again.\n\nThe dashboard keeps its files, draft and revisions; it forgets only where\nits file came from. A dashboard not managed in git is left as it is.",
+        "operationId": "detach_dashboard_source",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard",
+            "required": true,
+            "schema": {
+              "title": "Dashboard",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Detach Dashboard Source",
+        "tags": [
+          "dashboards"
+        ]
+      },
+      "get": {
+        "description": "The dashboard's file as YAML: as written, or as canonical YAML if it was sent as JSON.\n\nLoading the result as a file gives back the same dashboard.",
+        "operationId": "get_dashboard_source",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard",
+            "required": true,
+            "schema": {
+              "title": "Dashboard",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Show the draft, when there is one. Needs the writer role.",
+            "in": "query",
+            "name": "draft",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Show the draft, when there is one. Needs the writer role.",
+              "title": "Draft",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/yaml": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "The file as YAML."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Get Dashboard Source",
+        "tags": [
+          "dashboards"
+        ]
+      },
+      "put": {
+        "description": "Apply a dashboard file from git: create the dashboard, or replace its file.\n\nThe body is the file itself, kept byte for byte, comments included. The\ndashboard is then managed in git: every other write to it is a 409\n`managed_dashboard` until it is detached. Without `publish` the file becomes\nthe draft. The answer says what changed, and a `dry_run` answers the same\nway, after the same checks, without changing anything.\n\nA dashboard not found is created under the file's `name`, which must match\nthe path. One made in DuckHaven is a 409 `dashboard_name_taken` unless\n`adopt` is set. A file the same as the dashboard's changes nothing, and the\nanswer's `action` is `unchanged`.",
+        "operationId": "apply_dashboard_source",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "dashboard",
+            "required": true,
+            "schema": {
+              "title": "Dashboard",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "workspace",
+            "required": true,
+            "schema": {
+              "title": "Workspace",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Where the file lives, such as the repository. Kept when left out.",
+            "in": "query",
+            "name": "source_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Where the file lives, such as the repository. Kept when left out.",
+              "title": "Source Id"
+            }
+          },
+          {
+            "description": "The commit the file comes from.",
+            "in": "query",
+            "name": "source_ref",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 255,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The commit the file comes from.",
+              "title": "Source Ref"
+            }
+          },
+          {
+            "description": "The `spec_hash` the dashboard's newest file must have, as a dry run's `current_hash` reports it. Otherwise 409 `source_changed`.",
+            "in": "query",
+            "name": "expected_hash",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 64,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "The `spec_hash` the dashboard's newest file must have, as a dry run's `current_hash` reports it. Otherwise 409 `source_changed`.",
+              "title": "Expected Hash"
+            }
+          },
+          {
+            "description": "Publish the file. Needs the owner role, except on a dry run.",
+            "in": "query",
+            "name": "publish",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Publish the file. Needs the owner role, except on a dry run.",
+              "title": "Publish",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Manage a dashboard made in DuckHaven from this file. Needs the owner role, except on a dry run.",
+            "in": "query",
+            "name": "adopt",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Manage a dashboard made in DuckHaven from this file. Needs the owner role, except on a dry run.",
+              "title": "Adopt",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Apply even when `expected_hash` or `source_id` does not match.",
+            "in": "query",
+            "name": "force",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Apply even when `expected_hash` or `source_id` does not match.",
+              "title": "Force",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Make every check, and change nothing.",
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Make every check, and change nothing.",
+              "title": "Dry Run",
+              "type": "boolean"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/yaml": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          },
+          "description": "The dashboard file as YAML, byte for byte as it is in git.",
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardApplyOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardApplyOut"
+                }
+              }
+            },
+            "description": "The dashboard was created."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No such resource, or the caller may not know it exists."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "The request conflicts with the resource's current state."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Apply Dashboard Source",
+        "tags": [
+          "dashboards"
+        ]
+      }
+    },
     "/workspaces/{workspace}/health": {
       "get": {
         "description": "Table health across the workspace, grouped by namespace.\n\nReports the small-file and snapshot-bloat signals the maintenance scanner\nsamples, so a workspace can be triaged without opening each table.",
@@ -15843,7 +17790,7 @@
     },
     "/workspaces/{workspace}/queries": {
       "get": {
-        "description": "Query log, newest first. Doubles as the admin audit trail.\n\nPaged with a keyset cursor rather than an offset, because history is written\nto continuously and an offset page would duplicate and skip rows under load\n(see :mod:`api.services.query_history`). Sorting and filtering happen here,\nover the whole result set, before the page is cut \u2014 a client that sorted the\npage it was handed would be sorting a hundred rows out of thousands.\n\nA member sees their own workspace, gated on membership, and may narrow it\nhowever they like: by agent, kind of run, session, statement text, id,\nstatus, duration, statement type, and time. None of those reveal a row the\nlist would not already have shown them.\n\nThe cross-principal filters stay admin-only: ``all_workspaces``, and a\n``user_id`` other than the caller's own. Filtering to *yourself* is not\ncross-principal, so it is open to anyone \u2014 it is how the default History\nview scopes itself.",
+        "description": "Query log, newest first. Doubles as the admin audit trail.\n\nPaged with a keyset cursor rather than an offset, because history is written\nto continuously and an offset page would duplicate and skip rows under load\n(see :mod:`api.services.query_history`). Sorting and filtering happen here,\nover the whole result set, before the page is cut \u2014 a client that sorted the\npage it was handed would be sorting a hundred rows out of thousands.\n\nA member sees their own workspace, gated on membership, and may narrow it\nhowever they like: by agent, kind of run, session, statement text, id,\nstatus, duration, statement type, and time. None of those reveal a row the\nlist would not already have shown them.\n\nThe cross-principal filters stay admin-only: ``all_workspaces``, and a\n``user_id`` other than the caller's own. Filtering to *yourself* is not\ncross-principal, so it is open to anyone \u2014 it is how the default History\nview scopes itself. ``user_id`` matches the runs the assistant made for that\nperson as well as their own.",
         "operationId": "list_workspace_queries",
         "parameters": [
           {
@@ -16893,7 +18840,7 @@
         ]
       },
       "post": {
-        "description": "Schedule a job on a cron expression. Requires `writer`.\n\n422 for an unparseable cron. You may only point a schedule at an agent you\ncould run on yourself, and that check runs again at dispatch against the\ncreator -- so revoking their access stops the runs too.",
+        "description": "Schedule a job on a cron expression. Requires `writer`.\n\n422 for an unparseable cron, or a saved query that is not in this workspace.\nYou may only point a schedule at an agent you\ncould run on yourself, and that check runs again at dispatch against the\ncreator -- so revoking their access stops the runs too.",
         "operationId": "create_schedule",
         "parameters": [
           {
@@ -17417,7 +19364,7 @@
     },
     "/workspaces/{workspace}/semantic/imports": {
       "delete": {
-        "description": "Remove everything one provider published into this workspace.",
+        "description": "Remove everything one provider published into this workspace.\n\nA model a published dashboard reads makes this a 409 `breaking_dashboards`\nunless `allow_breaking`.",
         "operationId": "purge_import",
         "parameters": [
           {
@@ -17436,6 +19383,18 @@
             "schema": {
               "title": "Provider",
               "type": "string"
+            }
+          },
+          {
+            "description": "Make the change even though it breaks published dashboards. Without it, such a change is a 409 `breaking_dashboards` listing them.",
+            "in": "query",
+            "name": "allow_breaking",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Make the change even though it breaks published dashboards. Without it, such a change is a 409 `breaking_dashboards` listing them.",
+              "title": "Allow Breaking",
+              "type": "boolean"
             }
           }
         ],
@@ -17500,7 +19459,7 @@
     },
     "/workspaces/{workspace}/semantic/imports/{provider}": {
       "post": {
-        "description": "Publish semantic definitions from an external producer.\n\nImported models arrive as **drafts**. An import is a publishing act by a\npipeline, not by a person, and the whole value of the published gate is that\nsomebody decided \u2014 so promoting them stays a separate, deliberate step.\n\n``reconcile=provider_run`` (the default) treats the payload as this provider's\ncomplete set and retires models it no longer declares. Pass ``none`` when\npublishing a subset, or the models left out will be removed.",
+        "description": "Publish semantic definitions from an external producer.\n\nImported models arrive as **drafts**. An import is a publishing act by a\npipeline, not by a person, and the whole value of the published gate is that\nsomebody decided \u2014 so promoting them stays a separate, deliberate step.\n\n``reconcile=provider_run`` (the default) treats the payload as this provider's\ncomplete set and retires models it no longer declares. Pass ``none`` when\npublishing a subset, or the models left out will be removed.\n\nAn import that removes a model, metric or dimension a published dashboard\nreads is a 409 `breaking_dashboards` unless `allow_breaking`. The answer\nlists what it removed and, with `allow_breaking`, the dashboards it broke.",
         "operationId": "import_semantics",
         "parameters": [
           {
@@ -17529,6 +19488,30 @@
               "default": "provider_run",
               "title": "Reconcile",
               "type": "string"
+            }
+          },
+          {
+            "description": "Report what the import would change, and the published dashboards it would break, without changing anything.",
+            "in": "query",
+            "name": "dry_run",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Report what the import would change, and the published dashboards it would break, without changing anything.",
+              "title": "Dry Run",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Make the change even though it breaks published dashboards. Without it, such a change is a 409 `breaking_dashboards` listing them.",
+            "in": "query",
+            "name": "allow_breaking",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Make the change even though it breaks published dashboards. Without it, such a change is a 409 `breaking_dashboards` listing them.",
+              "title": "Allow Breaking",
+              "type": "boolean"
             }
           }
         ],
@@ -17794,7 +19777,7 @@
     },
     "/workspaces/{workspace}/semantic/models/{model}/deprecate": {
       "post": {
-        "description": "Mark a published model deprecated. Owner only.\n\nIt keeps working -- existing queries still compile -- but it is flagged as on\nthe way out, which is what makes retiring one safe.",
+        "description": "Mark a published model deprecated. Owner only.\n\nIt keeps working -- existing queries still compile -- but it is flagged as on\nthe way out, which is what makes retiring one safe. Dashboards read\npublished models only, so a model a published dashboard reads is a 409\n`breaking_dashboards` unless `allow_breaking`.",
         "operationId": "deprecate_model",
         "parameters": [
           {
@@ -17813,6 +19796,18 @@
             "schema": {
               "title": "Workspace",
               "type": "string"
+            }
+          },
+          {
+            "description": "Make the change even though it breaks published dashboards. Without it, such a change is a 409 `breaking_dashboards` listing them.",
+            "in": "query",
+            "name": "allow_breaking",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "Make the change even though it breaks published dashboards. Without it, such a change is a 409 `breaking_dashboards` listing them.",
+              "title": "Allow Breaking",
+              "type": "boolean"
             }
           }
         ],
@@ -17974,7 +19969,7 @@
     },
     "/workspaces/{workspace}/semantic/models/{model}/relationships": {
       "post": {
-        "description": "Join two of the model's datasets, so a metric on one can be sliced by a\ndimension on the other. Draft models only.\n\n422 if both sides name the same dataset.",
+        "description": "Join two of the model's datasets, so a metric on one can be sliced by a\ndimension on the other. Owner-only unless a draft.\n\n422 if both sides name the same dataset.",
         "operationId": "add_relationship",
         "parameters": [
           {
