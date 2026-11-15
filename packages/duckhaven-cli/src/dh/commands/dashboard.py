@@ -860,7 +860,8 @@ def detach(ctx: typer.Context, name: str) -> None:
     """Stop managing a dashboard in git, so it is edited in DuckHaven again. Needs owner.
 
     It keeps its file, draft and revisions. Delete its file from the repository
-    too, or the next apply takes it over again.
+    too, or the next apply is refused: the dashboard is then one made in
+    DuckHaven, which only `adopt` takes over.
     """
     cli = context.of(ctx)
     settings, url = _dashboards(cli)
