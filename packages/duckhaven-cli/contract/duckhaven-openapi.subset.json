@@ -1817,7 +1817,7 @@
                 "type": "null"
               }
             ],
-            "description": "The client of the last change, from its User-Agent.",
+            "description": "The client of the last change, from its User-Agent. Over MCP, the agent's.",
             "title": "Client"
           },
           "created_at": {
@@ -2009,6 +2009,18 @@
               }
             ],
             "title": "Updated By"
+          },
+          "updated_by_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The name of the person who made the last change.",
+            "title": "Updated By Name"
           },
           "updated_via": {
             "enum": [
@@ -6381,7 +6393,7 @@
         "type": "object"
       },
       "SearchResultOut": {
-        "description": "A single command-palette (\u2318K) result.\n\nDeliberately minimal \u2014 just enough for the palette to show disambiguating\nparent-path context and build its destination route without a second\nround-trip. Catalog/schema/table results are name-addressed (they have no\nseparate routable id; a catalog result carries its slug in both `name` and\n`catalog`); saved queries carry their real id plus\nenough to seed a worksheet tab the same way SavedQueriesPage does.",
+        "description": "A single command-palette (\u2318K) result.\n\nDeliberately minimal \u2014 just enough for the palette to show disambiguating\nparent-path context and build its destination route without a second\nround-trip. Catalog/schema/table results are name-addressed (they have no\nseparate routable id; a catalog result carries its slug in both `name` and\n`catalog`); saved queries carry their real id plus\nenough to seed a worksheet tab the same way SavedQueriesPage does.\nDashboards and semantic models carry the key their page is addressed by in\n`name` (a dashboard's name, a model's slug) and the label to show in `title`.",
         "properties": {
           "catalog": {
             "anyOf": [
@@ -6444,12 +6456,25 @@
             ],
             "title": "Sql"
           },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
           "type": {
             "enum": [
               "catalog",
               "schema",
               "table",
-              "saved_query"
+              "saved_query",
+              "dashboard",
+              "semantic_model"
             ],
             "title": "Type",
             "type": "string"
@@ -8035,6 +8060,22 @@
           "role": {
             "title": "Role",
             "type": "string"
+          },
+          "sidebar": {
+            "anyOf": [
+              {
+                "enum": [
+                  "expanded",
+                  "collapsed",
+                  "hover"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sidebar"
           },
           "theme": {
             "title": "Theme",
@@ -19644,7 +19685,7 @@
     },
     "/workspaces/{workspace}/search": {
       "get": {
-        "description": "Find catalogs, schemas, tables and saved queries by name across the workspace.\n\nPrefix and substring matching over names only, not contents. Results are\nfiltered by grant, so a caller never sees an object they could not open.\n\nA truncated report rather than a page: `limit` caps how many come back and\n`has_more` says whether it cut, but there is no cursor to walk -- narrow the\nquery instead.",
+        "description": "Find catalogs, schemas, tables, saved queries, dashboards and semantic models by name.\n\nPrefix and substring matching over names only, not contents. Results are\nfiltered by grant, so a caller never sees an object they could not open.\n\nA truncated report rather than a page: `limit` caps how many come back and\n`has_more` says whether it cut, but there is no cursor to walk -- narrow the\nquery instead.",
         "operationId": "search_workspace",
         "parameters": [
           {
@@ -19692,7 +19733,9 @@
                       "catalog",
                       "schema",
                       "table",
-                      "saved_query"
+                      "saved_query",
+                      "dashboard",
+                      "semantic_model"
                     ],
                     "type": "string"
                   },
