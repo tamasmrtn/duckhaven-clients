@@ -197,6 +197,14 @@ def test_the_fields_the_cli_reads_still_exist(contract, schema, fields):
     assert not missing, f"{schema} no longer carries: {sorted(missing)}"
 
 
+def test_search_type_offers_exactly_the_kinds_the_server_searches(contract):
+    """`dh search --type` names its kinds in its help; the server owns the list."""
+    parameters = contract["paths"]["/workspaces/{workspace}/search"]["get"]["parameters"]
+    types = next(p for p in parameters if p["name"] == "types")["schema"]
+    array = next(option for option in types["anyOf"] if option.get("type") == "array")
+    assert set(saved.SEARCH_KINDS) == set(array["items"]["enum"])
+
+
 def test_rows_are_still_objects_keyed_by_column_name(contract):
     """The output layer projects each row through `columns`.
 
