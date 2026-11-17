@@ -622,7 +622,7 @@ dh schema list
     . --catalog
 
 dh search
-    Find catalogs, schemas, tables and saved queries by name.
+    Find catalogs, schemas, tables, saved queries, dashboards and semantic models by name.
     . <query>
     . --limit
     . --type

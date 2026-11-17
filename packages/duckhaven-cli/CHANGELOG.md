@@ -6,6 +6,12 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- `dh search --type` lists every kind of object DuckHaven searches: `dashboard` and
+  `semantic_model` as well as `catalog`, `schema`, `table` and `saved_query`. A server at
+  v0.9.0 or earlier finds only the first four and answers `422` when asked for the others.
+
 ## [0.5.0] - 2026-11-15
 
 ### Added

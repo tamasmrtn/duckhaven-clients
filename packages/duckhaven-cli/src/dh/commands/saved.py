@@ -204,6 +204,9 @@ def schedule_runs(
 
 # --- Search ----------------------------------------------------------------
 
+#: The kinds of object the server's search finds, in the order it lists them.
+SEARCH_KINDS = ("catalog", "schema", "table", "saved_query", "dashboard", "semantic_model")
+
 
 def search(
     ctx: typer.Context,
@@ -212,10 +215,10 @@ def search(
     kinds: list[str] = typer.Option(
         None,
         "--type",
-        help="Only these kinds: catalog, schema, table or saved_query. Repeatable.",
+        help=f"Only these kinds: {', '.join(SEARCH_KINDS[:-1])} or {SEARCH_KINDS[-1]}. Repeatable.",
     ),
 ) -> None:
-    """Find catalogs, schemas, tables and saved queries by name.
+    """Find catalogs, schemas, tables, saved queries, dashboards and semantic models by name.
 
     A truncated report rather than a page: `limit` caps how many come back and
     `has_more` says whether it cut. There is no cursor to walk -- narrow the
