@@ -242,6 +242,25 @@ dh api put
     . --data/-d
     . --param/-p
 
+dh audit
+    The access audit log: access changes, sign-ins, refusals.
+
+dh audit list
+    Audit events, newest first. Needs the audit:read permission.
+    . --since
+    . --until
+    . --category
+    . --action
+    . --actor
+    . --subject
+    . --in-workspace
+    . --target-type
+    . --target-id
+    . --outcome
+    . --self-change
+    . --limit
+    . --all
+
 dh auth
     Sign in, and inspect the credential in use.
 
@@ -506,7 +525,7 @@ dh query get
     . <query_id>
 
 dh query list
-    The query log, newest first. Doubles as the audit trail.
+    The query log, newest first.
     . --status
     . --statement-type
     . --since

@@ -16,6 +16,7 @@ from typer.core import TyperGroup
 from dh import __version__
 from dh.commands import admin as admin_commands
 from dh.commands import api as api_commands
+from dh.commands import audit as audit_commands
 from dh.commands import auth as auth_commands
 from dh.commands import catalog as catalog_commands
 from dh.commands import dashboard as dashboard_commands
@@ -81,6 +82,7 @@ app.add_typer(dbt_commands.semantic_app)
 app.add_typer(dashboard_commands.app)
 app.add_typer(session_commands.app)
 app.add_typer(admin_commands.app)
+app.add_typer(audit_commands.app)
 app.add_typer(api_commands.app)
 
 
