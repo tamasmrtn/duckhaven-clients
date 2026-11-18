@@ -44,9 +44,24 @@ A server that supports them offers: DuckLake catalogs (`dh catalog kinds`,
 DuckDB runtimes agents run (`dh agent runtimes`, `--runtime` on
 `dh admin agent elastic-create`), per-agent monitoring over a window or range and the
 queries behind it (`dh admin agent monitoring`, `dh admin agent queries`), applying
-maintenance recommendations (`dh admin maintenance recommendations|apply`), and your
-private editor tabs (`dh worksheet`). Against an older server these commands answer with the
-server's own not-found or validation error.
+maintenance recommendations (`dh admin maintenance recommendations|apply`), your
+private editor tabs (`dh worksheet`), and the access audit log (`dh audit list`). Against an
+older server these commands answer with the server's own not-found or validation error.
+
+## The audit log
+
+`dh audit list` reads DuckHaven's access audit log, newest first: every access change, sign-in
+and refused request, in every workspace. It needs the `audit:read` permission, which the
+`admin` role holds. Narrow it with `--since`, `--until`, `--category`, `--action` (a name, or a
+prefix such as `catalog_grant.*`), `--actor`, `--subject`, `--in-workspace`, `--outcome` and
+`--self-change`:
+
+```sh
+dh --format json audit list --category access --since 2026-11-01T00:00:00Z --all
+```
+
+The log covers the whole deployment, so the workspace your profile sets does not narrow it;
+`--in-workspace` does.
 
 ## Dashboards in git
 

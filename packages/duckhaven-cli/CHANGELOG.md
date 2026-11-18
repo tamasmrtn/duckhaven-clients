@@ -6,6 +6,18 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `dh audit list` reads the access audit log, newest first: access changes, sign-ins and
+  refused requests, in every workspace. It filters by time, category, action or action
+  prefix, actor, subject, workspace (`--in-workspace`), target, outcome and `--self-change`,
+  and takes `--limit` and `--all`. It needs the `audit:read` permission and a DuckHaven newer
+  than v0.10.0; an older server answers `404`.
+
+### Changed
+
+- `dh query list`'s help calls it the query log only. The audit log is `dh audit list`.
+
 ### Fixed
 
 - `dh search --type` lists every kind of object DuckHaven searches: `dashboard` and
