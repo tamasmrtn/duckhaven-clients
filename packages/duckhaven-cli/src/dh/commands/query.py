@@ -225,7 +225,7 @@ def list_queries(
     limit: int = typer.Option(None, "--limit", help="Rows per page."),
     fetch_all: bool = typer.Option(False, "--all", help="Walk every page."),
 ) -> None:
-    """The query log, newest first. Doubles as the audit trail.
+    """The query log, newest first.
 
     Filtering and sorting happen server-side over the whole history before the
     page is cut, so narrowing here is not the same as filtering what you were

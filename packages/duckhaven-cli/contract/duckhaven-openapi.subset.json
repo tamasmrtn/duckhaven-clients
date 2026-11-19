@@ -938,6 +938,394 @@
         "title": "AgentRuntimeOut",
         "type": "object"
       },
+      "AuditActor": {
+        "description": "Who acted. For a delegated call, the service account and the person it acted for.",
+        "properties": {
+          "auth_method": {
+            "anyOf": [
+              {
+                "enum": [
+                  "session",
+                  "pat",
+                  "system"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Auth Method"
+          },
+          "credential_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "on_behalf_of_email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Behalf Of Email"
+          },
+          "on_behalf_of_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Behalf Of Id"
+          },
+          "type": {
+            "enum": [
+              "user",
+              "service_account",
+              "system",
+              "idp",
+              "anonymous"
+            ],
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "email",
+          "type",
+          "on_behalf_of_id",
+          "on_behalf_of_email",
+          "auth_method",
+          "credential_id"
+        ],
+        "title": "AuditActor",
+        "type": "object"
+      },
+      "AuditEventOut": {
+        "properties": {
+          "action": {
+            "description": "See docs/reference/audit-events.md.",
+            "title": "Action",
+            "type": "string"
+          },
+          "actor": {
+            "$ref": "#/components/schemas/AuditActor"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "category": {
+            "enum": [
+              "identity",
+              "access",
+              "credential",
+              "auth",
+              "authz"
+            ],
+            "title": "Category",
+            "type": "string"
+          },
+          "details": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Details"
+          },
+          "error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Code"
+          },
+          "event_time": {
+            "format": "date-time",
+            "title": "Event Time",
+            "type": "string"
+          },
+          "event_version": {
+            "title": "Event Version",
+            "type": "integer"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "description": "A short description of the action, for display.",
+            "title": "Label",
+            "type": "string"
+          },
+          "outcome": {
+            "enum": [
+              "success",
+              "denied",
+              "failure"
+            ],
+            "title": "Outcome",
+            "type": "string"
+          },
+          "request": {
+            "$ref": "#/components/schemas/AuditRequest"
+          },
+          "self_change": {
+            "description": "The subject is the actor, or the person a delegated call acted for.",
+            "title": "Self Change",
+            "type": "boolean"
+          },
+          "subject": {
+            "$ref": "#/components/schemas/AuditSubject"
+          },
+          "target": {
+            "$ref": "#/components/schemas/AuditTarget"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/AuditWorkspace"
+          }
+        },
+        "required": [
+          "id",
+          "event_time",
+          "event_version",
+          "category",
+          "action",
+          "label",
+          "outcome",
+          "actor",
+          "request",
+          "workspace",
+          "target",
+          "subject",
+          "self_change",
+          "before",
+          "after",
+          "details",
+          "error_code"
+        ],
+        "title": "AuditEventOut",
+        "type": "object"
+      },
+      "AuditRequest": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Also sent back as the X-Request-ID response header.",
+            "title": "Id"
+          },
+          "source_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source Ip"
+          },
+          "user_agent": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Agent"
+          }
+        },
+        "required": [
+          "id",
+          "source_ip",
+          "user_agent"
+        ],
+        "title": "AuditRequest",
+        "type": "object"
+      },
+      "AuditSubject": {
+        "description": "Whose access changed, when that is a person or service account.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          }
+        },
+        "required": [
+          "id",
+          "email"
+        ],
+        "title": "AuditSubject",
+        "type": "object"
+      },
+      "AuditTarget": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As it was at the time, such as sales.analytics.orders.",
+            "title": "Name"
+          },
+          "type": {
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "id",
+          "name"
+        ],
+        "title": "AuditTarget",
+        "type": "object"
+      },
+      "AuditWorkspace": {
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "slug": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "As it was at the time; kept after a delete.",
+            "title": "Slug"
+          }
+        },
+        "required": [
+          "id",
+          "slug"
+        ],
+        "title": "AuditWorkspace",
+        "type": "object"
+      },
       "AuthMethods": {
         "description": "Which login methods the SPA should surface.",
         "properties": {
@@ -4568,6 +4956,40 @@
           "items"
         ],
         "title": "Page[AgentQueryOut]",
+        "type": "object"
+      },
+      "Page_AuditEventOut_": {
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Opaque; feed back as `cursor` for the next page. Null on the last page.",
+            "title": "Cursor"
+          },
+          "has_more": {
+            "default": false,
+            "description": "Whether another page follows.",
+            "title": "Has More",
+            "type": "boolean"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/AuditEventOut"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "Page[AuditEventOut]",
         "type": "object"
       },
       "Page_CatalogExportOut_": {
@@ -9990,6 +10412,302 @@
         ]
       }
     },
+    "/admin/audit/events": {
+      "get": {
+        "description": "The access audit log, newest first: access changes, sign-ins and refusals.\n\nDeployment-wide: every workspace's events, for holders of `audit:read`.\nEvents are kept for `AUDIT_RETENTION_DAYS` (365 by default) and never\nchanged, and names are kept as they were, so an event about a deleted user\nor workspace still reads in full.",
+        "operationId": "list_audit_events",
+        "parameters": [
+          {
+            "description": "Events at or after this time.",
+            "in": "query",
+            "name": "since",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Events at or after this time.",
+              "title": "Since"
+            }
+          },
+          {
+            "description": "Events before this time.",
+            "in": "query",
+            "name": "until",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date-time",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Events before this time.",
+              "title": "Until"
+            }
+          },
+          {
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "identity",
+                    "access",
+                    "credential",
+                    "auth",
+                    "authz"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Category"
+            }
+          },
+          {
+            "description": "An action name, or a prefix ending in `.*` such as `catalog_grant.*`.",
+            "in": "query",
+            "name": "action",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "An action name, or a prefix ending in `.*` such as `catalog_grant.*`.",
+              "title": "Action"
+            }
+          },
+          {
+            "description": "Events this account made, or a delegated call made on its behalf.",
+            "in": "query",
+            "name": "actor_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Events this account made, or a delegated call made on its behalf.",
+              "title": "Actor Id"
+            }
+          },
+          {
+            "description": "Events that changed this account's access.",
+            "in": "query",
+            "name": "subject_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "uuid",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Events that changed this account's access.",
+              "title": "Subject Id"
+            }
+          },
+          {
+            "description": "A workspace slug or id.",
+            "in": "query",
+            "name": "workspace",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "A workspace slug or id.",
+              "title": "Workspace"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target_type",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Type"
+            }
+          },
+          {
+            "in": "query",
+            "name": "target_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "outcome",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "enum": [
+                    "success",
+                    "denied",
+                    "failure"
+                  ],
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Outcome"
+            }
+          },
+          {
+            "description": "Only changes the actor made to their own access.",
+            "in": "query",
+            "name": "self_change",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Only changes the actor made to their own access.",
+              "title": "Self Change"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 100,
+              "maximum": 1000,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AuditEventOut_"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "No valid session cookie or bearer token was supplied."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Authenticated, but not permitted to perform this operation."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorOut"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "security": [
+          {
+            "cookieAuth": []
+          },
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "List Audit Events",
+        "tags": [
+          "admin-audit"
+        ]
+      }
+    },
     "/admin/catalogs/ducklake/reconcile-roles": {
       "post": {
         "description": "Create any DuckLake login role that does not exist yet.\n\nPost-upgrade step: the Alembic migration can only write credential rows, not\nroles in the catalog database. Idempotent; also repairs a dropped role.",
@@ -11777,7 +12495,7 @@
     },
     "/catalogs": {
       "get": {
-        "description": "Every catalog in the deployment \u2014 the source for the attach picker.",
+        "description": "The catalogs the caller may attach to a workspace: every catalog for\n`catalogs:admin`, otherwise the ones they created. The source for the attach\npicker.",
         "operationId": "list_all_catalogs",
         "responses": {
           "200": {
@@ -14460,7 +15178,7 @@
         ]
       },
       "put": {
-        "description": "Attach an existing catalog to the workspace, or update the attachment.\n\nA membership write, so it is a PUT on the membership's own address -- the\nsame one DELETE detaches -- rather than an action. Idempotent: 201 the first\ntime, 200 when it was already attached. Catalogs are shared M:N, so this\nbinds an existing catalog rather than creating one. Owner only.",
+        "description": "Attach an existing catalog to the workspace, or update the attachment.\n\nA membership write, so it is a PUT on the membership's own address -- the\nsame one DELETE detaches -- rather than an action. Idempotent: 201 the first\ntime, 200 when it was already attached. Catalogs are shared M:N, so this\nbinds an existing catalog rather than creating one.\n\nWorkspace owner only. A new attachment also needs the catalog's creator or\n`catalogs:admin`: anyone may create a workspace, so owning one cannot be\nwhat lets a catalog into it. It starts in the mode the catalog is already\nrestricted by (see :func:`_inherited_access_mode`).",
         "operationId": "attach_workspace_catalog",
         "parameters": [
           {
@@ -18242,7 +18960,7 @@
     },
     "/workspaces/{workspace}/queries": {
       "get": {
-        "description": "Query log, newest first. Doubles as the admin audit trail.\n\nPaged with a keyset cursor rather than an offset, because history is written\nto continuously and an offset page would duplicate and skip rows under load\n(see :mod:`api.services.query_history`). Sorting and filtering happen here,\nover the whole result set, before the page is cut \u2014 a client that sorted the\npage it was handed would be sorting a hundred rows out of thousands.\n\nA member sees their own workspace, gated on membership, and may narrow it\nhowever they like: by agent, kind of run, session, statement text, id,\nstatus, duration, statement type, and time. None of those reveal a row the\nlist would not already have shown them.\n\nThe cross-principal filters stay admin-only: ``all_workspaces``, and a\n``user_id`` other than the caller's own. Filtering to *yourself* is not\ncross-principal, so it is open to anyone \u2014 it is how the default History\nview scopes itself. ``user_id`` matches the runs the assistant made for that\nperson as well as their own.",
+        "description": "Query log, newest first.\n\nPaged with a keyset cursor rather than an offset, because history is written\nto continuously and an offset page would duplicate and skip rows under load\n(see :mod:`api.services.query_history`). Sorting and filtering happen here,\nover the whole result set, before the page is cut \u2014 a client that sorted the\npage it was handed would be sorting a hundred rows out of thousands.\n\nA member sees their own workspace, gated on membership, and may narrow it\nhowever they like: by agent, kind of run, session, statement text, id,\nstatus, duration, statement type, and time. None of those reveal a row the\nlist would not already have shown them.\n\nThe cross-principal filters stay admin-only: ``all_workspaces``, and a\n``user_id`` other than the caller's own. Filtering to *yourself* is not\ncross-principal, so it is open to anyone \u2014 it is how the default History\nview scopes itself. ``user_id`` matches the runs the assistant made for that\nperson as well as their own.",
         "operationId": "list_workspace_queries",
         "parameters": [
           {

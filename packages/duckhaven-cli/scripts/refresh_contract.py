@@ -139,6 +139,7 @@ WANT: dict[str, set[str]] = {
     "/admin/storage-backends": {"get"},
     "/admin/storage-backends/{storage_backend_id}/health": {"post"},
     "/admin/catalogs/ducklake/reconcile-roles": {"post"},
+    "/admin/audit/events": {"get"},
     "/admin/maintenance/policy": {"get"},
     "/admin/maintenance/scan": {"post"},
     "/maintenance/recommendations": {"get"},
