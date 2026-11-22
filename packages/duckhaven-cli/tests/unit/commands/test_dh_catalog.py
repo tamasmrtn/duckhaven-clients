@@ -163,6 +163,24 @@ def test_workspace_create_defaults_the_name_to_the_slug(with_catalog):
 
 
 @respx.mock
+def test_workspace_create_refused_for_a_user_account_exits_auth(with_catalog):
+    # api_version 4: only the admin role holds workspaces:create.
+    respx.post(f"{API}/workspaces").mock(
+        return_value=httpx.Response(
+            403,
+            json={
+                "error": "forbidden",
+                "message": "Creating a workspace needs the workspaces:create permission.",
+                "details": None,
+            },
+        )
+    )
+    result = runner.invoke(app, ["workspace", "create", "new"])
+    assert result.exit_code == ExitCode.AUTH
+    assert "workspaces:create" in result.output
+
+
+@respx.mock
 def test_workspace_member_list(with_catalog):
     respx.get(f"{WS}/members").mock(return_value=httpx.Response(200, json=[{"role": "owner"}]))
     assert (

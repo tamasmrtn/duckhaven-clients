@@ -21,7 +21,8 @@ class ExitCode(IntEnum):
     FAILURE = 1
     #: Bad flags or arguments. Typer exits with this on its own.
     USAGE = 2
-    #: 401/403, a missing or rejected credential, an unreadable config.
+    #: 401/403: a missing or rejected credential, an unreadable config, or an action
+    #: the account has no permission for (the server's message names the permission).
     AUTH = 3
     NOT_FOUND = 4
     #: 409/410/422 -- the request was understood and refused.
