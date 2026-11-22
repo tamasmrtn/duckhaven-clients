@@ -8,6 +8,9 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ### Added
 
+- `dh workspace update --timezone` sets the workspace's IANA time zone, such as `Europe/London`.
+  Relative windows like month to date resolve in it. Owner only. The server checks the name and
+  refuses an unknown one with a conflict. A DuckHaven older than v0.11.0 ignores the flag silently.
 - `dh audit list` reads the access audit log, newest first: access changes, sign-ins and
   refused requests, in every workspace. It filters by time, category, action or action
   prefix, actor, subject, workspace (`--in-workspace`), target, outcome and `--self-change`,

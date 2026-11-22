@@ -45,8 +45,11 @@ DuckDB runtimes agents run (`dh agent runtimes`, `--runtime` on
 `dh admin agent elastic-create`), per-agent monitoring over a window or range and the
 queries behind it (`dh admin agent monitoring`, `dh admin agent queries`), applying
 maintenance recommendations (`dh admin maintenance recommendations|apply`), your
-private editor tabs (`dh worksheet`), and the access audit log (`dh audit list`). Against an
-older server these commands answer with the server's own not-found or validation error.
+private editor tabs (`dh worksheet`), the access audit log (`dh audit list`), and a workspace's time
+zone (`dh workspace update --timezone`). Against an
+older server these commands answer with the server's own not-found or validation error. A server
+older than v0.11.0 has no workspace time zone and ignores `--timezone` without an error, so check
+the result with `dh workspace get`.
 
 ## Who may do what
 

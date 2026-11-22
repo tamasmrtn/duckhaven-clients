@@ -111,15 +111,27 @@ def update_workspace(
         "--result-cache/--no-result-cache",
         help="Whether repeated queries may be answered from the result cache. Owner only.",
     ),
+    timezone: str = typer.Option(
+        None,
+        "--timezone",
+        help="IANA zone such as Europe/London. Relative windows like month to date resolve in it. "
+        "Owner only.",
+    ),
 ) -> None:
-    """Rename or re-describe a workspace, or switch its result cache on or off."""
+    """Rename or re-describe a workspace, set its time zone, or switch its result cache."""
     cli = context.of(ctx)
     settings = cli.settings()
-    fields = {"name": name, "description": description, "result_cache_enabled": result_cache}
+    fields = {
+        "name": name,
+        "description": description,
+        "result_cache_enabled": result_cache,
+        "timezone": timezone,
+    }
     body = {k: v for k, v in fields.items() if v is not None}
     if not body:
         raise ConflictError(
-            "nothing_to_update", "Give --name, --description or --result-cache/--no-result-cache."
+            "nothing_to_update",
+            "Give --name, --description, --timezone or --result-cache/--no-result-cache.",
         )
     with cli.client(settings) as client:
         target = workspace or settings.require("workspace")

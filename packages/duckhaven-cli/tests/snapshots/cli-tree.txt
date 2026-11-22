@@ -885,8 +885,9 @@ dh workspace member list
     Who belongs to the workspace, and in what role.
 
 dh workspace update
-    Rename or re-describe a workspace, or switch its result cache on or off.
+    Rename or re-describe a workspace, set its time zone, or switch its result cache.
     . <workspace>
     . --name
     . --description
     . --result-cache
+    . --timezone
