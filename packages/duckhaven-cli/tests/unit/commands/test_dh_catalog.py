@@ -170,14 +170,14 @@ def test_workspace_create_refused_for_a_user_account_exits_auth(with_catalog):
             403,
             json={
                 "error": "forbidden",
-                "message": "Creating a workspace needs the workspaces:create permission.",
+                "message": "Forbidden",
                 "details": None,
             },
         )
     )
     result = runner.invoke(app, ["workspace", "create", "new"])
     assert result.exit_code == ExitCode.AUTH
-    assert "workspaces:create" in result.output
+    assert "Forbidden" in result.output
 
 
 @respx.mock
