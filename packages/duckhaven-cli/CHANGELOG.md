@@ -6,6 +6,8 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-11-22
+
 ### Added
 
 - `dh workspace update --timezone` sets the workspace's IANA time zone, such as `Europe/London`.
