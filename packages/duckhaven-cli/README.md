@@ -48,6 +48,21 @@ maintenance recommendations (`dh admin maintenance recommendations|apply`), your
 private editor tabs (`dh worksheet`), and the access audit log (`dh audit list`). Against an
 older server these commands answer with the server's own not-found or validation error.
 
+## Who may do what
+
+Some commands need a permission your account may not hold, and the server refuses them with
+`403`, which `dh` reports with exit code 3 and the server's message. Three are worth knowing:
+
+- `dh workspace create` needs `workspaces:create`, which only the `admin` role holds. A `user`
+  account, or a token acting for one, gets `403`. Ask an admin to create the workspace, and
+  you become its owner only if the admin adds you as one.
+- `dh catalog attach` needs workspace ownership and the catalog's creator or `catalogs:admin`.
+  Owning a workspace alone does not let a catalog in.
+- `dh catalog create --storage-backend` and `dh catalog export create` need `storage:manage`.
+  Without it, a new catalog goes on DuckHaven's bundled store.
+
+Against a DuckHaven older than v0.11.0, `workspace create` is open to every signed-in account.
+
 ## The audit log
 
 `dh audit list` reads DuckHaven's access audit log, newest first: every access change, sign-in
