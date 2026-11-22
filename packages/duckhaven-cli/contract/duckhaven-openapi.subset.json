@@ -12826,7 +12826,7 @@
         ]
       },
       "post": {
-        "description": "Copy this DuckLake catalog's current state (not its history) into a new Iceberg one.\n\nRequires the catalog's creator or `catalogs:admin`, plus `owner` on the\ntarget workspace.",
+        "description": "Copy this DuckLake catalog's current state (not its history) into a new Iceberg one.\n\nRequires the catalog's creator or `catalogs:admin`, `owner` on the target\nworkspace, and `storage:manage` for the target backend.",
         "operationId": "start_export",
         "parameters": [
           {
@@ -14601,7 +14601,7 @@
         ]
       },
       "post": {
-        "description": "Create a workspace with its owner. A workspace starts with **no catalog** \u2014\nthe owner creates or attaches catalogs afterward (catalogs are decoupled,\nM:N). No storage backend or Polaris provisioning happens here.",
+        "description": "Create a workspace with its creator as owner. A workspace starts with **no catalog** \u2014\nthe owner creates or attaches catalogs afterward (catalogs are decoupled,\nM:N). No storage backend or Polaris provisioning happens here.",
         "operationId": "create_workspace",
         "requestBody": {
           "content": {
@@ -15178,7 +15178,7 @@
         ]
       },
       "put": {
-        "description": "Attach an existing catalog to the workspace, or update the attachment.\n\nA membership write, so it is a PUT on the membership's own address -- the\nsame one DELETE detaches -- rather than an action. Idempotent: 201 the first\ntime, 200 when it was already attached. Catalogs are shared M:N, so this\nbinds an existing catalog rather than creating one.\n\nWorkspace owner only. A new attachment also needs the catalog's creator or\n`catalogs:admin`: anyone may create a workspace, so owning one cannot be\nwhat lets a catalog into it. It starts in the mode the catalog is already\nrestricted by (see :func:`_inherited_access_mode`).",
+        "description": "Attach an existing catalog to the workspace, or update the attachment.\n\nA membership write, so it is a PUT on the membership's own address -- the\nsame one DELETE detaches -- rather than an action. Idempotent: 201 the first\ntime, 200 when it was already attached. Catalogs are shared M:N, so this\nbinds an existing catalog rather than creating one.\n\nWorkspace owner only. A new attachment also needs the catalog's creator or\n`catalogs:admin`: owning a workspace cannot be what lets a catalog into it,\nor every owner would reach every catalog. It starts in the mode the catalog\nis already restricted by (see :func:`_inherited_access_mode`).",
         "operationId": "attach_workspace_catalog",
         "parameters": [
           {

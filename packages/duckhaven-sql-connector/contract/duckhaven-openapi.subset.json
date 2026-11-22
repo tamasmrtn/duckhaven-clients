@@ -605,6 +605,29 @@
             ],
             "title": "Inline Arrow"
           },
+          "on_behalf_of_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Behalf Of Id"
+          },
+          "on_behalf_of_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "On Behalf Of Name"
+          },
           "origin": {
             "anyOf": [
               {
