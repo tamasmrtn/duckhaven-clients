@@ -133,6 +133,10 @@ reads is refused with exit `5`, listing every dashboard and what it reads, unles
 `--allow-breaking`. `dh semantic import --dry-run` reports what an import would create,
 update and remove, and the dashboards it would break, and changes nothing.
 
+A dbt metric's `format`, `unit`, `currency` and `polarity` are not dbt fields. An import reads them
+from the metric's `meta.duckhaven` block, which the server's
+[import guide](https://tamasmrtn.github.io/duckhaven/metadata/import-dbt-semantics/) describes.
+
 ## Writing a dashboard
 
 `dh dashboard preview FILE` shows a file in DuckHaven while you edit it, without saving it.
