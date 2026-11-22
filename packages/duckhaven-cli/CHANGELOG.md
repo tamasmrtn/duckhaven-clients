@@ -17,6 +17,12 @@ All notable changes to `duckhaven-cli` are documented here. The format follows
 ### Changed
 
 - `dh query list`'s help calls it the query log only. The audit log is `dh audit list`.
+- `dh workspace create` says it needs `workspaces:create`, held by the admin role only. Against a
+  DuckHaven at v0.11.0 or later a `user` account gets `403`, which exits with code 3. Older servers
+  let any signed-in account create a workspace.
+- `dh catalog attach` says it needs workspace ownership and the catalog's creator or
+  `catalogs:admin`. `dh catalog create --storage-backend` and `dh catalog export create` say they
+  need `storage:manage`.
 
 ### Fixed
 

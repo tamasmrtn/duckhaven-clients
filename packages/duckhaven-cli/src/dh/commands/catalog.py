@@ -90,7 +90,11 @@ def create_workspace(
     slug: str = typer.Argument(..., help="URL-safe identifier."),
     name: str = typer.Option(None, "--name", help="Display name. Defaults to the slug."),
 ) -> None:
-    """Create a workspace."""
+    """Create a workspace, becoming its owner.
+
+    Needs the workspaces:create permission, which only the admin role holds. A user
+    account gets 403, and so does a token acting for one.
+    """
     cli = context.of(ctx)
     with cli.client() as client:
         cli.emit(client.post("workspaces", json={"slug": slug, "name": name or slug}))
@@ -217,7 +221,9 @@ def create_catalog(
         "--kind",
         help="iceberg_polaris (the server default) or ducklake. See `dh catalog kinds`.",
     ),
-    storage_backend: str = typer.Option(None, "--storage-backend", help="Backend id."),
+    storage_backend: str = typer.Option(
+        None, "--storage-backend", help="Backend id. Needs storage:manage, else the bundled store."
+    ),
     access_mode: str = typer.Option(None, "--access-mode", help="open or scoped."),
 ) -> None:
     """Create a catalog and attach it to the workspace."""
@@ -279,7 +285,7 @@ def create_export(
     catalog_id: str,
     target_name: str = typer.Option(..., "--target-name", help="Name of the new Iceberg catalog."),
     storage_backend: str = typer.Option(
-        ..., "--storage-backend", help="Storage backend id for the new catalog."
+        ..., "--storage-backend", help="Backend id for the new catalog. Needs storage:manage."
     ),
 ) -> None:
     """Start exporting a DuckLake catalog to a new Iceberg catalog.
@@ -318,7 +324,11 @@ def attach_catalog(
         False, "--default", help="Also make it the workspace's default catalog."
     ),
 ) -> None:
-    """Attach an existing catalog to the workspace."""
+    """Attach an existing catalog to the workspace.
+
+    Needs workspace ownership, plus the catalog's creator or catalogs:admin. Owning a
+    workspace alone does not let a catalog in.
+    """
     cli = context.of(ctx)
     settings = cli.settings()
     body = {"make_default": True} if make_default else None

@@ -857,7 +857,7 @@ dh workspace
     Workspaces and their members.
 
 dh workspace create
-    Create a workspace.
+    Create a workspace, becoming its owner.
     . <slug>
     . --name
 
