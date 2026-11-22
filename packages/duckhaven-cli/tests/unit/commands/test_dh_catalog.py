@@ -314,6 +314,49 @@ def test_workspace_update_leaves_the_cache_alone_unless_asked(with_catalog):
 
 
 @respx.mock
+def test_workspace_update_sets_the_time_zone(with_catalog):
+    route = respx.patch(WS).mock(return_value=httpx.Response(200, json={}))
+    result = runner.invoke(app, ["workspace", "update", "--timezone", "Europe/London"])
+    assert result.exit_code == 0
+    assert json.loads(route.calls[0].request.content) == {"timezone": "Europe/London"}
+
+
+@respx.mock
+def test_workspace_update_sends_the_zone_with_other_fields(with_catalog):
+    route = respx.patch(WS).mock(return_value=httpx.Response(200, json={}))
+    runner.invoke(app, ["workspace", "update", "--timezone", "UTC", "--no-result-cache"])
+    assert json.loads(route.calls[0].request.content) == {
+        "timezone": "UTC",
+        "result_cache_enabled": False,
+    }
+
+
+@respx.mock
+def test_workspace_update_surfaces_an_unknown_zone_as_a_conflict(with_catalog):
+    respx.patch(WS).mock(
+        return_value=httpx.Response(
+            422,
+            json={
+                "error": "validation_error",
+                "message": "The request body or parameters did not validate.",
+                "details": {
+                    "errors": [
+                        {
+                            "type": "value_error",
+                            "loc": ["body", "timezone"],
+                            "msg": "Value error, 'Mars/Olympus' is not an IANA time zone name.",
+                        }
+                    ]
+                },
+            },
+        )
+    )
+    result = runner.invoke(app, ["workspace", "update", "--timezone", "Mars/Olympus"])
+    assert result.exit_code == ExitCode.CONFLICT
+    assert "IANA" in result.output
+
+
+@respx.mock
 def test_catalog_create_can_pick_the_kind(with_catalog):
     route = respx.post(f"{WS}/catalogs").mock(return_value=httpx.Response(201, json={}))
     runner.invoke(app, ["catalog", "create", "lake", "--kind", "ducklake"])
